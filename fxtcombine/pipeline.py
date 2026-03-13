@@ -9,9 +9,12 @@ import numpy as np
 import os
 from pathlib import Path
 import sys
+import warnings
 
 from astropy.io import fits
+from astropy.io.fits.verify import VerifyWarning
 from astropy.wcs import WCS
+from astropy.wcs import FITSFixedWarning
 from reproject import reproject_interp
 
 from fxtcombine.config import (
@@ -180,19 +183,25 @@ def fxtcombine_pipeline(
 		emit(main_logger, "info", f"Their corresponding exposures are: {exp_lst}")
 
 		##--- choosing the reference frame (with longest exposure)
-		with fits.open(img_fname_lst[0]) as hdu:
-			refimg = hdu[0]
-			refimg_wcs = WCS(refimg.header)
-			refimg_shape = refimg.data.shape
-			cts_sum = np.zeros(refimg_shape)
+		with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
+			warnings.simplefilter("ignore", VerifyWarning)
+			warnings.simplefilter("ignore", FITSFixedWarning)
+			with fits.open(img_fname_lst[0]) as hdu:
+				refimg = hdu[0]
+				refimg_wcs = WCS(refimg.header)
+				refimg_shape = refimg.data.shape
+				cts_sum = np.zeros(refimg_shape)
 		emit(main_logger, "info", f"The reference frame is {img_fname_lst[0]}.")
 		emit(main_logger, "info", f"Reference WCS is {refimg_wcs}.")
 
-		with fits.open(exp_fname_lst[0]) as hdu:
-			refexp = hdu[0]
-			refexp_wcs = WCS(refexp.header)
-			refexp_shape = refexp.data.shape
-			exp_sum = np.zeros(refexp_shape)
+		with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
+			warnings.simplefilter("ignore", VerifyWarning)
+			warnings.simplefilter("ignore", FITSFixedWarning)
+			with fits.open(exp_fname_lst[0]) as hdu:
+				refexp = hdu[0]
+				refexp_wcs = WCS(refexp.header)
+				refexp_shape = refexp.data.shape
+				exp_sum = np.zeros(refexp_shape)
 		assert refimg_shape == refexp_shape, f"The image and exposure should have same shape, but now gets {refimg_shape} and {refexp_shape}!"
 
 		# ##--- reproject and stack image
@@ -216,20 +225,25 @@ def fxtcombine_pipeline(
 		for i in range(len(clevt_fname_lst)):
 			clevt_fname = clevt_fname_lst[i]
 			img_fname = img_fname_lst[i]
-			with fits.open(clevt_fname) as hdu:
-				clevt_data = hdu[1].data
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore", VerifyWarning)
+				with fits.open(clevt_fname) as hdu:
+					clevt_data = hdu[1].data
 			clevt_x = clevt_data["X"]
 			clevt_y = clevt_data["Y"]
-			with fits.open(img_fname) as hdu:
-				img_wcs = WCS(hdu[0].header)
-				img = reproject_events_xy_to_refwcs(
-					clevt_x,clevt_y,
-					img_wcs,refimg_wcs,
-					shape_ref=refimg_shape,	# (ny, nx)
-					weight=None,
-					method="nearest",  		# "nearest" or "floor"
-					event_origin=1.0,
-				)
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore", VerifyWarning)
+				warnings.simplefilter("ignore", FITSFixedWarning)
+				with fits.open(img_fname) as hdu:
+					img_wcs = WCS(hdu[0].header)
+					img = reproject_events_xy_to_refwcs(
+						clevt_x,clevt_y,
+						img_wcs,refimg_wcs,
+						shape_ref=refimg_shape,	# (ny, nx)
+						weight=None,
+						method="nearest",  		# "nearest" or "floor"
+						event_origin=1.0,
+					)
 			cts_sum += img
 		cts_sum_fname = os.path.join(stack_dir,f"{datatype}_stack_cts.fits")
 		fits.writeto(cts_sum_fname,cts_sum,refimg.header,overwrite=True)
@@ -238,10 +252,13 @@ def fxtcombine_pipeline(
 		##--- reproject and stack expmap
 		emit(main_logger, "info", f"Reprojecting and stacking exposure maps ...")
 		for exp_fname_i in exp_fname_lst:
-			with fits.open(exp_fname_i) as hdu:
-				exp_i = hdu[0]
-				data_i = exp_i.data
-				wcs_i  = WCS(exp_i.header)
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore", VerifyWarning)
+				warnings.simplefilter("ignore", FITSFixedWarning)
+				with fits.open(exp_fname_i) as hdu:
+					exp_i = hdu[0]
+					data_i = exp_i.data
+					wcs_i  = WCS(exp_i.header)
 			###--- flux/count-conserving reprojection
 			data_i_reproj,footprint_i = reproject_interp((data_i,wcs_i),refexp_wcs,shape_out=refexp_shape)
 			###--- footprint is 0..1 overlap fraction; use it to ignore empty pixels
@@ -269,8 +286,7 @@ def fxtcombine_pipeline(
 	srcdet_bkg_fname = os.path.join(stack_dir, "stack_bkgmap.fits")
 	srcdet_log = os.path.join(stack_dir, "srcdet.log")
 	srcdet_cmd = " ".join([
-		f'"{sys.executable}"',
-		"-m", "fxtsrcdet",
+		"fxtsrcdet",
 		f'"{stack_image_fname}"',
 		"--expmap", f'"{stack_expmap_fname}"',
 		"--mission", "ep-fxt",
@@ -292,8 +308,7 @@ def fxtcombine_pipeline(
 	bkg_reg_fname = os.path.join(stack_dir, "target_bkg.reg")
 	fxtregions_log = os.path.join(stack_dir, "fxtregions.log")
 	fxtregions_cmd = " ".join([
-		f'"{sys.executable}"',
-		"-m", "fxtregions",
+		"fxtregions",
 		f'"{stack_image_fname}"',
 		f'"{srcdet_src_fname}"',
 		"--bkgmap", f'"{srcdet_bkg_fname}"',

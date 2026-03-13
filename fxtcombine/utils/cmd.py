@@ -7,6 +7,46 @@ import os
 
 from fxtcombine.utils.logger import emit
 
+
+def _emit_command_output(
+		output,
+		logger=None,
+		level="error",
+		max_lines=40,
+	):
+	"""Emit the tail of captured command output through the logger.
+
+	Parameters
+	----------
+	output : str | None
+		Captured combined stdout/stderr text.
+	logger : logging.Logger | None, optional
+		Optional logger used for output messages.
+	level : str, optional
+		Log level used when emitting the output.
+	max_lines : int, optional
+		Maximum number of trailing lines shown through the logger.
+
+	Returns
+	-------
+	None
+	"""
+	if not output:
+		return
+	lines = output.rstrip().splitlines()
+	if not lines:
+		return
+	if len(lines) > max_lines:
+		emit(
+			logger,
+			level,
+			f"Command output truncated to the last {max_lines} lines; see the step log for the full output.",
+		)
+		lines = lines[-max_lines:]
+	for line in lines:
+		emit(logger, level, line)
+
+
 def run_cmd(
 		cmd_str,
 		logger=None,logname="./run.log"
@@ -45,6 +85,7 @@ def run_cmd(
 			log_file.write(result.stdout or "")
 	if result.returncode != 0:
 		emit(logger, "error", f"Command failed with exit code {result.returncode}: {cmd_str}")
+		_emit_command_output(result.stdout, logger=logger, level="error")
 		raise subprocess.CalledProcessError(
 			result.returncode,
 			cmd_str,

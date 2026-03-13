@@ -16,7 +16,6 @@ setup(
     author="Shi-Jiang Chen",
     author_email="JohnnyCsj666@gmail.com",
     url="https://github.com/AstroChensj/eFXTDAS.git",
-    python_requires=">=3.10",
     packages=find_packages(
         include=[
             "fxtsrcdet",

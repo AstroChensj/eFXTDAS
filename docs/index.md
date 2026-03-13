@@ -8,20 +8,20 @@ This documentation is organized by task:
 :maxdepth: 2
 :caption: Tasks
 
-fxtsrcdet
-fxteefmap
-fxtregions
 fxtcombine
+fxtsrcdet
+fxtregions
+fxteefmap
 ```
 
 ## Scope
 
 The current toolkit contains four user-facing tasks:
 
-- `fxtsrcdet`: wavelet-style source detection and catalog construction
-- `fxteefmap`: image-sized EEF-radius map generation
-- `fxtregions`: source/background region construction for downstream analysis
 - `fxtcombine`: multi-epoch stacking and spectral combination
+- `fxtsrcdet`: wavelet-style source detection and catalog construction
+- `fxtregions`: source/background region construction for downstream analysis
+- `fxteefmap`: image-sized EEF-radius map generation
 
 ## Notes for Further Expansion
 
