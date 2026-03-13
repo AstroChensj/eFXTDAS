@@ -1,0 +1,392 @@
+# `fxtsrcdet`
+
+## What It Does
+
+`fxtsrcdet` is a source detection task in `eFXTDAS`, inheriting features from CIAO's `wavdetect` and eSASS's `ermldet`.
+
+It performs:
+
+- multi-scale Mexican-hat wavelet detection on a counts image
+- iterative local background estimation for each wavelet scale
+- cross-scale merging of provisional detections
+- exposure-aware background-map construction
+- PSF-aware single-source and grouped-source fitting
+- point-versus-extended source classification
+- final catalog writing to FITS
+- DS9 region export in image and sky coordinates
+
+The implementation draws inspiration from CIAO `wavdetect` on the initial detection side and eSASS `ermldet` / `erbackmap` concepts on the source fitting and catalog side.
+
+TODO: add classification debug columns, extent_support, morph_extent_support, etc. 
+TODO: add config.py storing tunable parameters.
+TODO: add logger.py for standard logger.
+
+## Basic Usage
+
+### Command-Line Usage
+
+```bash
+python -m fxtsrcdet.cli img.fits \
+  --expmap expmap.fits \
+  --eefmap eef_maps.fits \
+  --mission ep-fxt \
+  --instrument fxta \
+  --filter open \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out sources.fits \
+  --regfile sources.reg \
+  --sky-regfile sources_fk5.reg
+```
+
+### Python Usage
+
+```python
+from fxtsrcdet import PipelineConfig, run_pipeline
+
+cfg = PipelineConfig(
+    mission="ep-fxt",
+    instrument="fxta",
+    filter_name="open",
+    emin_keV=0.3,
+    emax_keV=10.0,
+)
+
+result = run_pipeline(
+    image="img.fits",
+    exposure="expmap.fits",
+    config=cfg,
+)
+
+rows = result["rows"]
+background_map = result["background_map"]
+per_scale = result["per_scale"]
+```
+
+### Inputs
+
+- counts image FITS
+- optional exposure map FITS
+- optional multi-extension EEF-radius map from `fxteefmap`
+- mission / instrument / filter / energy metadata for PSF selection
+
+### Outputs
+
+- source catalog FITS
+- image-coordinate region file
+- optional sky-coordinate region file
+- optional intermediate maps:
+  - aggregate source mask
+  - best-significance map
+  - background map
+
+### Visualization
+
+The return value from `run_pipeline()` is intentionally rich enough for review work:
+
+- `result["per_scale"]`: background / correlation / source-mask results at each wavelet scale
+- `result["agg_mask"]`: aggregate source-support mask
+- `result["best_sig"]`: smallest significance over all scales
+- `result["background_map"]`: final exposure-aware background map
+
+Example:
+
+```python
+import matplotlib.pyplot as plt
+
+scale_result = result["per_scale"][2]
+
+fig, ax = plt.subplots(1, 3, figsize=(15, 5), constrained_layout=True)
+ax[0].imshow(scale_result.background, origin="lower", cmap="gray")
+ax[0].set_title("Background")
+ax[1].imshow(scale_result.correlation, origin="lower", cmap="magma")
+ax[1].set_title("Wavelet Correlation")
+ax[2].imshow(scale_result.source_mask, origin="lower", cmap="gray")
+ax[2].set_title("Source Mask")
+for axis in ax:
+    axis.set_xticks([])
+    axis.set_yticks([])
+plt.show()
+```
+
+## Detailed Algorithm and How It Works
+
+### 1. Multi-Scale Wavelet Detection
+
+For each user-specified wavelet scale:
+
+1. build a Mexican-hat kernel
+2. estimate local background with the wavelet's negative annulus
+3. iteratively suppress likely source pixels and re-estimate background
+4. compute wavelet correlation and correlation significance
+5. form a per-scale source mask and peak mask
+
+An example of all wavelet results is shown in {numref}`fig-wavelet-allscales`.
+
+```{figure} figs/wavelet_allscales.png
+:alt: wavelet-allscales
+:width: 100%
+:name: fig-wavelet-allscales
+
+Wavelet results across all scales.
+```
+
+### 2. Cross-Scale Candidate Construction
+
+Per-scale connected components are converted into provisional source candidates.
+
+The current implementation:
+
+- labels connected source-mask components
+- finds local peaks within them
+- trims large components to a neighborhood around the dominant peak
+- merges candidates across scales using a PSF-aware spatial clustering radius
+
+The representative candidate center is taken from the wavelet peak, not from the centroid of a large asymmetric connected island. This avoids large centroid drifts for bright extended structures.
+
+An example of wavelet result is shown in {numref}`fig-wavelet-final`.
+
+```{figure} figs/wavelet_final.png
+:alt: wavelet-final
+:width: 85%
+:name: fig-wavelet-final
+
+Mosaic image with final wavelet source catalog overlaid.
+```
+
+### 3. Background Map Construction
+
+The background map is constructed after the initial detection stage:
+
+1. build a valid mask from exposure
+2. carve source regions from the valid image
+3. smooth masked counts and masked exposure over several scales
+4. estimate effective support at each smoothing scale
+5. choose or interpolate the smallest smoothing scale with enough support
+
+This is closer in spirit to `erbackmap` than to a simple annulus-fill background.
+
+An example of this step is shown in {numref}`fig-wavelet-bkg`.
+
+```{figure} figs/wavelet_bkg.png
+:alt: wavelet-bkg
+:width: 100%
+:name: fig-wavelet-bkg
+
+Adaptive background smoothing across all scales.
+```
+
+### 4. Single-Source Fit
+
+Each candidate first receives a local PSF-aware fit:
+
+- point-source fit with small position adjustment
+- optional single-source extended fit using a beta-model kernel
+- residual-profile measurement for `r50`, `r80`, `r90`
+
+This stage initializes:
+
+- source position
+- counts-like amplitude
+- local morphology
+- preliminary `det_like` / `ext_like`
+
+
+An example of this step is shown in {numref}`fig-single-fit`.
+
+```{figure} figs/single_src_fit.png
+:alt: single-fit
+:width: 90%
+:name: fig-single-fit
+
+Fitting step 1: single source fit.
+```
+
+### 5. Grouped Fit
+
+Nearby candidates are grouped and fit jointly as point sources.
+
+This stage improves:
+
+- deblending
+- conditional per-source `det_like`
+
+Grouped extent testing is then performed greedily:
+
+1. start from the current grouped model
+2. rank members by a composite extension-brightness score
+3. test one member at a time as extended on top of the current accepted group model
+4. keep the extended replacement only if the extent likelihood passes threshold
+
+This allows more than one extended source in a group without letting every weak member absorb the same broad residual.
+
+```{mermaid}
+flowchart TD
+    A[Build grouped point-source model] --> B[Fit all group member amplitudes jointly]
+    B --> C[Compute current mixed group model]
+    C --> D[Rank members by composite score]
+    D --> E[Pick next member]
+    E --> F[Build null model by removing this member from current group model]
+    F --> G[Test a grid of extended rc values]
+    G --> H[For each rc: build beta-model template and fit amplitude]
+    H --> I[Keep best extended alternative]
+    I --> J[Compute trial ext_like against current group model]
+    J --> K{ext_like >= min_ext_like?}
+    K -- Yes --> L[Accept member as extended]
+    L --> M[Replace this member in current group model]
+    K -- No --> N[Keep member as point-like]
+    M --> O{More members left?}
+    N --> O
+    O -- Yes --> E
+    O -- No --> P[Finish grouped extent assignment]
+```
+
+The important detail is that the grouped model is updated after each accepted extended member. Later candidates are therefore tested against the current accepted mixed model, not always against the original all-point group model.
+
+An illustration of this step is shown in {numref}`fig-joint-fit`.
+
+```{figure} figs/group_joint_fit.png
+:alt: joint-fit
+:width: 90%
+:name: fig-joint-fit
+
+Fitting step 2: group joint fit.
+```
+
+### 6. Classification and Catalog Assembly
+
+Each source is finally labeled as one of:
+
+- `background`
+- `point`
+- `extended`
+
+The final `CatalogRow` stores lowercase internal names. The FITS writer maps those internal names to public science catalog names such as `ML_CTS_0`, `DET_LIKE_0`, and `SOURCE_TYPE`.
+
+## Tunable Parameters and Heuristic Constants
+
+This task contains several user-facing parameters and several internal heuristic constants that strongly affect behavior.
+
+### User-Facing Detection Parameters
+
+- wavelet scales:
+  - default `(1, 2, 4, 8, 16)` pixels
+- detection significance threshold:
+  - `sigthresh = 1e-6`
+- background-cleansing significance threshold:
+  - `bkgsigthresh = 1e-3`
+- valid relative exposure threshold in the detection stage:
+  - `expthresh = 0.1`
+- ellipse scale factor used to convert source pixels into a wavelet-stage ellipse:
+  - `ellsigma = 3.0`
+
+### User-Facing Catalog Parameters
+
+- minimum detection likelihood for non-background classification:
+  - `min_det_like = 6.0`
+- minimum extent likelihood for `extended` classification:
+  - `min_ext_like = 6.0`
+
+### Per-Scale Candidate Construction
+
+- local support trimming around the dominant peak uses:
+  - `peak_radius = max(2.5 * scale, 4.0)`
+- weak single-scale fragments are rejected if:
+  - `npix <= 4`, or
+  - `wavelet_peak_score < z_thresh + 1.0`
+
+These settings control how aggressively large connected source islands are trimmed before being turned into provisional candidates.
+
+### Background-Map Carving and Smoothing
+
+- source carve radius in the current background map:
+  - `max(0.8 * psf_r90, 1.5 * scale, 3.5)`
+- default smoothing grid:
+  - `4, 8, 16, 32` pixels plus the requested `smooth_sigma`
+- default smoothing scale floor:
+  - `smooth_sigma >= 4`
+- local background rate cap:
+  - `3 * percentile_99.9(rate_samples)`
+
+These choices control how much source flux is removed before smoothing and how spiky or over-smoothed the final background map becomes.
+
+### Single-Source Fit Geometry
+
+- single-source fit stamp radius:
+  - `fit_stamp_radius = max(1.75 * psf_r90, 1.75 * scale, 6.0)`
+- morphology/profile measurement radius:
+  - `profile_radius = max(1.25 * psf_r90, 1.25 * scale, 5.0)`
+
+These two radii are intentionally different:
+
+- the fit stamp is larger to provide local context
+- the profile radius is smaller to reduce contamination from nearby sources and broad background structure
+
+### Neighbor Contamination Masking
+
+- contaminant mask radius around nearby stronger sources:
+  - `max(other_psf_r90, 1.5 * other.scale, 4.0)`
+
+This affects both the single-source fit and the grouped fit.
+
+### Group Construction and Grouped Fit Geometry
+
+- source grouping link radius:
+  - `max(1.25 * max(r90_i, r90_j), 8.0)`
+- grouped fit stamp radius:
+  - `group_extent + margin`
+- grouped fit margin:
+  - `max(1.5 * max_psf_r90, 1.5 * max_scale, 6.0)`
+- grouped fit hard minimum stamp radius:
+  - `10.0` pixels
+
+These parameters determine how aggressively nearby candidates are treated as one local fitting problem.
+
+### Extended-Source Model
+
+- beta-model slope:
+  - fixed at `beta = 2/3`
+- default extent trial grid includes:
+  - `0.5, 1.5, 3.0, 6.0` pixels
+- single-source extent grid also includes PSF-scaled terms:
+  - `0.4 * psf_r50`
+  - `0.7 * psf_r50`
+  - `1.0 * psf_r50`
+  - `0.4 * psf_r90`
+- extent grid upper bound:
+  - `max(1.2 * psf_r90, 6.0)`
+
+### Grouped Extent Selection
+
+Grouped extension is currently chosen greedily:
+
+- members are ranked by:
+  - `log1p(point_amp) * extent_proxy`
+- where `extent_proxy` is built from:
+  - `max(r50/psf_r50 - 1, 0)`
+  - `0.5 * max(r80/psf_r80 - 1, 0)`
+- a member is promoted to extended only if:
+  - `trial_ext_like >= min_ext_like`
+
+### Final Classification Heuristics
+
+Examples of current classification constants:
+
+- `stretch >= 1.25` for the model-based extent path
+- `stretch >= 2.5` for the morphology-based fallback path
+- fitted extent scale must satisfy:
+  - `best_sigma < max(1.5 * psf_r90, 12.0)`
+- high-significance morphology fallback requires:
+  - `det_like >= max(3.0 * min_det_like, 20.0)`
+- single-scale non-background floor:
+  - `max(4.5 * min_det_like, 28.0)`
+
+### Public Catalog Region
+
+- the final public catalog region is circular
+- point sources use local `r75`
+- extended sources use fitted extended-model `r75`
+
+## Suggested Future Additions
+
+- a dedicated page on catalog column definitions

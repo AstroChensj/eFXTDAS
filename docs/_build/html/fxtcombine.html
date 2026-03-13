@@ -1,0 +1,667 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>fxtcombine &#8212; eFXTDAS 0.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=6dabc696" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=e1a75a79"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'fxtcombine';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="fxtregions" href="fxtregions.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">eFXTDAS 0.1 documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/fxtcombine.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>fxtcombine</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-obsid-preprocessing">1. Per-OBSID Preprocessing</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#image-and-exposure-stacking">2. Image and Exposure Stacking</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#detection-and-region-building">3. Detection and Region Building</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-obsid-spectral-extraction">4. Per-OBSID Spectral Extraction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#spectral-stacking">5. Spectral Stacking</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#logging-and-output-layout">Logging and Output Layout</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-constants">Tunable Parameters and Constants</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#current-limitations">Current Limitations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="fxtcombine">
+<h1><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code><a class="headerlink" href="#fxtcombine" title="Link to this heading">#</a></h1>
+<section id="what-it-does">
+<h2>What It Does<a class="headerlink" href="#what-it-does" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> combines multiple EP-FXT observations of the same target into a stacked imaging product and a stacked X-ray spectrum.</p>
+<p>The current workflow:</p>
+<ul class="simple">
+<li><p>scans multiple OBSID directories and selects matching event products</p></li>
+<li><p>runs a simplified per-OBSID preprocessing chain to create clean events, images, and exposure maps</p></li>
+<li><p>reprojects and stacks images and vignetted exposure maps onto a common reference frame</p></li>
+<li><p>runs <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> on the stacked image</p></li>
+<li><p>runs <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code> to generate source and background extraction regions</p></li>
+<li><p>re-enters each OBSID to extract source/background spectra and response products</p></li>
+<li><p>calls external <code class="docutils literal notranslate"><span class="pre">runXstack</span></code> to build the final stacked source spectrum, background spectrum, RMF, and ARF</p></li>
+</ul>
+<p>This makes <code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> the top-level orchestration task in the current <code class="docutils literal notranslate"><span class="pre">eFXTDAS</span></code> toolkit.</p>
+</section>
+<section id="basic-usage">
+<h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
+<section id="command-line-usage">
+<h3>Command-Line Usage<a class="headerlink" href="#command-line-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtcombine<span class="w"> </span>/data/epfxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--obsid-lst<span class="w"> </span><span class="m">02001234567</span>,02001234568<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out-dir<span class="w"> </span>combine_out
+</pre></div>
+</div>
+<p>Reuse already existing intermediates:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtcombine<span class="w"> </span>/data/epfxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--obsid-lst<span class="w"> </span>obsids.txt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out-dir<span class="w"> </span>combine_out<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--skip-existing
+</pre></div>
+</div>
+</section>
+<section id="python-usage">
+<h3>Python Usage<a class="headerlink" href="#python-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fxtcombine.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">combine_spec</span>
+
+<span class="n">combine_spec</span><span class="p">(</span>
+    <span class="n">src_dir</span><span class="o">=</span><span class="s2">&quot;/data/epfxt&quot;</span><span class="p">,</span>
+    <span class="n">obsid_lst</span><span class="o">=</span><span class="s2">&quot;02001234567,02001234568&quot;</span><span class="p">,</span>
+    <span class="n">ra</span><span class="o">=</span><span class="mf">9.25937</span><span class="p">,</span>
+    <span class="n">dec</span><span class="o">=</span><span class="mf">9.16681</span><span class="p">,</span>
+    <span class="n">out_dir</span><span class="o">=</span><span class="s2">&quot;combine_out&quot;</span><span class="p">,</span>
+    <span class="n">module</span><span class="o">=</span><span class="s2">&quot;a,b&quot;</span><span class="p">,</span>
+    <span class="n">datamode</span><span class="o">=</span><span class="s2">&quot;ff&quot;</span><span class="p">,</span>
+    <span class="n">datatype</span><span class="o">=</span><span class="s2">&quot;evt&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="inputs">
+<h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>source directory with one subdirectory per OBSID</p></li>
+<li><p>target <code class="docutils literal notranslate"><span class="pre">RA</span></code>, <code class="docutils literal notranslate"><span class="pre">Dec</span></code></p></li>
+<li><p>one or more OBSIDs, passed either as a comma-separated list or a file</p></li>
+<li><p>optional module / datamode / datatype filtering</p></li>
+</ul>
+</section>
+<section id="outputs">
+<h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>per-OBSID intermediate products under <code class="docutils literal notranslate"><span class="pre">&lt;out-dir&gt;/&lt;OBSID&gt;/products/</span></code></p></li>
+<li><p>stacked imaging products under <code class="docutils literal notranslate"><span class="pre">&lt;out-dir&gt;/stack/</span></code></p></li>
+<li><p>stacked source catalog and region products</p></li>
+<li><p>final stacked spectrum products from <code class="docutils literal notranslate"><span class="pre">runXstack</span></code></p></li>
+<li><p>summary JSON and per-step logs</p></li>
+</ul>
+<p>Typical stacked products include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">evt_stack_cts.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evt_stack_exp.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evt_stack_rate.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stack_src.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stack_src.reg</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_src.reg</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_bkg.reg</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stack_pi.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stack_bkgpi.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stack_rmf.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stack_arf.fits</span></code></p></li>
+</ul>
+</section>
+</section>
+<section id="detailed-algorithm-and-how-it-works">
+<h2>Detailed Algorithm and How It Works<a class="headerlink" href="#detailed-algorithm-and-how-it-works" title="Link to this heading">#</a></h2>
+<section id="per-obsid-preprocessing">
+<h3>1. Per-OBSID Preprocessing<a class="headerlink" href="#per-obsid-preprocessing" title="Link to this heading">#</a></h3>
+<p>For each selected OBSID and each selected event file:</p>
+<ol class="arabic simple">
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtcoord</span></code></p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtpical</span></code></p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtparticleidentify</span></code></p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtbadpix</span></code></p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtgrade</span></code></p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtgtigen</span></code></p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">xselect</span></code> to produce:</p>
+<ul class="simple">
+<li><p>clean events</p></li>
+<li><p>a 0.3-10 keV image</p></li>
+<li><p>a whole-field light curve</p></li>
+</ul>
+</li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtexpogen</span></code> to produce a vignetted exposure map</p></li>
+</ol>
+<p>This stage creates the per-OBSID products that are later stacked.</p>
+</section>
+<section id="image-and-exposure-stacking">
+<h3>2. Image and Exposure Stacking<a class="headerlink" href="#image-and-exposure-stacking" title="Link to this heading">#</a></h3>
+<p>The longest-exposure image is used as the reference frame.</p>
+<p>Current stacking behavior:</p>
+<ul class="simple">
+<li><p>each clean event list is projected onto the reference WCS and binned into the reference image grid</p></li>
+<li><p>each exposure map is reprojected onto the same reference frame and summed</p></li>
+<li><p>a stacked rate map is computed as <code class="docutils literal notranslate"><span class="pre">counts</span> <span class="pre">/</span> <span class="pre">exposure</span></code></p></li>
+</ul>
+<p>The stacked outputs are written separately for each requested datatype such as <code class="docutils literal notranslate"><span class="pre">evt</span></code> or <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>.</p>
+</section>
+<section id="detection-and-region-building">
+<h3>3. Detection and Region Building<a class="headerlink" href="#detection-and-region-building" title="Link to this heading">#</a></h3>
+<p>After the stacked <code class="docutils literal notranslate"><span class="pre">evt</span></code> products are written:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> calls <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> writes the stacked source catalog and source region file</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> calls <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code> writes the source and background extraction region files</p></li>
+</ol>
+<p>The current <code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> usage of <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code> is in <code class="docutils literal notranslate"><span class="pre">manual</span></code> mode, with fixed source and background radii:</p>
+<ul class="simple">
+<li><p>source radius: <code class="docutils literal notranslate"><span class="pre">60</span> <span class="pre">arcsec</span></code></p></li>
+<li><p>background annulus: <code class="docutils literal notranslate"><span class="pre">90-300</span> <span class="pre">arcsec</span></code></p></li>
+</ul>
+<p>Target-to-catalog matching currently uses the EP-FXT representative position accuracy at 90% confidence:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FXT_POSITION_ERR90_ARCSEC</span> <span class="pre">=</span> <span class="pre">8.6</span></code></p></li>
+</ul>
+</section>
+<section id="per-obsid-spectral-extraction">
+<h3>4. Per-OBSID Spectral Extraction<a class="headerlink" href="#per-obsid-spectral-extraction" title="Link to this heading">#</a></h3>
+<p>After the stacked source/background regions are created, <code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> loops over each OBSID again and:</p>
+<ul class="simple">
+<li><p>extracts source-filtered events</p></li>
+<li><p>extracts source and background PI spectra</p></li>
+<li><p>extracts source and background light curves</p></li>
+<li><p>runs <code class="docutils literal notranslate"><span class="pre">fxtarfgen</span></code></p></li>
+<li><p>runs <code class="docutils literal notranslate"><span class="pre">fxtrmfgen</span></code></p></li>
+<li><p>updates OGIP header keywords so the products are internally linked</p></li>
+</ul>
+</section>
+<section id="spectral-stacking">
+<h3>5. Spectral Stacking<a class="headerlink" href="#spectral-stacking" title="Link to this heading">#</a></h3>
+<p>Finally, <code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> prepares a file list of all extracted source spectra and calls:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">runXstack</span></code></p></li>
+</ul>
+<p>with same-target mode enabled.</p>
+<p>This stage produces the final stacked source spectrum and associated response products.</p>
+</section>
+</section>
+<section id="logging-and-output-layout">
+<h2>Logging and Output Layout<a class="headerlink" href="#logging-and-output-layout" title="Link to this heading">#</a></h2>
+<p>The default main log file is:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;out-dir&gt;/log/fxtcombine.log</span></code></p></li>
+</ul>
+<p>Per-OBSID logs are written under:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;out-dir&gt;/&lt;OBSID&gt;/products/log/</span></code></p></li>
+</ul>
+<p>Command-specific logs such as <code class="docutils literal notranslate"><span class="pre">xselect.log</span></code>, <code class="docutils literal notranslate"><span class="pre">fxtarfgen.log</span></code>, and <code class="docutils literal notranslate"><span class="pre">runXstack.log</span></code> are written beside the stage that generated them.</p>
+</section>
+<section id="tunable-parameters-and-constants">
+<h2>Tunable Parameters and Constants<a class="headerlink" href="#tunable-parameters-and-constants" title="Link to this heading">#</a></h2>
+<p>Important current constants are defined in <a class="reference download internal" download="" href="_downloads/c375e8c643807e2749c0e608eb9b5a11/config.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtcombine/config.py</span></code></span></a>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FXT_POSITION_ERR90_ARCSEC</span> <span class="pre">=</span> <span class="pre">8.6</span></code></p>
+<ul>
+<li><p>representative source-position accuracy at 90% confidence</p></li>
+<li><p>used for target-to-catalog matching via <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SRC_EXTRACT_RADIUS</span> <span class="pre">=</span> <span class="pre">60</span></code></p>
+<ul>
+<li><p>source extraction radius in arcsec</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BKG_EXTRACT_INNER_RADIUS</span> <span class="pre">=</span> <span class="pre">90</span></code></p>
+<ul>
+<li><p>background annulus inner radius in arcsec</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BKG_EXTRACT_OUTER_RADIUS</span> <span class="pre">=</span> <span class="pre">300</span></code></p>
+<ul>
+<li><p>background annulus outer radius in arcsec</p></li>
+</ul>
+</li>
+</ul>
+<p>The main user-facing pipeline controls are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--module</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--datamode</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--datatype</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--grade</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--expr</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--skip-existing</span></code></p></li>
+</ul>
+</section>
+<section id="current-limitations">
+<h2>Current Limitations<a class="headerlink" href="#current-limitations" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> assumes all selected observations belong to the same astrophysical target.</p></li>
+<li><p>The stacked-image detection/region step is currently fixed to the <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> + <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code> workflow.</p></li>
+<li><p>The current region-building step uses fixed manual radii rather than the <code class="docutils literal notranslate"><span class="pre">auto</span></code> sizing mode in <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code>.</p></li>
+<li><p>Spectral stacking relies on external <code class="docutils literal notranslate"><span class="pre">runXstack</span></code>; there is no local in-package replacement.</p></li>
+<li><p>The counts-image stacking step currently bins reprojected events onto the reference grid rather than performing a full flux-conserving image reprojection.</p></li>
+</ul>
+</section>
+<section id="suggested-future-additions">
+<h2>Suggested Future Additions<a class="headerlink" href="#suggested-future-additions" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>examples using a real multi-epoch test dataset</p></li>
+<li><p>documentation of expected FXTDAS external dependencies</p></li>
+<li><p>a diagram of the per-OBSID versus stacked-product directory tree</p></li>
+<li><p>a validation note comparing stacked extraction against single-epoch extraction</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="fxtregions.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></p>
+      </div>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-obsid-preprocessing">1. Per-OBSID Preprocessing</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#image-and-exposure-stacking">2. Image and Exposure Stacking</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#detection-and-region-building">3. Detection and Region Building</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-obsid-spectral-extraction">4. Per-OBSID Spectral Extraction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#spectral-stacking">5. Spectral Stacking</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#logging-and-output-layout">Logging and Output Layout</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-constants">Tunable Parameters and Constants</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#current-limitations">Current Limitations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Chen SJ
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Chen SJ.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

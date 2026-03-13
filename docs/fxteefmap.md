@@ -1,0 +1,136 @@
+# `fxteefmap`
+
+## What It Does
+
+`fxteefmap` creates an image-sized map of local EEF radii for FXT images.
+
+The standard output is a multi-extension FITS product containing per-pixel maps such as:
+
+- `R50`
+- `R75`
+- `R80`
+- `R90`
+
+Each map stores the radius in image pixels corresponding to the requested encircled-energy fraction at that image position.
+
+## Basic Usage
+
+### Command-Line Usage
+
+```bash
+fxteefmap img.fits \
+  --expmap expmap.fits \
+  --mission ep-fxt \
+  --instrument fxta \
+  --filter open \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out eef_maps.fits
+```
+
+### Single-Fraction Output
+
+```bash
+fxteefmap img.fits \
+  --expmap expmap.fits \
+  --mission ep-fxt \
+  --instrument fxta \
+  --filter open \
+  --emin 0.3 \
+  --emax 10.0 \
+  --eeffrac 0.75 \
+  --out r75_map.fits
+```
+
+### Python Usage
+
+```python
+from fxteefmap import build_eef_radius_maps
+
+maps, meta = build_eef_radius_maps(
+    image=image,
+    pixel_scale_arcsec=9.6,
+    eeffrac_values=(0.50, 0.75, 0.80, 0.90),
+    mission="ep-fxt",
+    instrument="fxta",
+    filter_name="open",
+    emin_keV=0.3,
+    emax_keV=10.0,
+)
+```
+
+### Inputs
+
+- image FITS, used for shape and WCS
+- optional exposure map for zeroing outside-FOV pixels
+- mission / instrument / filter / energy configuration
+
+### Outputs
+
+- multi-extension FITS with one radius map per encircled-energy fraction
+- or a single image if `--eeffrac` is explicitly requested
+
+### Visualization
+
+The output maps can be opened directly in SAOImage DS9.
+
+Each image extension carries:
+
+- WCS copied from the input image
+- `EEF_FRAC`
+- `BUNIT = pixel`
+
+That makes it practical to inspect spatial PSF broadening across the field.
+
+## Detailed Algorithm and How It Works
+
+1. Load the input image and infer the pixel scale.
+2. Build the mission PSF context for the requested instrument / filter / energy band.
+3. Compute the optical-axis geometry.
+4. For each requested encircled-energy fraction:
+   - evaluate local off-axis angle over the image
+   - interpolate the local EEF calibration in off-axis angle
+   - interpolate the radius corresponding to the requested EEF fraction
+5. Write the result as a FITS image or multi-extension FITS product.
+
+The current implementation uses the EP/FXT EEF calibration and interpolates in off-axis angle rather than snapping to the nearest tabulated calibration extension. This keeps the output radius map spatially continuous.
+
+## Tunable Parameters and Heuristic Constants
+
+### User-Facing Parameters
+
+- default output fractions:
+  - `0.50, 0.75, 0.80, 0.90`
+- single-map mode:
+  - `--eeffrac`
+- multi-extension mode:
+  - `--fractions`
+
+### Pixel Scale Handling
+
+- image pixel scale is inferred from WCS when available
+- if WCS is missing or unusable, the current fallback in the CLI path is:
+  - `9.6 arcsec/pixel`
+
+### Off-Axis Interpolation
+
+- local EEF radii are interpolated in off-axis angle rather than snapped to the nearest tabulated calibration extension
+- endpoint extrapolation uses the nearest available calibration curve
+
+### Outside-FOV Handling
+
+- if an exposure map is supplied, zero-exposure pixels are written as zero in the radius maps
+
+### Default Fraction Choice
+
+The default `R50/R75/R80/R90` set is chosen because:
+
+- `R50` is useful for PSF-core and extent checks
+- `R75` is useful for public source/cell radii
+- `R80` is a useful intermediate profile scale
+- `R90` is useful for background carving and fit-support sizing
+
+## Suggested Future Additions
+
+- optional theta map output alongside the radius maps
+- a validation page comparing `fxteefmap` radii with `fxtpsfgen` / `fxteefgen` at selected positions

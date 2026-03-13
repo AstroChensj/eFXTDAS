@@ -1,0 +1,1269 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>fxtregions &#8212; eFXTDAS 0.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=6dabc696" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=e1a75a79"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = `pre.mermaid {
+    /* Same as .mermaid-container > pre */
+    display: block;
+    width: 100%;
+}
+
+pre.mermaid > svg {
+    /* Same as .mermaid-container > pre > svg */
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}`;
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = `.mermaid-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+.mermaid-container > pre {
+    display: block;
+    width: 100%;
+}
+
+.mermaid-container > pre > svg {
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+
+.mermaid-fullscreen-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 95vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-container-fullscreen pre.mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen .mermaid svg {
+    height: 100% !important;
+    width: 100% !important;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}`;
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        all_mermaids.forEach((el) => {
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+        await mermaid.run();
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if ("False" === "True") {
+        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("");
+            if(all_mermaids.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else if(svgs.size() !== mermaids_to_add_zoom) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else {
+                svgs.each(function() {
+                    var svg = d3.select(this);
+                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+                    var inner = svg.select("g");
+                    var zoom = d3.zoom().on("zoom", function(event) {
+                        inner.attr("transform", event.transform);
+                    });
+                    svg.call(zoom);
+                });
+            }
+        }
+    } else if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if ("True" !== "True") return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.style.opacity = '50%';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scroll, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.sdisplay = 'block';
+
+                if ("False" === "True") {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+const load = async () => {
+    initStyles();
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...JSON.parse(
+                    `{"startOnLoad": false}`
+                ),
+                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...JSON.parse(
+        `{"startOnLoad": false}`
+    ),
+    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+    }
+);
+
+window.addEventListener("load", load);
+window.runMermaid = runMermaid;</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'fxtregions';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="fxtcombine" href="fxtcombine.html" />
+    <link rel="prev" title="fxteefmap" href="fxteefmap.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">eFXTDAS 0.1 documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtcombine.html"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/fxtregions.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>fxtregions</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#region-construction-logic">Region Construction Logic</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-and-background-extraction-region-construction">Source and Background Extraction Region Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exclusion-region-in-background-region">Exclusion Region in Background Region</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exclusion-region-in-source-region">Exclusion Region in Source Region</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#final-output">Final Output</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#notes-on-the-current-srctool-like-policy">Notes on the Current <code class="docutils literal notranslate"><span class="pre">srctool</span></code>-Like Policy</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#matching">Matching</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-manual-fallback-radii">Default Manual Fallback Radii</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-radius-floors">Source Radius Floors</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#contaminant-exclusion-geometry">Contaminant Exclusion Geometry</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-background-radius-relations">Source / Background Radius Relations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#surface-brightness-thresholds">Surface-Brightness Thresholds</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="fxtregions">
+<h1><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code><a class="headerlink" href="#fxtregions" title="Link to this heading">#</a></h1>
+<section id="what-it-does">
+<h2>What It Does<a class="headerlink" href="#what-it-does" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code> builds source and background extraction regions for downstream analysis tools such as <code class="docutils literal notranslate"><span class="pre">xselect</span></code>.</p>
+<p>It is intended as an <code class="docutils literal notranslate"><span class="pre">srctool</span></code>-inspired region builder for FXT data. The tool:</p>
+<ul class="simple">
+<li><p>matches an input sky position against a detected source catalog</p></li>
+<li><p>adopts the catalog position when the target is detected</p></li>
+<li><p>chooses source and background radii in either <code class="docutils literal notranslate"><span class="pre">manual</span></code> or <code class="docutils literal notranslate"><span class="pre">auto</span></code> mode</p></li>
+<li><p>carves out contaminating neighboring sources from both source and background regions</p></li>
+<li><p>writes DS9/XSELECT-readable region files</p></li>
+</ul>
+<p>Unlike eSASS <code class="docutils literal notranslate"><span class="pre">srctool</span></code>, the current implementation does not use catalog flags such as <code class="docutils literal notranslate"><span class="pre">AUTO_EXTRACT</span></code> or <code class="docutils literal notranslate"><span class="pre">AUTO_EXCLUDE</span></code>.</p>
+</section>
+<section id="basic-usage">
+<h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
+<section id="command-line-usage">
+<h3>Command-Line Usage<a class="headerlink" href="#command-line-usage" title="Link to this heading">#</a></h3>
+<p>Auto mode with catalog-driven source sizing:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtregions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>image.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sources.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mission<span class="w"> </span>ep-fxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--instrument<span class="w"> </span>fxta<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="w"> </span>open<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emin<span class="w"> </span><span class="m">0</span>.3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emax<span class="w"> </span><span class="m">10</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mode<span class="w"> </span>auto<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--src-regfile<span class="w"> </span>source.reg<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkg-regfile<span class="w"> </span>background.reg
+</pre></div>
+</div>
+<p>Auto mode with an optional background map:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtregions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>image.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sources.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkgmap<span class="w"> </span>bkgmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mission<span class="w"> </span>ep-fxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--instrument<span class="w"> </span>fxta<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="w"> </span>open<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emin<span class="w"> </span><span class="m">0</span>.3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emax<span class="w"> </span><span class="m">10</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mode<span class="w"> </span>auto<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--src-regfile<span class="w"> </span>source.reg<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkg-regfile<span class="w"> </span>background.reg
+</pre></div>
+</div>
+<p>Manual mode:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtregions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>image.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sources.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mode<span class="w"> </span>manual<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--src-radius<span class="w"> </span><span class="m">34</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkg-inner<span class="w"> </span><span class="m">84</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkg-outer<span class="w"> </span><span class="m">425</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--src-regfile<span class="w"> </span>source.reg<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkg-regfile<span class="w"> </span>background.reg
+</pre></div>
+</div>
+</section>
+<section id="python-usage">
+<h3>Python Usage<a class="headerlink" href="#python-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fxtregions.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_regions</span>
+
+<span class="n">info</span> <span class="o">=</span> <span class="n">build_regions</span><span class="p">(</span>
+    <span class="n">image_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;image.fits&quot;</span><span class="p">),</span>
+    <span class="n">catalog_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;sources.fits&quot;</span><span class="p">),</span>
+    <span class="n">ra_deg</span><span class="o">=</span><span class="mf">9.25937</span><span class="p">,</span>
+    <span class="n">dec_deg</span><span class="o">=</span><span class="mf">9.16681</span><span class="p">,</span>
+    <span class="n">mission</span><span class="o">=</span><span class="s2">&quot;ep-fxt&quot;</span><span class="p">,</span>
+    <span class="n">instrument</span><span class="o">=</span><span class="s2">&quot;fxta&quot;</span><span class="p">,</span>
+    <span class="n">filter_name</span><span class="o">=</span><span class="s2">&quot;open&quot;</span><span class="p">,</span>
+    <span class="n">emin_keV</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+    <span class="n">emax_keV</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;source_region&quot;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;background_region&quot;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;source_radius_arcsec&quot;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;background_inner_arcsec&quot;</span><span class="p">],</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;background_outer_arcsec&quot;</span><span class="p">])</span>
+</pre></div>
+</div>
+</section>
+<section id="inputs">
+<h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>counts image FITS with celestial WCS</p></li>
+<li><p>detected source catalog from <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p></li>
+<li><p>target <code class="docutils literal notranslate"><span class="pre">RA</span></code>, <code class="docutils literal notranslate"><span class="pre">Dec</span></code></p></li>
+<li><p>mission / instrument / filter / energy metadata for PSF-aware region sizing</p></li>
+<li><p>optional background map</p></li>
+</ul>
+</section>
+<section id="outputs">
+<h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>source region file</p></li>
+<li><p>background region file</p></li>
+<li><p>contaminant exclusions embedded in the region expressions</p></li>
+<li><p>a summary dictionary from the Python API</p></li>
+</ul>
+</section>
+<section id="visualization">
+<h3>Visualization<a class="headerlink" href="#visualization" title="Link to this heading">#</a></h3>
+<p>Typical review workflow:</p>
+<ol class="arabic simple">
+<li><p>Open the counts image in DS9.</p></li>
+<li><p>Load the source region file.</p></li>
+<li><p>Load the background region file.</p></li>
+<li><p>Check:</p>
+<ul class="simple">
+<li><p>whether the adopted source center is correct</p></li>
+<li><p>whether the source circle is sensible</p></li>
+<li><p>whether the background annulus avoids the source wings</p></li>
+<li><p>whether contaminating neighbors are excluded appropriately</p></li>
+</ul>
+</li>
+</ol>
+</section>
+</section>
+<section id="detailed-algorithm-and-how-it-works">
+<h2>Detailed Algorithm and How It Works<a class="headerlink" href="#detailed-algorithm-and-how-it-works" title="Link to this heading">#</a></h2>
+<section id="region-construction-logic">
+<h3>Region Construction Logic<a class="headerlink" href="#region-construction-logic" title="Link to this heading">#</a></h3>
+<pre  class="mermaid">
+        flowchart TD
+    A[Input RA, Dec, image, catalog] --&gt; B{Target detected in catalog?}
+    B -- Yes --&gt; C[Adopt catalog coordinate]
+    B -- No --&gt; D[Keep input coordinate]
+
+    C --&gt; E{Requested mode}
+    D --&gt; E
+    E -- MANUAL --&gt; F[Use user radii]
+    E -- AUTO --&gt; E2{Target detected?}
+    E2 -- Yes --&gt; G[Use ML_CTS_0 and local background]
+    E2 -- No --&gt; H[Fallback to manual defaults]
+
+    F --&gt; I[Construct source circle and background annulus]
+    G --&gt; I
+    H --&gt; I
+
+    I --&gt; J[Carve exclusion regions from background annulus]
+    J --&gt; K{Target detected?}
+    K -- Yes --&gt; L[Build source-region exclusions from contaminant vs target brightness]
+    K -- No --&gt; M[Use background-style exclusions in source region and warn]
+
+    L --&gt; N{Any exclusion fully covers source region?}
+    M --&gt; N
+    N -- Yes --&gt; O[Raise error]
+    N -- No --&gt; P[Write source and background region files]
+    </pre></section>
+<section id="source-and-background-extraction-region-construction">
+<h3>Source and Background Extraction Region Construction<a class="headerlink" href="#source-and-background-extraction-region-construction" title="Link to this heading">#</a></h3>
+<ol class="arabic simple">
+<li><p>Match the input coordinate against the detected source catalog.</p></li>
+<li><p>If a match is found within the configured threshold:</p>
+<ul class="simple">
+<li><p>adopt the catalog position</p></li>
+<li><p>treat the target as detected</p></li>
+</ul>
+</li>
+<li><p>Otherwise:</p>
+<ul class="simple">
+<li><p>keep the original input coordinate</p></li>
+<li><p>treat the target as undetected</p></li>
+</ul>
+</li>
+<li><p>Determine the effective mode:</p>
+<ul class="simple">
+<li><p>matched target: keep requested <code class="docutils literal notranslate"><span class="pre">manual</span></code> or <code class="docutils literal notranslate"><span class="pre">auto</span></code></p></li>
+<li><p>unmatched target + requested <code class="docutils literal notranslate"><span class="pre">auto</span></code>: fall back to <code class="docutils literal notranslate"><span class="pre">manual</span></code></p></li>
+</ul>
+</li>
+<li><p>Determine the local background:</p>
+<ul class="simple">
+<li><p>if a background map is supplied, sample it at the target position</p></li>
+<li><p>else if the target is detected, use catalog <code class="docutils literal notranslate"><span class="pre">ML_BKG_0</span></code></p></li>
+<li><p>else use the nearest detected source <code class="docutils literal notranslate"><span class="pre">ML_BKG_0</span></code> and emit a warning</p></li>
+</ul>
+</li>
+<li><p>Determine the target brightness:</p>
+<ul class="simple">
+<li><p>if detected, use catalog <code class="docutils literal notranslate"><span class="pre">ML_CTS_0</span></code></p></li>
+<li><p>if undetected, do not invent a catalog brightness</p></li>
+</ul>
+</li>
+<li><p>Determine source and background radii:</p>
+<ul class="simple">
+<li><p>manual mode uses user-supplied radii</p></li>
+<li><p>unmatched targets in effective manual mode use config defaults</p></li>
+<li><p>matched auto mode uses <code class="docutils literal notranslate"><span class="pre">ML_CTS_0</span></code> and local background following the same broad policy as eSASS <code class="docutils literal notranslate"><span class="pre">srctool</span></code></p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="exclusion-region-in-background-region">
+<h3>Exclusion Region in Background Region<a class="headerlink" href="#exclusion-region-in-background-region" title="Link to this heading">#</a></h3>
+<p>For every neighboring catalog source:</p>
+<ol class="arabic simple">
+<li><p>Build a contaminant source model from the local PSF and, when available, the catalog extent.</p></li>
+<li><p>Estimate the contaminant brightness from <code class="docutils literal notranslate"><span class="pre">ML_CTS_0</span></code>.</p></li>
+<li><p>Determine the exclusion radius by comparing the contaminant surface-brightness profile to the local background level.</p></li>
+<li><p>Append that exclusion circle to the background region if it overlaps the background annulus.</p></li>
+</ol>
+<p>This step is applied regardless of whether the target itself is detected or undetected.</p>
+</section>
+<section id="exclusion-region-in-source-region">
+<h3>Exclusion Region in Source Region<a class="headerlink" href="#exclusion-region-in-source-region" title="Link to this heading">#</a></h3>
+<p>For every neighboring catalog source:</p>
+<ol class="arabic simple">
+<li><p>If the target is detected:</p>
+<ul class="simple">
+<li><p>determine the contaminant exclusion radius by comparing the contaminant surface brightness against the target source surface brightness, following the same broad policy as <code class="docutils literal notranslate"><span class="pre">srctool</span></code></p></li>
+</ul>
+</li>
+<li><p>If the target is undetected:</p>
+<ul class="simple">
+<li><p>the target <code class="docutils literal notranslate"><span class="pre">ML_CTS_0</span></code> is unavailable</p></li>
+<li><p>reuse the background-style contaminant exclusion radius</p></li>
+<li><p>emit a warning through the logger</p></li>
+</ul>
+</li>
+<li><p>If a single contaminant exclusion fully covers the target source region:</p>
+<ul class="simple">
+<li><p>abort with an error because the effective source region would be empty</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="final-output">
+<h3>Final Output<a class="headerlink" href="#final-output" title="Link to this heading">#</a></h3>
+<p>After the source/background geometry and both exclusion sets are determined, the tool writes:</p>
+<ul class="simple">
+<li><p>one source region file</p></li>
+<li><p>one background region file</p></li>
+</ul>
+<p>Both are written in DS9/XSELECT-readable syntax.</p>
+</section>
+<section id="notes-on-the-current-srctool-like-policy">
+<h3>Notes on the Current <code class="docutils literal notranslate"><span class="pre">srctool</span></code>-Like Policy<a class="headerlink" href="#notes-on-the-current-srctool-like-policy" title="Link to this heading">#</a></h3>
+<p>Current auto-mode logic follows the same broad policy as <code class="docutils literal notranslate"><span class="pre">srctool</span></code>:</p>
+<ul class="simple">
+<li><p>source extraction radius is chosen to maximize nominal SNR</p></li>
+<li><p>the background annulus starts outside the source region</p></li>
+<li><p>the inner background radius is pushed outward until the target source wing level is sufficiently low</p></li>
+<li><p>contaminating sources are carved out using surface-brightness thresholds</p></li>
+</ul>
+<p>The implementation is intentionally simpler than eSASS and uses local PSF-derived source kernels rather than the full <code class="docutils literal notranslate"><span class="pre">srctool</span></code> machinery.</p>
+</section>
+</section>
+<section id="tunable-parameters-and-heuristic-constants">
+<h2>Tunable Parameters and Heuristic Constants<a class="headerlink" href="#tunable-parameters-and-heuristic-constants" title="Link to this heading">#</a></h2>
+<p>The following constants are defined in <a class="reference download internal" download="" href="_downloads/abcec044151a140b2ba8abba9d56e4e7/config.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtregions/config.py</span></code></span></a>:</p>
+<section id="matching">
+<h3>Matching<a class="headerlink" href="#matching" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MATCH_THRESHOLD_ARCSEC</span> <span class="pre">=</span> <span class="pre">15.0</span></code></p>
+<ul>
+<li><p>Maximum separation for declaring that the requested target is detected in the catalog.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="default-manual-fallback-radii">
+<h3>Default Manual Fallback Radii<a class="headerlink" href="#default-manual-fallback-radii" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_SOURCE_RADIUS_DEG</span> <span class="pre">=</span> <span class="pre">0.00944444</span></code></p>
+<ul>
+<li><p>Default source radius when auto mode falls back to effective manual mode for an undetected target.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_BKG_INNER_RADIUS_DEG</span> <span class="pre">=</span> <span class="pre">0.0233333</span></code></p>
+<ul>
+<li><p>Default background annulus inner radius in the same fallback case.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DEFAULT_BKG_OUTER_RADIUS_DEG</span> <span class="pre">=</span> <span class="pre">0.118</span></code></p>
+<ul>
+<li><p>Default background annulus outer radius in the same fallback case.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="source-radius-floors">
+<h3>Source Radius Floors<a class="headerlink" href="#source-radius-floors" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MIN_SOURCE_RADIUS_ARCSEC</span> <span class="pre">=</span> <span class="pre">15.0</span></code></p>
+<ul>
+<li><p>Lower limit for automatically chosen source radii.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="contaminant-exclusion-geometry">
+<h3>Contaminant Exclusion Geometry<a class="headerlink" href="#contaminant-exclusion-geometry" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MIN_EXCLUDE_RADIUS_ARCSEC</span> <span class="pre">=</span> <span class="pre">5.0</span></code></p>
+<ul>
+<li><p>Minimum contaminant exclusion radius.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MIN_EXCLUDE_DIST_ARCSEC</span> <span class="pre">=</span> <span class="pre">10.0</span></code></p>
+<ul>
+<li><p>Neighboring sources closer than this are treated as blended rather than carved out as a separate contaminant.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="source-background-radius-relations">
+<h3>Source / Background Radius Relations<a class="headerlink" href="#source-background-radius-relations" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">INITIAL_SRC_TO_BKG_INNER_RATIO</span> <span class="pre">=</span> <span class="pre">2.0</span></code></p>
+<ul>
+<li><p>Initial background inner-radius guess relative to the source radius.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BACK_TO_SRC_AREA_RATIO</span> <span class="pre">=</span> <span class="pre">10.0</span></code></p>
+<ul>
+<li><p>Target ratio of background annulus area to source region area.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MAX_BACK_R1_TO_R99_RATIO</span> <span class="pre">=</span> <span class="pre">3.0</span></code></p>
+<ul>
+<li><p>Upper cap linking the background inner radius to the local <code class="docutils literal notranslate"><span class="pre">r99</span></code>.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MAX_BACK_ANNULUS_WIDTH_ARCSEC</span> <span class="pre">=</span> <span class="pre">120.0</span></code></p>
+<ul>
+<li><p>Maximum allowed width of the background annulus.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="surface-brightness-thresholds">
+<h3>Surface-Brightness Thresholds<a class="headerlink" href="#surface-brightness-thresholds" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MAX_SRC_TO_BKG_RATIO</span> <span class="pre">=</span> <span class="pre">0.05</span></code></p>
+<ul>
+<li><p>Target source wing level at the inner edge of the background annulus, as a fraction of the local background.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MAX_CONF_TO_SRC_RATIO</span> <span class="pre">=</span> <span class="pre">0.20</span></code></p>
+<ul>
+<li><p>Contaminant exclusion threshold inside the source region, relative to the target source surface brightness.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MAX_CONF_TO_BACK_RATIO</span> <span class="pre">=</span> <span class="pre">0.10</span></code></p>
+<ul>
+<li><p>Contaminant exclusion threshold inside the background annulus, relative to the local background.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="suggested-future-additions">
+<h2>Suggested Future Additions<a class="headerlink" href="#suggested-future-additions" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>a worked crowded-field example with DS9 screenshots</p></li>
+<li><p>optional output of the intermediate adopted target state</p></li>
+<li><p>optional diagnostic plot of source/background radii and contaminant exclusions</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="fxteefmap.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="fxtcombine.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#region-construction-logic">Region Construction Logic</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-and-background-extraction-region-construction">Source and Background Extraction Region Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exclusion-region-in-background-region">Exclusion Region in Background Region</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exclusion-region-in-source-region">Exclusion Region in Source Region</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#final-output">Final Output</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#notes-on-the-current-srctool-like-policy">Notes on the Current <code class="docutils literal notranslate"><span class="pre">srctool</span></code>-Like Policy</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#matching">Matching</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-manual-fallback-radii">Default Manual Fallback Radii</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-radius-floors">Source Radius Floors</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#contaminant-exclusion-geometry">Contaminant Exclusion Geometry</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-background-radius-relations">Source / Background Radius Relations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#surface-brightness-thresholds">Surface-Brightness Thresholds</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Chen SJ
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Chen SJ.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

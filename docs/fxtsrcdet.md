@@ -1,0 +1,394 @@
+# `fxtsrcdet`
+
+## What It Does
+
+`fxtsrcdet` is a source detection task in `eFXTDAS`, inheriting features from CIAO's `wavdetect` and eSASS's `ermldet`.
+
+It performs:
+
+- multi-scale Mexican-hat wavelet detection on a counts image
+- iterative local background estimation for each wavelet scale
+- cross-scale merging of provisional detections
+- exposure-aware background-map construction
+- PSF-aware single-source and grouped-source fitting
+- point-versus-extended source classification
+- final catalog writing to FITS
+- DS9 region export in image and sky coordinates
+
+The implementation draws inspiration from CIAO `wavdetect` on the initial detection side and eSASS `ermldet` / `erbackmap` concepts on the source fitting and catalog side.
+
+TODO: add classification debug columns, extent_support, morph_extent_support, etc. 
+TODO: add logger.py for standard logger.
+
+## Basic Usage
+
+### Command-Line Usage
+
+```bash
+fxtsrcdet img.fits \
+  --expmap expmap.fits \
+  --eefmap eef_maps.fits \
+  --mission ep-fxt \
+  --instrument fxta \
+  --filter open \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out sources.fits \
+  --regfile sources.reg \
+  --sky-regfile sources_fk5.reg
+```
+
+### Python Usage
+
+```python
+from fxtsrcdet import PipelineConfig, fxtsrcdet_pipeline
+
+cfg = PipelineConfig(
+    mission="ep-fxt",
+    instrument="fxta",
+    filter_name="open",
+    emin_keV=0.3,
+    emax_keV=10.0,
+)
+
+result = fxtsrcdet_pipeline(
+    image="img.fits",
+    exposure="expmap.fits",
+    config=cfg,
+)
+
+rows = result["rows"]
+background_map = result["background_map"]
+per_scale = result["per_scale"]
+```
+
+### Inputs
+
+- counts image FITS
+- optional exposure map FITS
+- optional multi-extension EEF-radius map from `fxteefmap`
+- mission / instrument / filter / energy metadata for PSF selection
+
+### Outputs
+
+- source catalog FITS
+- image-coordinate region file
+- optional sky-coordinate region file
+- optional intermediate maps:
+  - aggregate source mask
+  - best-significance map
+  - background map
+
+### Visualization
+
+The return value from `fxtsrcdet_pipeline()` is intentionally rich enough for review work:
+
+- `result["per_scale"]`: background / correlation / source-mask results at each wavelet scale
+- `result["agg_mask"]`: aggregate source-support mask
+- `result["best_sig"]`: smallest significance over all scales
+- `result["background_map"]`: final exposure-aware background map
+
+Example:
+
+```python
+import matplotlib.pyplot as plt
+
+scale_result = result["per_scale"][2]
+
+fig, ax = plt.subplots(1, 3, figsize=(15, 5), constrained_layout=True)
+ax[0].imshow(scale_result.background, origin="lower", cmap="gray")
+ax[0].set_title("Background")
+ax[1].imshow(scale_result.correlation, origin="lower", cmap="magma")
+ax[1].set_title("Wavelet Correlation")
+ax[2].imshow(scale_result.source_mask, origin="lower", cmap="gray")
+ax[2].set_title("Source Mask")
+for axis in ax:
+    axis.set_xticks([])
+    axis.set_yticks([])
+plt.show()
+```
+
+## Detailed Algorithm and How It Works
+
+### 1. Multi-Scale Wavelet Detection
+
+For each user-specified wavelet scale:
+
+1. build a Mexican-hat kernel
+2. estimate local background with the wavelet's negative annulus
+3. iteratively suppress likely source pixels and re-estimate background
+4. compute wavelet correlation and correlation significance
+5. form a per-scale source mask and peak mask
+
+```{admonition} How to Understand Mexican-Hat Filtering
+:class: tip
+
+Think of an image row as counts in adjacent pixels.
+
+Background only:
+
+`2 1 3 2 2 1 2 3 2 2`
+
+With a source:
+
+`2 1 3 2 8 12 9 3 2 2`
+
+Now slide a simple wavelet-like filter over the data:
+
+`[-1, +2, -1]`
+
+This is the 1D analogue of the 2D Mexican-hat wavelet: positive in the center
+and negative on the sides. The filter score is therefore:
+
+`bright center - local surrounding background`
+
+For a background-only patch:
+
+`window: 1 2 3`
+
+`score = (-1)*1 + (+2)*2 + (-1)*3 = 0`
+
+For a source patch:
+
+`window: 8 12 9`
+
+`score = (-1)*8 + (+2)*12 + (-1)*9 = 7`
+
+The second score is large and positive because the center is brighter than its
+neighbors. In 2D, `wavdetect` repeats this idea with a round Mexican-hat
+wavelet at several scales. Small scales respond to compact sources, large
+scales to broader sources. At each scale, the correlation value is compared
+against what would be expected from background alone; unlikely excesses are
+marked as source pixels. Background estimation is then iteratively improved by
+cleansing likely source pixels before forming the final merged source list.
+```
+
+An example of all wavelet results is shown in {numref}`fig-wavelet-allscales`.
+
+```{figure} figs/wavelet_allscales.png
+:alt: wavelet-allscales
+:width: 100%
+:name: fig-wavelet-allscales
+
+Wavelet results across all scales.
+```
+
+
+#### 1.1 Cross-Scale Candidate Construction
+
+Per-scale connected components are converted into provisional source candidates.
+
+The current implementation:
+
+- labels connected source-mask components
+- finds local peaks within them
+- trims large components to a neighborhood around the dominant peak
+- merges candidates across scales using a PSF-aware spatial clustering radius
+
+The representative candidate center is taken from the wavelet peak, not from the centroid of a large asymmetric connected island. This avoids large centroid drifts for bright extended structures.
+
+An example of wavelet result is shown in {numref}`fig-wavelet-final`.
+
+```{figure} figs/wavelet_final.png
+:alt: wavelet-final
+:width: 85%
+:name: fig-wavelet-final
+
+Mosaic image with final wavelet source catalog overlaid.
+```
+
+### 2. Background Map Construction
+
+The background map is constructed after the initial detection stage:
+
+1. build a valid mask from exposure
+2. carve source regions from the valid image
+3. smooth masked counts and masked exposure over several scales
+4. estimate effective support at each smoothing scale
+5. choose or interpolate the smallest smoothing scale with enough support
+
+This is closer in spirit to `erbackmap` than to a simple annulus-fill background.
+
+An example of this step is shown in {numref}`fig-wavelet-bkg`.
+
+```{figure} figs/wavelet_bkg.png
+:alt: wavelet-bkg
+:width: 100%
+:name: fig-wavelet-bkg
+
+Adaptive background smoothing across all scales.
+```
+
+### 3. PSF-Aware Source Fitting and Classification
+#### 3.1 Single-Source Fit
+
+Each candidate first receives a local PSF-aware fit:
+
+- point-source fit with small position adjustment
+- optional single-source extended fit using a beta-model kernel
+- residual-profile measurement for `r50`, `r80`, `r90`
+
+This stage initializes:
+
+- source position
+- counts-like amplitude
+- local morphology
+- preliminary `det_like` / `ext_like`
+
+
+An example of this step is shown in {numref}`fig-single-fit`.
+
+```{figure} figs/single_src_fit.png
+:alt: single-fit
+:width: 90%
+:name: fig-single-fit
+
+Fitting step 1: single source fit.
+```
+
+#### 3.2 Grouped Fit
+
+Nearby candidates are grouped and fit jointly as point sources.
+
+This stage improves:
+
+- deblending
+- conditional per-source `det_like`
+
+Grouped extent testing is then performed greedily:
+
+1. start from the current grouped model
+2. rank members by a composite extension-brightness score
+3. test one member at a time as extended on top of the current accepted group model
+4. keep the extended replacement only if the extent likelihood passes threshold
+
+This allows more than one extended source in a group without letting every weak member absorb the same broad residual.
+
+```{mermaid}
+flowchart TD
+    A[Build grouped point-source model] --> B[Fit all group member amplitudes jointly]
+    B --> C[Compute current mixed group model]
+    C --> D[Rank members by composite score]
+    D --> E[Pick next member]
+    E --> F[Build null model by removing this member from current group model]
+    F --> G[Test a grid of extended rc values]
+    G --> H[For each rc: build beta-model template and fit amplitude]
+    H --> I[Keep best extended alternative]
+    I --> J[Compute trial ext_like against current group model]
+    J --> K{ext_like >= min_ext_like?}
+    K -- Yes --> L[Accept member as extended]
+    L --> M[Replace this member in current group model]
+    K -- No --> N[Keep member as point-like]
+    M --> O{More members left?}
+    N --> O
+    O -- Yes --> E
+    O -- No --> P[Finish grouped extent assignment]
+```
+
+The important detail is that the grouped model is updated after each accepted extended member. Later candidates are therefore tested against the current accepted mixed model, not always against the original all-point group model.
+
+An illustration of this step is shown in {numref}`fig-joint-fit`.
+
+```{figure} figs/group_joint_fit.png
+:alt: joint-fit
+:width: 90%
+:name: fig-joint-fit
+
+Fitting step 2: group joint fit.
+```
+
+#### 3.3 Classification and Catalog Assembly
+
+Each source is finally labeled as one of:
+
+- `background`
+- `point`
+- `extended`
+
+The final `CatalogRow` stores lowercase internal names. The FITS writer maps those internal names to public science catalog names such as `ML_CTS_0`, `DET_LIKE_0`, and `SOURCE_TYPE`.
+
+## Tunable Parameters and Heuristic Constants
+
+This task contains several user-facing parameters and several internal heuristic constants that strongly affect behavior.
+
+### User-Facing Detection Parameters
+
+- wavelet scales:
+  - default `(1, 2, 4, 8, 16)` pixels
+- detection significance threshold:
+  - `sigthresh = 1e-6`
+- background-cleansing significance threshold:
+  - `bkgsigthresh = 1e-3`
+- valid relative exposure threshold in the detection stage:
+  - `expthresh = 0.1`
+- ellipse scale factor used to convert source pixels into a wavelet-stage ellipse:
+  - `ellsigma = 3.0`
+
+### User-Facing Catalog Parameters
+
+- minimum detection likelihood for non-background classification:
+  - `min_det_like = 6.0`
+- minimum extent likelihood for `extended` classification:
+  - `min_ext_like = 6.0`
+
+### Internal Heuristic Constants
+
+The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They are not exposed directly through the CLI, but they control important behavior in detection, background estimation, fitting, and classification.
+
+### Wavelet / Candidate Construction
+
+- Limit how far the Mexican-hat kernel extends away from the target scale so the wavelet remains finite and computationally practical. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `mexican_hat_kernel()`. Formula: `radius = ceil(MEXICAN_HAT_TRUNCATE * scale)`. Defaults: `MEXICAN_HAT_TRUNCATE = 5.0`.
+- Define how local a “local maximum” must be when identifying wavelet peaks inside thresholded source regions. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `local_maxima()`. Formula: `maximum_filter(..., size=LOCAL_MAX_FILTER_SIZE)`. Defaults: `LOCAL_MAX_FILTER_SIZE = 3`.
+- Set the minimum cross-scale clustering radius when no PSF information is available, so nearby detections can still be merged conservatively. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `cluster_peak_candidates()`. Formula: `radius = CLUSTER_MIN_RADIUS_PIX`. Defaults: `CLUSTER_MIN_RADIUS_PIX = 8.0`.
+- Adapt the cross-scale clustering radius to the local PSF so broader off-axis detections merge more permissively than sharp on-axis ones. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `cluster_peak_candidates()`. Formula: `max(CLUSTER_R90_FACTOR * local_r90, CLUSTER_MIN_RADIUS_PIX)`. Defaults: `CLUSTER_R90_FACTOR = 0.75`, `CLUSTER_MIN_RADIUS_PIX = 8.0`.
+- Prevent a large connected source island from inheriting too much low-significance structure away from its dominant peak. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `combine_scales()`. Formula: `max(PEAK_TRIM_SCALE_FACTOR * scale, PEAK_TRIM_MIN_RADIUS_PIX)`. Defaults: `PEAK_TRIM_SCALE_FACTOR = 2.5`, `PEAK_TRIM_MIN_RADIUS_PIX = 4.0`.
+- Reject tiny one-scale fragments that are more likely to be noise or threshold artifacts than real sources. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `combine_scales()`. Formula: reject when `npix <= SINGLE_SCALE_FRAGMENT_MAX_NPIX` or `wavelet_peak_score < z_thresh + SINGLE_SCALE_PEAK_SCORE_MARGIN`. Defaults: `SINGLE_SCALE_FRAGMENT_MAX_NPIX = 4`, `SINGLE_SCALE_PEAK_SCORE_MARGIN = 1.0`.
+
+### Background-Map Construction
+
+- Carve detected sources out of the image before adaptive smoothing so source wings do not leak into the background model. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `max(BACKGROUND_CARVE_R90_FACTOR * psf_r90, BACKGROUND_CARVE_SCALE_FACTOR * scale, BACKGROUND_CARVE_MIN_RADIUS_PIX)`. Defaults: `BACKGROUND_CARVE_R90_FACTOR = 0.8`, `BACKGROUND_CARVE_SCALE_FACTOR = 1.5`, `BACKGROUND_CARVE_MIN_RADIUS_PIX = 3.5`.
+- Choose the preferred starting smoothing width for the adaptive background builder. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `smooth_sigma = DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX`. Defaults: `DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX = 6.0`.
+- Control which Gaussian smoothing scales are available to the adaptive background model. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `sorted({max(smooth_sigma, BACKGROUND_SIGMA_FLOOR_PIX), *BACKGROUND_SIGMA_GRID_PIX})`. Defaults: `BACKGROUND_SIGMA_FLOOR_PIX = 4.0`, `BACKGROUND_SIGMA_GRID_PIX = (4.0, 8.0, 16.0, 32.0)`.
+- Require a minimum number of effective source-free background counts before trusting a local smoothing scale. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `support >= BACKGROUND_TARGET_COUNTS`. Defaults: `BACKGROUND_TARGET_COUNTS = 100.0`.
+- Zero out pixels whose broadest-scale source-free support is still too poor for a reliable background estimate. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `support_ref > BACKGROUND_MIN_SUPPORT_WEIGHT`. Defaults: `BACKGROUND_MIN_SUPPORT_WEIGHT = 0.1`.
+- Prevent pathological spikes in the local background-rate estimate near carved holes or sharp exposure edges. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `percentile(rate_samples, BACKGROUND_RATE_CAP_PERCENTILE) * BACKGROUND_RATE_CAP_FACTOR`. Defaults: `BACKGROUND_RATE_CAP_PERCENTILE = 99.9`, `BACKGROUND_RATE_CAP_FACTOR = 3.0`.
+
+### Local and Grouped Fitting Geometry
+
+- Set how large the local single-source fitting stamp should be so the fit has enough context without becoming too contaminated. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(FIT_STAMP_R90_FACTOR * psf_r90, FIT_STAMP_SCALE_FACTOR * scale, FIT_STAMP_MIN_RADIUS_PIX)`. Defaults: `FIT_STAMP_R90_FACTOR = 1.75`, `FIT_STAMP_SCALE_FACTOR = 1.75`, `FIT_STAMP_MIN_RADIUS_PIX = 6.0`.
+- Set how far out the local radial profile is measured so morphology stays local and less sensitive to broad contamination. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(PROFILE_R90_FACTOR * psf_r90, PROFILE_SCALE_FACTOR * scale, PROFILE_MIN_RADIUS_PIX)`. Defaults: `PROFILE_R90_FACTOR = 1.25`, `PROFILE_SCALE_FACTOR = 1.25`, `PROFILE_MIN_RADIUS_PIX = 5.0`.
+- Mask pixels polluted by a stronger nearby source before fitting the current target. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(CONTAM_R90_FACTOR * other_psf_r90, CONTAM_SCALE_FACTOR * other.scale, CONTAM_MIN_RADIUS_PIX)`. Defaults: `CONTAM_R90_FACTOR = 1.0`, `CONTAM_SCALE_FACTOR = 1.5`, `CONTAM_MIN_RADIUS_PIX = 4.0`.
+- Limit how far the local point-source centroid fit is allowed to move from the wavelet seed position. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max_shift = LOCAL_POINT_MAX_SHIFT_PIX`. Defaults: `LOCAL_POINT_MAX_SHIFT_PIX = 1.0`.
+- Convert the point-source Cash-statistic improvement into the catalog `DET_LIKE` value. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `cash_delta_to_like(..., dof=POINT_SOURCE_DET_LIKE_DOF)`. Defaults: `POINT_SOURCE_DET_LIKE_DOF = 3.0`.
+- Decide when a source is worth attempting an extent fit at all. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: require `npix >= EXTENT_FIT_MIN_NPIX` and `len(support_scales) >= EXTENT_FIT_MIN_SUPPORT_SCALES`. Defaults: `EXTENT_FIT_MIN_NPIX = 5`, `EXTENT_FIT_MIN_SUPPORT_SCALES = 2`.
+- Define the baseline radius grid used when testing extended models. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `EXT_RC_GRID_BASE_PIX = (0.5, 1.5, 3.0, 6.0)`. Defaults: `EXT_RC_GRID_BASE_PIX = (0.5, 1.5, 3.0, 6.0)`.
+- Add PSF-scaled trial radii so the extent search adapts to the local PSF size. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `EXT_RC_GRID_R50_FACTORS * psf_r50` and `EXT_RC_GRID_R90_FACTOR * psf_r90`. Defaults: `EXT_RC_GRID_R50_FACTORS = (0.4, 0.7, 1.0)`, `EXT_RC_GRID_R90_FACTOR = 0.4`.
+- Limit the allowed extent trial radii so the search does not run to unphysical or unhelpfully broad scales. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `clip(..., EXT_RC_MIN_PIX, max(EXT_RC_MAX_R90_FACTOR * psf_r90, EXT_RC_MAX_MIN_PIX))`. Defaults: `EXT_RC_MIN_PIX = 0.5`, `EXT_RC_MAX_R90_FACTOR = 1.2`, `EXT_RC_MAX_MIN_PIX = 6.0`.
+- Convert the extent Cash-statistic improvement into `EXT_LIKE`. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `cash_delta_to_like(..., dof=EXTENT_LIKE_DOF)`. Defaults: `EXTENT_LIKE_DOF = 1.0`.
+- Define the fallback fitted extent scale when no meaningful extent solution is kept. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `DEFAULT_EXTENT_SIGMA_PIX = 0.5`. Defaults: `DEFAULT_EXTENT_SIGMA_PIX = 0.5`.
+- Control how much margin is added around a candidate group before the grouped fit is run. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(GROUP_STAMP_MARGIN_R90_FACTOR * max_psf_r90, GROUP_STAMP_MARGIN_SCALE_FACTOR * max_scale, GROUP_STAMP_MARGIN_MIN_PIX)`. Defaults: `GROUP_STAMP_MARGIN_R90_FACTOR = 1.5`, `GROUP_STAMP_MARGIN_SCALE_FACTOR = 1.5`, `GROUP_STAMP_MARGIN_MIN_PIX = 6.0`.
+- Impose a hard minimum size on the grouped-fit image stamp so small groups still get enough local context. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(group_extent + margin, GROUP_STAMP_MIN_RADIUS_PIX)`. Defaults: `GROUP_STAMP_MIN_RADIUS_PIX = 10.0`.
+- Decide how aggressively nearby detections are merged into one joint-fitting problem. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `build_source_groups()`. Formula: `max(GROUP_LINK_R90_FACTOR * max(r90_i, r90_j), GROUP_LINK_MIN_RADIUS_PIX)`, after flooring each PSF with `GROUP_LINK_MIN_PSF_R90_PIX`. Defaults: `GROUP_LINK_R90_FACTOR = 1.25`, `GROUP_LINK_MIN_RADIUS_PIX = 8.0`, `GROUP_LINK_MIN_PSF_R90_PIX = 4.0`.
+- Limit the upper search range of the non-negative amplitude optimizer so it remains broad enough to capture bright sources but bounded enough to stay stable. Used in [`fxtsrcdet/fit.py`](../fxtsrcdet/fit.py) `fit_amplitude_cash()`. Formula: `upper * AMPLITUDE_FIT_UPPER_SCALE + AMPLITUDE_FIT_UPPER_PAD`. Defaults: `AMPLITUDE_FIT_UPPER_SCALE = 2.0`, `AMPLITUDE_FIT_UPPER_PAD = 1.0`.
+- Set the tolerance of the 1D amplitude optimizer. Used in [`fxtsrcdet/fit.py`](../fxtsrcdet/fit.py) `fit_amplitude_cash()`. Formula: `xatol = AMPLITUDE_FIT_XATOL`. Defaults: `AMPLITUDE_FIT_XATOL = 1e-3`.
+- Define the default search range for the standalone point-source centroid fit helper. Used in [`fxtsrcdet/fit.py`](../fxtsrcdet/fit.py) `fit_point_position_cash()`. Formula: `FIT_POINT_MAX_SHIFT_PIX = 2.0`. Defaults: `FIT_POINT_MAX_SHIFT_PIX = 2.0`.
+- Define the default beta-model slope and shift range for the standalone extended-fit helper. Used in [`fxtsrcdet/fit.py`](../fxtsrcdet/fit.py) `fit_extended_position_cash()`. Formula: `beta = FIT_EXTENDED_BETA` and `max_shift = FIT_EXTENDED_MAX_SHIFT_PIX`. Defaults: `FIT_EXTENDED_BETA = 2/3`, `FIT_EXTENDED_MAX_SHIFT_PIX = 2.0`.
+- Prevent Gaussian smoothing from collapsing to an unrealistically tiny kernel in low-level helper code. Used in [`fxtsrcdet/utils/imageops.py`](../fxtsrcdet/utils/imageops.py) `smooth_image()`. Formula: `max(sigma, MIN_GAUSSIAN_SIGMA_PIX)`. Defaults: `MIN_GAUSSIAN_SIGMA_PIX = 0.5`.
+
+### Classification and Final Catalog Cleanup
+
+- Require the fitted extent solution to be both statistically meaningful and morphologically plausible before assigning the model-based `extended` label. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: require `best_sigma > EXTENT_CLASSIFY_MIN_SIGMA_PIX`, `best_sigma < max(EXTENT_CLASSIFY_MAX_R90_FACTOR * psf_r90, EXTENT_CLASSIFY_MAX_SIGMA_PIX)`, `stretch >= EXTENT_CLASSIFY_MIN_STRETCH`, and `maskfrac >= EXTENT_CLASSIFY_MIN_MASKFRAC`. Defaults: `EXTENT_CLASSIFY_MIN_SIGMA_PIX = 1.0`, `EXTENT_CLASSIFY_MAX_R90_FACTOR = 1.5`, `EXTENT_CLASSIFY_MAX_SIGMA_PIX = 12.0`, `EXTENT_CLASSIFY_MIN_STRETCH = 1.25`, `EXTENT_CLASSIFY_MIN_MASKFRAC = 0.8`.
+- Allow a strong morphology-based fallback path to classify clearly broadened sources as extended even when the model-based extent path is imperfect. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: require `stretch >= MORPH_EXTENT_MIN_STRETCH`, `r80_meas >= MORPH_EXTENT_MIN_R80_FACTOR * psf_r80`, `npix >= MORPH_EXTENT_MIN_NPIX`, `len(support_scales) >= MORPH_EXTENT_MIN_SUPPORT_SCALES`, `det_like >= max(MORPH_EXTENT_DET_LIKE_FACTOR * min_det_like, MORPH_EXTENT_DET_LIKE_FLOOR)`, `maskfrac >= MORPH_EXTENT_MIN_MASKFRAC`, and `r50_meas <= MORPH_EXTENT_MAX_R50_FACTOR * psf_r50`. Defaults: `MORPH_EXTENT_MIN_STRETCH = 2.5`, `MORPH_EXTENT_MIN_R80_FACTOR = 1.8`, `MORPH_EXTENT_MIN_NPIX = 20`, `MORPH_EXTENT_MIN_SUPPORT_SCALES = 3`, `MORPH_EXTENT_DET_LIKE_FACTOR = 3.0`, `MORPH_EXTENT_DET_LIKE_FLOOR = 20.0`, `MORPH_EXTENT_MIN_MASKFRAC = 0.9`, `MORPH_EXTENT_MAX_R50_FACTOR = 8.0`.
+- Prevent weak one-scale detections from surviving as science sources unless they are exceptionally significant. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(SINGLE_SCALE_DET_LIKE_FACTOR * min_det_like, SINGLE_SCALE_DET_LIKE_FLOOR)`. Defaults: `SINGLE_SCALE_DET_LIKE_FACTOR = 4.5`, `SINGLE_SCALE_DET_LIKE_FLOOR = 28.0`.
+- Reject edge-like low-support detections that are more likely to be artifacts than real astrophysical sources. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: require `maskfrac < EDGE_BACKGROUND_MAX_MASKFRAC`, `det_like < max(EDGE_BACKGROUND_DET_LIKE_FACTOR * min_det_like, EDGE_BACKGROUND_DET_LIKE_FLOOR)`, `npix <= EDGE_BACKGROUND_MAX_NPIX`, and `len(support_scales) <= EDGE_BACKGROUND_MAX_SUPPORT_SCALES`. Defaults: `EDGE_BACKGROUND_MAX_MASKFRAC = 0.75`, `EDGE_BACKGROUND_DET_LIKE_FACTOR = 3.0`, `EDGE_BACKGROUND_DET_LIKE_FLOOR = 20.0`, `EDGE_BACKGROUND_MAX_NPIX = 8`, `EDGE_BACKGROUND_MAX_SUPPORT_SCALES = 2`.
+- Suppress weaker duplicate detections that fall inside the PSF footprint of a stronger nearby source. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `prune_nearby_sources()`. Formula: `max(PRUNE_SUPPRESS_R90_FACTOR * strong_psf, PRUNE_SUPPRESS_MIN_RADIUS_PIX)`, after flooring `strong_psf` by `PRUNE_MIN_PSF_R90_PIX`. Defaults: `PRUNE_SUPPRESS_R90_FACTOR = 1.35`, `PRUNE_SUPPRESS_MIN_RADIUS_PIX = 8.0`, `PRUNE_MIN_PSF_R90_PIX = 4.0`.
+
+### Public Catalog Region
+
+- the final public catalog region is circular
+- point sources use local `r75`
+- extended sources use fitted extended-model `r75`
+
+## Suggested Future Additions
+
+- a dedicated page on catalog column definitions

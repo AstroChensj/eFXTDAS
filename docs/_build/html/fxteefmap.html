@@ -1,0 +1,614 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>fxteefmap &#8212; eFXTDAS 0.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=6dabc696" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=e1a75a79"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'fxteefmap';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="fxtregions" href="fxtregions.html" />
+    <link rel="prev" title="fxtsrcdet" href="fxtsrcdet.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">eFXTDAS 0.1 documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtcombine.html"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/fxteefmap.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>fxteefmap</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#single-fraction-output">Single-Fraction Output</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-parameters">User-Facing Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pixel-scale-handling">Pixel Scale Handling</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#off-axis-interpolation">Off-Axis Interpolation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outside-fov-handling">Outside-FOV Handling</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-fraction-choice">Default Fraction Choice</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="fxteefmap">
+<h1><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code><a class="headerlink" href="#fxteefmap" title="Link to this heading">#</a></h1>
+<section id="what-it-does">
+<h2>What It Does<a class="headerlink" href="#what-it-does" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code> creates an image-sized map of local EEF radii for FXT images.</p>
+<p>The standard output is a multi-extension FITS product containing per-pixel maps such as:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">R50</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">R75</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">R80</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">R90</span></code></p></li>
+</ul>
+<p>Each map stores the radius in image pixels corresponding to the requested encircled-energy fraction at that image position.</p>
+</section>
+<section id="basic-usage">
+<h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
+<section id="command-line-usage">
+<h3>Command-Line Usage<a class="headerlink" href="#command-line-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxteefmap<span class="w"> </span>img.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--expmap<span class="w"> </span>expmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mission<span class="w"> </span>ep-fxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--instrument<span class="w"> </span>fxta<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="w"> </span>open<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emin<span class="w"> </span><span class="m">0</span>.3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emax<span class="w"> </span><span class="m">10</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>eef_maps.fits
+</pre></div>
+</div>
+</section>
+<section id="single-fraction-output">
+<h3>Single-Fraction Output<a class="headerlink" href="#single-fraction-output" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxteefmap<span class="w"> </span>img.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--expmap<span class="w"> </span>expmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mission<span class="w"> </span>ep-fxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--instrument<span class="w"> </span>fxta<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="w"> </span>open<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emin<span class="w"> </span><span class="m">0</span>.3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emax<span class="w"> </span><span class="m">10</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--eeffrac<span class="w"> </span><span class="m">0</span>.75<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>r75_map.fits
+</pre></div>
+</div>
+</section>
+<section id="python-usage">
+<h3>Python Usage<a class="headerlink" href="#python-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fxteefmap</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_eef_radius_maps</span>
+
+<span class="n">maps</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">build_eef_radius_maps</span><span class="p">(</span>
+    <span class="n">image</span><span class="o">=</span><span class="n">image</span><span class="p">,</span>
+    <span class="n">pixel_scale_arcsec</span><span class="o">=</span><span class="mf">9.6</span><span class="p">,</span>
+    <span class="n">eeffrac_values</span><span class="o">=</span><span class="p">(</span><span class="mf">0.50</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.80</span><span class="p">,</span> <span class="mf">0.90</span><span class="p">),</span>
+    <span class="n">mission</span><span class="o">=</span><span class="s2">&quot;ep-fxt&quot;</span><span class="p">,</span>
+    <span class="n">instrument</span><span class="o">=</span><span class="s2">&quot;fxta&quot;</span><span class="p">,</span>
+    <span class="n">filter_name</span><span class="o">=</span><span class="s2">&quot;open&quot;</span><span class="p">,</span>
+    <span class="n">emin_keV</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+    <span class="n">emax_keV</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="inputs">
+<h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>image FITS, used for shape and WCS</p></li>
+<li><p>optional exposure map for zeroing outside-FOV pixels</p></li>
+<li><p>mission / instrument / filter / energy configuration</p></li>
+</ul>
+</section>
+<section id="outputs">
+<h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>multi-extension FITS with one radius map per encircled-energy fraction</p></li>
+<li><p>or a single image if <code class="docutils literal notranslate"><span class="pre">--eeffrac</span></code> is explicitly requested</p></li>
+</ul>
+</section>
+<section id="visualization">
+<h3>Visualization<a class="headerlink" href="#visualization" title="Link to this heading">#</a></h3>
+<p>The output maps can be opened directly in SAOImage DS9.</p>
+<p>Each image extension carries:</p>
+<ul class="simple">
+<li><p>WCS copied from the input image</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EEF_FRAC</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BUNIT</span> <span class="pre">=</span> <span class="pre">pixel</span></code></p></li>
+</ul>
+<p>That makes it practical to inspect spatial PSF broadening across the field.</p>
+</section>
+</section>
+<section id="detailed-algorithm-and-how-it-works">
+<h2>Detailed Algorithm and How It Works<a class="headerlink" href="#detailed-algorithm-and-how-it-works" title="Link to this heading">#</a></h2>
+<ol class="arabic simple">
+<li><p>Load the input image and infer the pixel scale.</p></li>
+<li><p>Build the mission PSF context for the requested instrument / filter / energy band.</p></li>
+<li><p>Compute the optical-axis geometry.</p></li>
+<li><p>For each requested encircled-energy fraction:</p>
+<ul class="simple">
+<li><p>evaluate local off-axis angle over the image</p></li>
+<li><p>interpolate the local EEF calibration in off-axis angle</p></li>
+<li><p>interpolate the radius corresponding to the requested EEF fraction</p></li>
+</ul>
+</li>
+<li><p>Write the result as a FITS image or multi-extension FITS product.</p></li>
+</ol>
+<p>The current implementation uses the EP/FXT EEF calibration and interpolates in off-axis angle rather than snapping to the nearest tabulated calibration extension. This keeps the output radius map spatially continuous.</p>
+</section>
+<section id="tunable-parameters-and-heuristic-constants">
+<h2>Tunable Parameters and Heuristic Constants<a class="headerlink" href="#tunable-parameters-and-heuristic-constants" title="Link to this heading">#</a></h2>
+<section id="user-facing-parameters">
+<h3>User-Facing Parameters<a class="headerlink" href="#user-facing-parameters" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>default output fractions:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">0.50,</span> <span class="pre">0.75,</span> <span class="pre">0.80,</span> <span class="pre">0.90</span></code></p></li>
+</ul>
+</li>
+<li><p>single-map mode:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--eeffrac</span></code></p></li>
+</ul>
+</li>
+<li><p>multi-extension mode:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--fractions</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="pixel-scale-handling">
+<h3>Pixel Scale Handling<a class="headerlink" href="#pixel-scale-handling" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>image pixel scale is inferred from WCS when available</p></li>
+<li><p>if WCS is missing or unusable, the current fallback in the CLI path is:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">9.6</span> <span class="pre">arcsec/pixel</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="off-axis-interpolation">
+<h3>Off-Axis Interpolation<a class="headerlink" href="#off-axis-interpolation" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>local EEF radii are interpolated in off-axis angle rather than snapped to the nearest tabulated calibration extension</p></li>
+<li><p>endpoint extrapolation uses the nearest available calibration curve</p></li>
+</ul>
+</section>
+<section id="outside-fov-handling">
+<h3>Outside-FOV Handling<a class="headerlink" href="#outside-fov-handling" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>if an exposure map is supplied, zero-exposure pixels are written as zero in the radius maps</p></li>
+</ul>
+</section>
+<section id="default-fraction-choice">
+<h3>Default Fraction Choice<a class="headerlink" href="#default-fraction-choice" title="Link to this heading">#</a></h3>
+<p>The default <code class="docutils literal notranslate"><span class="pre">R50/R75/R80/R90</span></code> set is chosen because:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">R50</span></code> is useful for PSF-core and extent checks</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">R75</span></code> is useful for public source/cell radii</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">R80</span></code> is a useful intermediate profile scale</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">R90</span></code> is useful for background carving and fit-support sizing</p></li>
+</ul>
+</section>
+</section>
+<section id="suggested-future-additions">
+<h2>Suggested Future Additions<a class="headerlink" href="#suggested-future-additions" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>optional theta map output alongside the radius maps</p></li>
+<li><p>a validation page comparing <code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code> radii with <code class="docutils literal notranslate"><span class="pre">fxtpsfgen</span></code> / <code class="docutils literal notranslate"><span class="pre">fxteefgen</span></code> at selected positions</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="fxtsrcdet.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="fxtregions.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#single-fraction-output">Single-Fraction Output</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-parameters">User-Facing Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pixel-scale-handling">Pixel Scale Handling</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#off-axis-interpolation">Off-Axis Interpolation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outside-fov-handling">Outside-FOV Handling</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-fraction-choice">Default Fraction Choice</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Chen SJ
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Chen SJ.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

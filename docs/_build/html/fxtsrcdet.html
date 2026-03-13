@@ -1,0 +1,1320 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>fxtsrcdet &#8212; eFXTDAS 0.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=6dabc696" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=e1a75a79"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = `pre.mermaid {
+    /* Same as .mermaid-container > pre */
+    display: block;
+    width: 100%;
+}
+
+pre.mermaid > svg {
+    /* Same as .mermaid-container > pre > svg */
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}`;
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = `.mermaid-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+.mermaid-container > pre {
+    display: block;
+    width: 100%;
+}
+
+.mermaid-container > pre > svg {
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+
+.mermaid-fullscreen-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 95vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-container-fullscreen pre.mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen .mermaid svg {
+    height: 100% !important;
+    width: 100% !important;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}`;
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        all_mermaids.forEach((el) => {
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+        await mermaid.run();
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if ("False" === "True") {
+        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("");
+            if(all_mermaids.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else if(svgs.size() !== mermaids_to_add_zoom) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else {
+                svgs.each(function() {
+                    var svg = d3.select(this);
+                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+                    var inner = svg.select("g");
+                    var zoom = d3.zoom().on("zoom", function(event) {
+                        inner.attr("transform", event.transform);
+                    });
+                    svg.call(zoom);
+                });
+            }
+        }
+    } else if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if ("True" !== "True") return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.style.opacity = '50%';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scroll, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.sdisplay = 'block';
+
+                if ("False" === "True") {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+const load = async () => {
+    initStyles();
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...JSON.parse(
+                    `{"startOnLoad": false}`
+                ),
+                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...JSON.parse(
+        `{"startOnLoad": false}`
+    ),
+    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+    }
+);
+
+window.addEventListener("load", load);
+window.runMermaid = runMermaid;</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'fxtsrcdet';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="fxteefmap" href="fxteefmap.html" />
+    <link rel="prev" title="eFXTDAS Documentation" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">eFXTDAS 0.1 documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtcombine.html"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/fxtsrcdet.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>fxtsrcdet</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-scale-wavelet-detection">1. Multi-Scale Wavelet Detection</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-scale-candidate-construction">1.1 Cross-Scale Candidate Construction</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#background-map-construction">2. Background Map Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#psf-aware-source-fitting-and-classification">3. PSF-Aware Source Fitting and Classification</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#single-source-fit">3.1 Single-Source Fit</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#grouped-fit">3.2 Grouped Fit</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-catalog-assembly">3.3 Classification and Catalog Assembly</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-detection-parameters">User-Facing Detection Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-catalog-parameters">User-Facing Catalog Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-heuristic-constants">Internal Heuristic Constants</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#wavelet-candidate-construction">Wavelet / Candidate Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Background-Map Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-and-grouped-fitting-geometry">Local and Grouped Fitting Geometry</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-final-catalog-cleanup">Classification and Final Catalog Cleanup</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#public-catalog-region">Public Catalog Region</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="fxtsrcdet">
+<h1><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code><a class="headerlink" href="#fxtsrcdet" title="Link to this heading">#</a></h1>
+<section id="what-it-does">
+<h2>What It Does<a class="headerlink" href="#what-it-does" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> is a source detection task in <code class="docutils literal notranslate"><span class="pre">eFXTDAS</span></code>, inheriting features from CIAO’s <code class="docutils literal notranslate"><span class="pre">wavdetect</span></code> and eSASS’s <code class="docutils literal notranslate"><span class="pre">ermldet</span></code>.</p>
+<p>It performs:</p>
+<ul class="simple">
+<li><p>multi-scale Mexican-hat wavelet detection on a counts image</p></li>
+<li><p>iterative local background estimation for each wavelet scale</p></li>
+<li><p>cross-scale merging of provisional detections</p></li>
+<li><p>exposure-aware background-map construction</p></li>
+<li><p>PSF-aware single-source and grouped-source fitting</p></li>
+<li><p>point-versus-extended source classification</p></li>
+<li><p>final catalog writing to FITS</p></li>
+<li><p>DS9 region export in image and sky coordinates</p></li>
+</ul>
+<p>The implementation draws inspiration from CIAO <code class="docutils literal notranslate"><span class="pre">wavdetect</span></code> on the initial detection side and eSASS <code class="docutils literal notranslate"><span class="pre">ermldet</span></code> / <code class="docutils literal notranslate"><span class="pre">erbackmap</span></code> concepts on the source fitting and catalog side.</p>
+<p>TODO: add classification debug columns, extent_support, morph_extent_support, etc.
+TODO: add logger.py for standard logger.</p>
+</section>
+<section id="basic-usage">
+<h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
+<section id="command-line-usage">
+<h3>Command-Line Usage<a class="headerlink" href="#command-line-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtsrcdet<span class="w"> </span>img.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--expmap<span class="w"> </span>expmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--eefmap<span class="w"> </span>eef_maps.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mission<span class="w"> </span>ep-fxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--instrument<span class="w"> </span>fxta<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="w"> </span>open<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emin<span class="w"> </span><span class="m">0</span>.3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emax<span class="w"> </span><span class="m">10</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>sources.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--regfile<span class="w"> </span>sources.reg<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--sky-regfile<span class="w"> </span>sources_fk5.reg
+</pre></div>
+</div>
+</section>
+<section id="python-usage">
+<h3>Python Usage<a class="headerlink" href="#python-usage" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fxtsrcdet</span><span class="w"> </span><span class="kn">import</span> <span class="n">PipelineConfig</span><span class="p">,</span> <span class="n">fxtsrcdet_pipeline</span>
+
+<span class="n">cfg</span> <span class="o">=</span> <span class="n">PipelineConfig</span><span class="p">(</span>
+    <span class="n">mission</span><span class="o">=</span><span class="s2">&quot;ep-fxt&quot;</span><span class="p">,</span>
+    <span class="n">instrument</span><span class="o">=</span><span class="s2">&quot;fxta&quot;</span><span class="p">,</span>
+    <span class="n">filter_name</span><span class="o">=</span><span class="s2">&quot;open&quot;</span><span class="p">,</span>
+    <span class="n">emin_keV</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+    <span class="n">emax_keV</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">fxtsrcdet_pipeline</span><span class="p">(</span>
+    <span class="n">image</span><span class="o">=</span><span class="s2">&quot;img.fits&quot;</span><span class="p">,</span>
+    <span class="n">exposure</span><span class="o">=</span><span class="s2">&quot;expmap.fits&quot;</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">cfg</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">rows</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;rows&quot;</span><span class="p">]</span>
+<span class="n">background_map</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;background_map&quot;</span><span class="p">]</span>
+<span class="n">per_scale</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;per_scale&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="inputs">
+<h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>counts image FITS</p></li>
+<li><p>optional exposure map FITS</p></li>
+<li><p>optional multi-extension EEF-radius map from <code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></p></li>
+<li><p>mission / instrument / filter / energy metadata for PSF selection</p></li>
+</ul>
+</section>
+<section id="outputs">
+<h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>source catalog FITS</p></li>
+<li><p>image-coordinate region file</p></li>
+<li><p>optional sky-coordinate region file</p></li>
+<li><p>optional intermediate maps:</p>
+<ul>
+<li><p>aggregate source mask</p></li>
+<li><p>best-significance map</p></li>
+<li><p>background map</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="visualization">
+<h3>Visualization<a class="headerlink" href="#visualization" title="Link to this heading">#</a></h3>
+<p>The return value from <code class="docutils literal notranslate"><span class="pre">fxtsrcdet_pipeline()</span></code> is intentionally rich enough for review work:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">result[&quot;per_scale&quot;]</span></code>: background / correlation / source-mask results at each wavelet scale</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result[&quot;agg_mask&quot;]</span></code>: aggregate source-support mask</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result[&quot;best_sig&quot;]</span></code>: smallest significance over all scales</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result[&quot;background_map&quot;]</span></code>: final exposure-aware background map</p></li>
+</ul>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+
+<span class="n">scale_result</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;per_scale&quot;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="n">constrained_layout</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">scale_result</span><span class="o">.</span><span class="n">background</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s2">&quot;lower&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;gray&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Background&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">scale_result</span><span class="o">.</span><span class="n">correlation</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s2">&quot;lower&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;magma&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Wavelet Correlation&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">scale_result</span><span class="o">.</span><span class="n">source_mask</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s2">&quot;lower&quot;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;gray&quot;</span><span class="p">)</span>
+<span class="n">ax</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Source Mask&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">ax</span><span class="p">:</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">set_xticks</span><span class="p">([])</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">([])</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="detailed-algorithm-and-how-it-works">
+<h2>Detailed Algorithm and How It Works<a class="headerlink" href="#detailed-algorithm-and-how-it-works" title="Link to this heading">#</a></h2>
+<section id="multi-scale-wavelet-detection">
+<h3>1. Multi-Scale Wavelet Detection<a class="headerlink" href="#multi-scale-wavelet-detection" title="Link to this heading">#</a></h3>
+<p>For each user-specified wavelet scale:</p>
+<ol class="arabic simple">
+<li><p>build a Mexican-hat kernel</p></li>
+<li><p>estimate local background with the wavelet’s negative annulus</p></li>
+<li><p>iteratively suppress likely source pixels and re-estimate background</p></li>
+<li><p>compute wavelet correlation and correlation significance</p></li>
+<li><p>form a per-scale source mask and peak mask</p></li>
+</ol>
+<div class="tip admonition">
+<p class="admonition-title">How to Understand Mexican-Hat Filtering</p>
+<p>Think of an image row as counts in adjacent pixels.</p>
+<p>Background only:</p>
+<p><code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">1</span> <span class="pre">3</span> <span class="pre">2</span> <span class="pre">2</span> <span class="pre">1</span> <span class="pre">2</span> <span class="pre">3</span> <span class="pre">2</span> <span class="pre">2</span></code></p>
+<p>With a source:</p>
+<p><code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">1</span> <span class="pre">3</span> <span class="pre">2</span> <span class="pre">8</span> <span class="pre">12</span> <span class="pre">9</span> <span class="pre">3</span> <span class="pre">2</span> <span class="pre">2</span></code></p>
+<p>Now slide a simple wavelet-like filter over the data:</p>
+<p><code class="docutils literal notranslate"><span class="pre">[-1,</span> <span class="pre">+2,</span> <span class="pre">-1]</span></code></p>
+<p>This is the 1D analogue of the 2D Mexican-hat wavelet: positive in the center
+and negative on the sides. The filter score is therefore:</p>
+<p><code class="docutils literal notranslate"><span class="pre">bright</span> <span class="pre">center</span> <span class="pre">-</span> <span class="pre">local</span> <span class="pre">surrounding</span> <span class="pre">background</span></code></p>
+<p>For a background-only patch:</p>
+<p><code class="docutils literal notranslate"><span class="pre">window:</span> <span class="pre">1</span> <span class="pre">2</span> <span class="pre">3</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">(-1)*1</span> <span class="pre">+</span> <span class="pre">(+2)*2</span> <span class="pre">+</span> <span class="pre">(-1)*3</span> <span class="pre">=</span> <span class="pre">0</span></code></p>
+<p>For a source patch:</p>
+<p><code class="docutils literal notranslate"><span class="pre">window:</span> <span class="pre">8</span> <span class="pre">12</span> <span class="pre">9</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">(-1)*8</span> <span class="pre">+</span> <span class="pre">(+2)*12</span> <span class="pre">+</span> <span class="pre">(-1)*9</span> <span class="pre">=</span> <span class="pre">7</span></code></p>
+<p>The second score is large and positive because the center is brighter than its
+neighbors. In 2D, <code class="docutils literal notranslate"><span class="pre">wavdetect</span></code> repeats this idea with a round Mexican-hat
+wavelet at several scales. Small scales respond to compact sources, large
+scales to broader sources. At each scale, the correlation value is compared
+against what would be expected from background alone; unlikely excesses are
+marked as source pixels. Background estimation is then iteratively improved by
+cleansing likely source pixels before forming the final merged source list.</p>
+</div>
+<p>An example of all wavelet results is shown in <a class="reference internal" href="#fig-wavelet-allscales"><span class="std std-numref">Fig. 1</span></a>.</p>
+<figure class="align-default" id="fig-wavelet-allscales">
+<a class="reference internal image-reference" href="_images/wavelet_allscales.png"><img alt="wavelet-allscales" src="_images/wavelet_allscales.png" style="width: 100%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Fig. 1 </span><span class="caption-text">Wavelet results across all scales.</span><a class="headerlink" href="#fig-wavelet-allscales" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+<section id="cross-scale-candidate-construction">
+<h4>1.1 Cross-Scale Candidate Construction<a class="headerlink" href="#cross-scale-candidate-construction" title="Link to this heading">#</a></h4>
+<p>Per-scale connected components are converted into provisional source candidates.</p>
+<p>The current implementation:</p>
+<ul class="simple">
+<li><p>labels connected source-mask components</p></li>
+<li><p>finds local peaks within them</p></li>
+<li><p>trims large components to a neighborhood around the dominant peak</p></li>
+<li><p>merges candidates across scales using a PSF-aware spatial clustering radius</p></li>
+</ul>
+<p>The representative candidate center is taken from the wavelet peak, not from the centroid of a large asymmetric connected island. This avoids large centroid drifts for bright extended structures.</p>
+<p>An example of wavelet result is shown in <a class="reference internal" href="#fig-wavelet-final"><span class="std std-numref">Fig. 2</span></a>.</p>
+<figure class="align-default" id="fig-wavelet-final">
+<a class="reference internal image-reference" href="_images/wavelet_final.png"><img alt="wavelet-final" src="_images/wavelet_final.png" style="width: 85%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Fig. 2 </span><span class="caption-text">Mosaic image with final wavelet source catalog overlaid.</span><a class="headerlink" href="#fig-wavelet-final" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+<section id="background-map-construction">
+<h3>2. Background Map Construction<a class="headerlink" href="#background-map-construction" title="Link to this heading">#</a></h3>
+<p>The background map is constructed after the initial detection stage:</p>
+<ol class="arabic simple">
+<li><p>build a valid mask from exposure</p></li>
+<li><p>carve source regions from the valid image</p></li>
+<li><p>smooth masked counts and masked exposure over several scales</p></li>
+<li><p>estimate effective support at each smoothing scale</p></li>
+<li><p>choose or interpolate the smallest smoothing scale with enough support</p></li>
+</ol>
+<p>This is closer in spirit to <code class="docutils literal notranslate"><span class="pre">erbackmap</span></code> than to a simple annulus-fill background.</p>
+<p>An example of this step is shown in <a class="reference internal" href="#fig-wavelet-bkg"><span class="std std-numref">Fig. 3</span></a>.</p>
+<figure class="align-default" id="fig-wavelet-bkg">
+<a class="reference internal image-reference" href="_images/wavelet_bkg.png"><img alt="wavelet-bkg" src="_images/wavelet_bkg.png" style="width: 100%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Fig. 3 </span><span class="caption-text">Adaptive background smoothing across all scales.</span><a class="headerlink" href="#fig-wavelet-bkg" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="psf-aware-source-fitting-and-classification">
+<h3>3. PSF-Aware Source Fitting and Classification<a class="headerlink" href="#psf-aware-source-fitting-and-classification" title="Link to this heading">#</a></h3>
+<section id="single-source-fit">
+<h4>3.1 Single-Source Fit<a class="headerlink" href="#single-source-fit" title="Link to this heading">#</a></h4>
+<p>Each candidate first receives a local PSF-aware fit:</p>
+<ul class="simple">
+<li><p>point-source fit with small position adjustment</p></li>
+<li><p>optional single-source extended fit using a beta-model kernel</p></li>
+<li><p>residual-profile measurement for <code class="docutils literal notranslate"><span class="pre">r50</span></code>, <code class="docutils literal notranslate"><span class="pre">r80</span></code>, <code class="docutils literal notranslate"><span class="pre">r90</span></code></p></li>
+</ul>
+<p>This stage initializes:</p>
+<ul class="simple">
+<li><p>source position</p></li>
+<li><p>counts-like amplitude</p></li>
+<li><p>local morphology</p></li>
+<li><p>preliminary <code class="docutils literal notranslate"><span class="pre">det_like</span></code> / <code class="docutils literal notranslate"><span class="pre">ext_like</span></code></p></li>
+</ul>
+<p>An example of this step is shown in <a class="reference internal" href="#fig-single-fit"><span class="std std-numref">Fig. 4</span></a>.</p>
+<figure class="align-default" id="fig-single-fit">
+<a class="reference internal image-reference" href="_images/single_src_fit.png"><img alt="single-fit" src="_images/single_src_fit.png" style="width: 90%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Fig. 4 </span><span class="caption-text">Fitting step 1: single source fit.</span><a class="headerlink" href="#fig-single-fit" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="grouped-fit">
+<h4>3.2 Grouped Fit<a class="headerlink" href="#grouped-fit" title="Link to this heading">#</a></h4>
+<p>Nearby candidates are grouped and fit jointly as point sources.</p>
+<p>This stage improves:</p>
+<ul class="simple">
+<li><p>deblending</p></li>
+<li><p>conditional per-source <code class="docutils literal notranslate"><span class="pre">det_like</span></code></p></li>
+</ul>
+<p>Grouped extent testing is then performed greedily:</p>
+<ol class="arabic simple">
+<li><p>start from the current grouped model</p></li>
+<li><p>rank members by a composite extension-brightness score</p></li>
+<li><p>test one member at a time as extended on top of the current accepted group model</p></li>
+<li><p>keep the extended replacement only if the extent likelihood passes threshold</p></li>
+</ol>
+<p>This allows more than one extended source in a group without letting every weak member absorb the same broad residual.</p>
+<pre  class="mermaid">
+        flowchart TD
+    A[Build grouped point-source model] --&gt; B[Fit all group member amplitudes jointly]
+    B --&gt; C[Compute current mixed group model]
+    C --&gt; D[Rank members by composite score]
+    D --&gt; E[Pick next member]
+    E --&gt; F[Build null model by removing this member from current group model]
+    F --&gt; G[Test a grid of extended rc values]
+    G --&gt; H[For each rc: build beta-model template and fit amplitude]
+    H --&gt; I[Keep best extended alternative]
+    I --&gt; J[Compute trial ext_like against current group model]
+    J --&gt; K{ext_like &gt;= min_ext_like?}
+    K -- Yes --&gt; L[Accept member as extended]
+    L --&gt; M[Replace this member in current group model]
+    K -- No --&gt; N[Keep member as point-like]
+    M --&gt; O{More members left?}
+    N --&gt; O
+    O -- Yes --&gt; E
+    O -- No --&gt; P[Finish grouped extent assignment]
+    </pre><p>The important detail is that the grouped model is updated after each accepted extended member. Later candidates are therefore tested against the current accepted mixed model, not always against the original all-point group model.</p>
+<p>An illustration of this step is shown in <a class="reference internal" href="#fig-joint-fit"><span class="std std-numref">Fig. 5</span></a>.</p>
+<figure class="align-default" id="fig-joint-fit">
+<a class="reference internal image-reference" href="_images/group_joint_fit.png"><img alt="joint-fit" src="_images/group_joint_fit.png" style="width: 90%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Fig. 5 </span><span class="caption-text">Fitting step 2: group joint fit.</span><a class="headerlink" href="#fig-joint-fit" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="classification-and-catalog-assembly">
+<h4>3.3 Classification and Catalog Assembly<a class="headerlink" href="#classification-and-catalog-assembly" title="Link to this heading">#</a></h4>
+<p>Each source is finally labeled as one of:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">background</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">point</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">extended</span></code></p></li>
+</ul>
+<p>The final <code class="docutils literal notranslate"><span class="pre">CatalogRow</span></code> stores lowercase internal names. The FITS writer maps those internal names to public science catalog names such as <code class="docutils literal notranslate"><span class="pre">ML_CTS_0</span></code>, <code class="docutils literal notranslate"><span class="pre">DET_LIKE_0</span></code>, and <code class="docutils literal notranslate"><span class="pre">SOURCE_TYPE</span></code>.</p>
+</section>
+</section>
+</section>
+<section id="tunable-parameters-and-heuristic-constants">
+<h2>Tunable Parameters and Heuristic Constants<a class="headerlink" href="#tunable-parameters-and-heuristic-constants" title="Link to this heading">#</a></h2>
+<p>This task contains several user-facing parameters and several internal heuristic constants that strongly affect behavior.</p>
+<section id="user-facing-detection-parameters">
+<h3>User-Facing Detection Parameters<a class="headerlink" href="#user-facing-detection-parameters" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>wavelet scales:</p>
+<ul>
+<li><p>default <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">2,</span> <span class="pre">4,</span> <span class="pre">8,</span> <span class="pre">16)</span></code> pixels</p></li>
+</ul>
+</li>
+<li><p>detection significance threshold:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">sigthresh</span> <span class="pre">=</span> <span class="pre">1e-6</span></code></p></li>
+</ul>
+</li>
+<li><p>background-cleansing significance threshold:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">bkgsigthresh</span> <span class="pre">=</span> <span class="pre">1e-3</span></code></p></li>
+</ul>
+</li>
+<li><p>valid relative exposure threshold in the detection stage:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">expthresh</span> <span class="pre">=</span> <span class="pre">0.1</span></code></p></li>
+</ul>
+</li>
+<li><p>ellipse scale factor used to convert source pixels into a wavelet-stage ellipse:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">ellsigma</span> <span class="pre">=</span> <span class="pre">3.0</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="user-facing-catalog-parameters">
+<h3>User-Facing Catalog Parameters<a class="headerlink" href="#user-facing-catalog-parameters" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>minimum detection likelihood for non-background classification:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_det_like</span> <span class="pre">=</span> <span class="pre">6.0</span></code></p></li>
+</ul>
+</li>
+<li><p>minimum extent likelihood for <code class="docutils literal notranslate"><span class="pre">extended</span></code> classification:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_ext_like</span> <span class="pre">=</span> <span class="pre">6.0</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="internal-heuristic-constants">
+<h3>Internal Heuristic Constants<a class="headerlink" href="#internal-heuristic-constants" title="Link to this heading">#</a></h3>
+<p>The non-user-facing heuristics are now collected in <code class="docutils literal notranslate"><span class="pre">fxtsrcdet/config.py</span></code>. They are not exposed directly through the CLI, but they control important behavior in detection, background estimation, fitting, and classification.</p>
+</section>
+<section id="wavelet-candidate-construction">
+<h3>Wavelet / Candidate Construction<a class="headerlink" href="#wavelet-candidate-construction" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Limit how far the Mexican-hat kernel extends away from the target scale so the wavelet remains finite and computationally practical. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">mexican_hat_kernel()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">radius</span> <span class="pre">=</span> <span class="pre">ceil(MEXICAN_HAT_TRUNCATE</span> <span class="pre">*</span> <span class="pre">scale)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">MEXICAN_HAT_TRUNCATE</span> <span class="pre">=</span> <span class="pre">5.0</span></code>.</p></li>
+<li><p>Define how local a “local maximum” must be when identifying wavelet peaks inside thresholded source regions. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">local_maxima()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">maximum_filter(...,</span> <span class="pre">size=LOCAL_MAX_FILTER_SIZE)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">LOCAL_MAX_FILTER_SIZE</span> <span class="pre">=</span> <span class="pre">3</span></code>.</p></li>
+<li><p>Set the minimum cross-scale clustering radius when no PSF information is available, so nearby detections can still be merged conservatively. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">cluster_peak_candidates()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">radius</span> <span class="pre">=</span> <span class="pre">CLUSTER_MIN_RADIUS_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">CLUSTER_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">8.0</span></code>.</p></li>
+<li><p>Adapt the cross-scale clustering radius to the local PSF so broader off-axis detections merge more permissively than sharp on-axis ones. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">cluster_peak_candidates()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(CLUSTER_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">local_r90,</span> <span class="pre">CLUSTER_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">CLUSTER_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">0.75</span></code>, <code class="docutils literal notranslate"><span class="pre">CLUSTER_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">8.0</span></code>.</p></li>
+<li><p>Prevent a large connected source island from inheriting too much low-significance structure away from its dominant peak. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">combine_scales()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(PEAK_TRIM_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">PEAK_TRIM_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">PEAK_TRIM_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">2.5</span></code>, <code class="docutils literal notranslate"><span class="pre">PEAK_TRIM_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>.</p></li>
+<li><p>Reject tiny one-scale fragments that are more likely to be noise or threshold artifacts than real sources. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">combine_scales()</span></code>. Formula: reject when <code class="docutils literal notranslate"><span class="pre">npix</span> <span class="pre">&lt;=</span> <span class="pre">SINGLE_SCALE_FRAGMENT_MAX_NPIX</span></code> or <code class="docutils literal notranslate"><span class="pre">wavelet_peak_score</span> <span class="pre">&lt;</span> <span class="pre">z_thresh</span> <span class="pre">+</span> <span class="pre">SINGLE_SCALE_PEAK_SCORE_MARGIN</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">SINGLE_SCALE_FRAGMENT_MAX_NPIX</span> <span class="pre">=</span> <span class="pre">4</span></code>, <code class="docutils literal notranslate"><span class="pre">SINGLE_SCALE_PEAK_SCORE_MARGIN</span> <span class="pre">=</span> <span class="pre">1.0</span></code>.</p></li>
+</ul>
+</section>
+<section id="id1">
+<h3>Background-Map Construction<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Carve detected sources out of the image before adaptive smoothing so source wings do not leak into the background model. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">0.8</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">3.5</span></code>.</p></li>
+<li><p>Choose the preferred starting smoothing width for the adaptive background builder. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">smooth_sigma</span> <span class="pre">=</span> <span class="pre">DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">6.0</span></code>.</p></li>
+<li><p>Control which Gaussian smoothing scales are available to the adaptive background model. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">sorted({max(smooth_sigma,</span> <span class="pre">BACKGROUND_SIGMA_FLOOR_PIX),</span> <span class="pre">*BACKGROUND_SIGMA_GRID_PIX})</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_SIGMA_FLOOR_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_SIGMA_GRID_PIX</span> <span class="pre">=</span> <span class="pre">(4.0,</span> <span class="pre">8.0,</span> <span class="pre">16.0,</span> <span class="pre">32.0)</span></code>.</p></li>
+<li><p>Require a minimum number of effective source-free background counts before trusting a local smoothing scale. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">support</span> <span class="pre">&gt;=</span> <span class="pre">BACKGROUND_TARGET_COUNTS</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_TARGET_COUNTS</span> <span class="pre">=</span> <span class="pre">100.0</span></code>.</p></li>
+<li><p>Zero out pixels whose broadest-scale source-free support is still too poor for a reliable background estimate. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">support_ref</span> <span class="pre">&gt;</span> <span class="pre">BACKGROUND_MIN_SUPPORT_WEIGHT</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_MIN_SUPPORT_WEIGHT</span> <span class="pre">=</span> <span class="pre">0.1</span></code>.</p></li>
+<li><p>Prevent pathological spikes in the local background-rate estimate near carved holes or sharp exposure edges. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">percentile(rate_samples,</span> <span class="pre">BACKGROUND_RATE_CAP_PERCENTILE)</span> <span class="pre">*</span> <span class="pre">BACKGROUND_RATE_CAP_FACTOR</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_RATE_CAP_PERCENTILE</span> <span class="pre">=</span> <span class="pre">99.9</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_RATE_CAP_FACTOR</span> <span class="pre">=</span> <span class="pre">3.0</span></code>.</p></li>
+</ul>
+</section>
+<section id="local-and-grouped-fitting-geometry">
+<h3>Local and Grouped Fitting Geometry<a class="headerlink" href="#local-and-grouped-fitting-geometry" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Set how large the local single-source fitting stamp should be so the fit has enough context without becoming too contaminated. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(FIT_STAMP_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">FIT_STAMP_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">FIT_STAMP_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">FIT_STAMP_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.75</span></code>, <code class="docutils literal notranslate"><span class="pre">FIT_STAMP_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.75</span></code>, <code class="docutils literal notranslate"><span class="pre">FIT_STAMP_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">6.0</span></code>.</p></li>
+<li><p>Set how far out the local radial profile is measured so morphology stays local and less sensitive to broad contamination. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(PROFILE_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">PROFILE_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">PROFILE_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">PROFILE_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.25</span></code>, <code class="docutils literal notranslate"><span class="pre">PROFILE_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.25</span></code>, <code class="docutils literal notranslate"><span class="pre">PROFILE_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">5.0</span></code>.</p></li>
+<li><p>Mask pixels polluted by a stronger nearby source before fitting the current target. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(CONTAM_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">other_psf_r90,</span> <span class="pre">CONTAM_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">other.scale,</span> <span class="pre">CONTAM_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">CONTAM_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.0</span></code>, <code class="docutils literal notranslate"><span class="pre">CONTAM_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">CONTAM_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>.</p></li>
+<li><p>Limit how far the local point-source centroid fit is allowed to move from the wavelet seed position. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max_shift</span> <span class="pre">=</span> <span class="pre">LOCAL_POINT_MAX_SHIFT_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">LOCAL_POINT_MAX_SHIFT_PIX</span> <span class="pre">=</span> <span class="pre">1.0</span></code>.</p></li>
+<li><p>Convert the point-source Cash-statistic improvement into the catalog <code class="docutils literal notranslate"><span class="pre">DET_LIKE</span></code> value. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">cash_delta_to_like(...,</span> <span class="pre">dof=POINT_SOURCE_DET_LIKE_DOF)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">POINT_SOURCE_DET_LIKE_DOF</span> <span class="pre">=</span> <span class="pre">3.0</span></code>.</p></li>
+<li><p>Decide when a source is worth attempting an extent fit at all. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: require <code class="docutils literal notranslate"><span class="pre">npix</span> <span class="pre">&gt;=</span> <span class="pre">EXTENT_FIT_MIN_NPIX</span></code> and <code class="docutils literal notranslate"><span class="pre">len(support_scales)</span> <span class="pre">&gt;=</span> <span class="pre">EXTENT_FIT_MIN_SUPPORT_SCALES</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EXTENT_FIT_MIN_NPIX</span> <span class="pre">=</span> <span class="pre">5</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_FIT_MIN_SUPPORT_SCALES</span> <span class="pre">=</span> <span class="pre">2</span></code>.</p></li>
+<li><p>Define the baseline radius grid used when testing extended models. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">EXT_RC_GRID_BASE_PIX</span> <span class="pre">=</span> <span class="pre">(0.5,</span> <span class="pre">1.5,</span> <span class="pre">3.0,</span> <span class="pre">6.0)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EXT_RC_GRID_BASE_PIX</span> <span class="pre">=</span> <span class="pre">(0.5,</span> <span class="pre">1.5,</span> <span class="pre">3.0,</span> <span class="pre">6.0)</span></code>.</p></li>
+<li><p>Add PSF-scaled trial radii so the extent search adapts to the local PSF size. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">EXT_RC_GRID_R50_FACTORS</span> <span class="pre">*</span> <span class="pre">psf_r50</span></code> and <code class="docutils literal notranslate"><span class="pre">EXT_RC_GRID_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EXT_RC_GRID_R50_FACTORS</span> <span class="pre">=</span> <span class="pre">(0.4,</span> <span class="pre">0.7,</span> <span class="pre">1.0)</span></code>, <code class="docutils literal notranslate"><span class="pre">EXT_RC_GRID_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">0.4</span></code>.</p></li>
+<li><p>Limit the allowed extent trial radii so the search does not run to unphysical or unhelpfully broad scales. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">clip(...,</span> <span class="pre">EXT_RC_MIN_PIX,</span> <span class="pre">max(EXT_RC_MAX_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">EXT_RC_MAX_MIN_PIX))</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EXT_RC_MIN_PIX</span> <span class="pre">=</span> <span class="pre">0.5</span></code>, <code class="docutils literal notranslate"><span class="pre">EXT_RC_MAX_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.2</span></code>, <code class="docutils literal notranslate"><span class="pre">EXT_RC_MAX_MIN_PIX</span> <span class="pre">=</span> <span class="pre">6.0</span></code>.</p></li>
+<li><p>Convert the extent Cash-statistic improvement into <code class="docutils literal notranslate"><span class="pre">EXT_LIKE</span></code>. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">cash_delta_to_like(...,</span> <span class="pre">dof=EXTENT_LIKE_DOF)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EXTENT_LIKE_DOF</span> <span class="pre">=</span> <span class="pre">1.0</span></code>.</p></li>
+<li><p>Define the fallback fitted extent scale when no meaningful extent solution is kept. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">DEFAULT_EXTENT_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">0.5</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">DEFAULT_EXTENT_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">0.5</span></code>.</p></li>
+<li><p>Control how much margin is added around a candidate group before the grouped fit is run. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(GROUP_STAMP_MARGIN_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">max_psf_r90,</span> <span class="pre">GROUP_STAMP_MARGIN_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">max_scale,</span> <span class="pre">GROUP_STAMP_MARGIN_MIN_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">GROUP_STAMP_MARGIN_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">GROUP_STAMP_MARGIN_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">GROUP_STAMP_MARGIN_MIN_PIX</span> <span class="pre">=</span> <span class="pre">6.0</span></code>.</p></li>
+<li><p>Impose a hard minimum size on the grouped-fit image stamp so small groups still get enough local context. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(group_extent</span> <span class="pre">+</span> <span class="pre">margin,</span> <span class="pre">GROUP_STAMP_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">GROUP_STAMP_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">10.0</span></code>.</p></li>
+<li><p>Decide how aggressively nearby detections are merged into one joint-fitting problem. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">build_source_groups()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(GROUP_LINK_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">max(r90_i,</span> <span class="pre">r90_j),</span> <span class="pre">GROUP_LINK_MIN_RADIUS_PIX)</span></code>, after flooring each PSF with <code class="docutils literal notranslate"><span class="pre">GROUP_LINK_MIN_PSF_R90_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">GROUP_LINK_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.25</span></code>, <code class="docutils literal notranslate"><span class="pre">GROUP_LINK_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">8.0</span></code>, <code class="docutils literal notranslate"><span class="pre">GROUP_LINK_MIN_PSF_R90_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>.</p></li>
+<li><p>Limit the upper search range of the non-negative amplitude optimizer so it remains broad enough to capture bright sources but bounded enough to stay stable. Used in <a class="reference download internal" download="" href="_downloads/82cdbc8b061f05371c47d3321aba8557/fit.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/fit.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">fit_amplitude_cash()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">upper</span> <span class="pre">*</span> <span class="pre">AMPLITUDE_FIT_UPPER_SCALE</span> <span class="pre">+</span> <span class="pre">AMPLITUDE_FIT_UPPER_PAD</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">AMPLITUDE_FIT_UPPER_SCALE</span> <span class="pre">=</span> <span class="pre">2.0</span></code>, <code class="docutils literal notranslate"><span class="pre">AMPLITUDE_FIT_UPPER_PAD</span> <span class="pre">=</span> <span class="pre">1.0</span></code>.</p></li>
+<li><p>Set the tolerance of the 1D amplitude optimizer. Used in <a class="reference download internal" download="" href="_downloads/82cdbc8b061f05371c47d3321aba8557/fit.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/fit.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">fit_amplitude_cash()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">xatol</span> <span class="pre">=</span> <span class="pre">AMPLITUDE_FIT_XATOL</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">AMPLITUDE_FIT_XATOL</span> <span class="pre">=</span> <span class="pre">1e-3</span></code>.</p></li>
+<li><p>Define the default search range for the standalone point-source centroid fit helper. Used in <a class="reference download internal" download="" href="_downloads/82cdbc8b061f05371c47d3321aba8557/fit.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/fit.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">fit_point_position_cash()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">FIT_POINT_MAX_SHIFT_PIX</span> <span class="pre">=</span> <span class="pre">2.0</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">FIT_POINT_MAX_SHIFT_PIX</span> <span class="pre">=</span> <span class="pre">2.0</span></code>.</p></li>
+<li><p>Define the default beta-model slope and shift range for the standalone extended-fit helper. Used in <a class="reference download internal" download="" href="_downloads/82cdbc8b061f05371c47d3321aba8557/fit.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/fit.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">fit_extended_position_cash()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">beta</span> <span class="pre">=</span> <span class="pre">FIT_EXTENDED_BETA</span></code> and <code class="docutils literal notranslate"><span class="pre">max_shift</span> <span class="pre">=</span> <span class="pre">FIT_EXTENDED_MAX_SHIFT_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">FIT_EXTENDED_BETA</span> <span class="pre">=</span> <span class="pre">2/3</span></code>, <code class="docutils literal notranslate"><span class="pre">FIT_EXTENDED_MAX_SHIFT_PIX</span> <span class="pre">=</span> <span class="pre">2.0</span></code>.</p></li>
+<li><p>Prevent Gaussian smoothing from collapsing to an unrealistically tiny kernel in low-level helper code. Used in <a class="reference download internal" download="" href="_downloads/00981e67b34c5aca95ed7f83962edbaa/imageops.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/utils/imageops.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">smooth_image()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(sigma,</span> <span class="pre">MIN_GAUSSIAN_SIGMA_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">MIN_GAUSSIAN_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">0.5</span></code>.</p></li>
+</ul>
+</section>
+<section id="classification-and-final-catalog-cleanup">
+<h3>Classification and Final Catalog Cleanup<a class="headerlink" href="#classification-and-final-catalog-cleanup" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Require the fitted extent solution to be both statistically meaningful and morphologically plausible before assigning the model-based <code class="docutils literal notranslate"><span class="pre">extended</span></code> label. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: require <code class="docutils literal notranslate"><span class="pre">best_sigma</span> <span class="pre">&gt;</span> <span class="pre">EXTENT_CLASSIFY_MIN_SIGMA_PIX</span></code>, <code class="docutils literal notranslate"><span class="pre">best_sigma</span> <span class="pre">&lt;</span> <span class="pre">max(EXTENT_CLASSIFY_MAX_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">EXTENT_CLASSIFY_MAX_SIGMA_PIX)</span></code>, <code class="docutils literal notranslate"><span class="pre">stretch</span> <span class="pre">&gt;=</span> <span class="pre">EXTENT_CLASSIFY_MIN_STRETCH</span></code>, and <code class="docutils literal notranslate"><span class="pre">maskfrac</span> <span class="pre">&gt;=</span> <span class="pre">EXTENT_CLASSIFY_MIN_MASKFRAC</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MIN_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">1.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MAX_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MAX_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">12.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MIN_STRETCH</span> <span class="pre">=</span> <span class="pre">1.25</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MIN_MASKFRAC</span> <span class="pre">=</span> <span class="pre">0.8</span></code>.</p></li>
+<li><p>Allow a strong morphology-based fallback path to classify clearly broadened sources as extended even when the model-based extent path is imperfect. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: require <code class="docutils literal notranslate"><span class="pre">stretch</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_STRETCH</span></code>, <code class="docutils literal notranslate"><span class="pre">r80_meas</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_R80_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r80</span></code>, <code class="docutils literal notranslate"><span class="pre">npix</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_NPIX</span></code>, <code class="docutils literal notranslate"><span class="pre">len(support_scales)</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_SUPPORT_SCALES</span></code>, <code class="docutils literal notranslate"><span class="pre">det_like</span> <span class="pre">&gt;=</span> <span class="pre">max(MORPH_EXTENT_DET_LIKE_FACTOR</span> <span class="pre">*</span> <span class="pre">min_det_like,</span> <span class="pre">MORPH_EXTENT_DET_LIKE_FLOOR)</span></code>, <code class="docutils literal notranslate"><span class="pre">maskfrac</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_MASKFRAC</span></code>, and <code class="docutils literal notranslate"><span class="pre">r50_meas</span> <span class="pre">&lt;=</span> <span class="pre">MORPH_EXTENT_MAX_R50_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r50</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_STRETCH</span> <span class="pre">=</span> <span class="pre">2.5</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_R80_FACTOR</span> <span class="pre">=</span> <span class="pre">1.8</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_NPIX</span> <span class="pre">=</span> <span class="pre">20</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_SUPPORT_SCALES</span> <span class="pre">=</span> <span class="pre">3</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_DET_LIKE_FACTOR</span> <span class="pre">=</span> <span class="pre">3.0</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_DET_LIKE_FLOOR</span> <span class="pre">=</span> <span class="pre">20.0</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_MASKFRAC</span> <span class="pre">=</span> <span class="pre">0.9</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MAX_R50_FACTOR</span> <span class="pre">=</span> <span class="pre">8.0</span></code>.</p></li>
+<li><p>Prevent weak one-scale detections from surviving as science sources unless they are exceptionally significant. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(SINGLE_SCALE_DET_LIKE_FACTOR</span> <span class="pre">*</span> <span class="pre">min_det_like,</span> <span class="pre">SINGLE_SCALE_DET_LIKE_FLOOR)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">SINGLE_SCALE_DET_LIKE_FACTOR</span> <span class="pre">=</span> <span class="pre">4.5</span></code>, <code class="docutils literal notranslate"><span class="pre">SINGLE_SCALE_DET_LIKE_FLOOR</span> <span class="pre">=</span> <span class="pre">28.0</span></code>.</p></li>
+<li><p>Reject edge-like low-support detections that are more likely to be artifacts than real astrophysical sources. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: require <code class="docutils literal notranslate"><span class="pre">maskfrac</span> <span class="pre">&lt;</span> <span class="pre">EDGE_BACKGROUND_MAX_MASKFRAC</span></code>, <code class="docutils literal notranslate"><span class="pre">det_like</span> <span class="pre">&lt;</span> <span class="pre">max(EDGE_BACKGROUND_DET_LIKE_FACTOR</span> <span class="pre">*</span> <span class="pre">min_det_like,</span> <span class="pre">EDGE_BACKGROUND_DET_LIKE_FLOOR)</span></code>, <code class="docutils literal notranslate"><span class="pre">npix</span> <span class="pre">&lt;=</span> <span class="pre">EDGE_BACKGROUND_MAX_NPIX</span></code>, and <code class="docutils literal notranslate"><span class="pre">len(support_scales)</span> <span class="pre">&lt;=</span> <span class="pre">EDGE_BACKGROUND_MAX_SUPPORT_SCALES</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_MAX_MASKFRAC</span> <span class="pre">=</span> <span class="pre">0.75</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_DET_LIKE_FACTOR</span> <span class="pre">=</span> <span class="pre">3.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_DET_LIKE_FLOOR</span> <span class="pre">=</span> <span class="pre">20.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_MAX_NPIX</span> <span class="pre">=</span> <span class="pre">8</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_MAX_SUPPORT_SCALES</span> <span class="pre">=</span> <span class="pre">2</span></code>.</p></li>
+<li><p>Suppress weaker duplicate detections that fall inside the PSF footprint of a stronger nearby source. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">prune_nearby_sources()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(PRUNE_SUPPRESS_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">strong_psf,</span> <span class="pre">PRUNE_SUPPRESS_MIN_RADIUS_PIX)</span></code>, after flooring <code class="docutils literal notranslate"><span class="pre">strong_psf</span></code> by <code class="docutils literal notranslate"><span class="pre">PRUNE_MIN_PSF_R90_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">PRUNE_SUPPRESS_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.35</span></code>, <code class="docutils literal notranslate"><span class="pre">PRUNE_SUPPRESS_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">8.0</span></code>, <code class="docutils literal notranslate"><span class="pre">PRUNE_MIN_PSF_R90_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>.</p></li>
+</ul>
+</section>
+<section id="public-catalog-region">
+<h3>Public Catalog Region<a class="headerlink" href="#public-catalog-region" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>the final public catalog region is circular</p></li>
+<li><p>point sources use local <code class="docutils literal notranslate"><span class="pre">r75</span></code></p></li>
+<li><p>extended sources use fitted extended-model <code class="docutils literal notranslate"><span class="pre">r75</span></code></p></li>
+</ul>
+</section>
+</section>
+<section id="suggested-future-additions">
+<h2>Suggested Future Additions<a class="headerlink" href="#suggested-future-additions" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>a dedicated page on catalog column definitions</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">eFXTDAS Documentation</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="fxteefmap.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-it-does">What It Does</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic Usage</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-scale-wavelet-detection">1. Multi-Scale Wavelet Detection</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-scale-candidate-construction">1.1 Cross-Scale Candidate Construction</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#background-map-construction">2. Background Map Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#psf-aware-source-fitting-and-classification">3. PSF-Aware Source Fitting and Classification</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#single-source-fit">3.1 Single-Source Fit</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#grouped-fit">3.2 Grouped Fit</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-catalog-assembly">3.3 Classification and Catalog Assembly</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-detection-parameters">User-Facing Detection Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-catalog-parameters">User-Facing Catalog Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-heuristic-constants">Internal Heuristic Constants</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#wavelet-candidate-construction">Wavelet / Candidate Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Background-Map Construction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-and-grouped-fitting-geometry">Local and Grouped Fitting Geometry</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-final-catalog-cleanup">Classification and Final Catalog Cleanup</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#public-catalog-region">Public Catalog Region</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Chen SJ
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Chen SJ.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
