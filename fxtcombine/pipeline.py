@@ -281,14 +281,29 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
 	stack_image_fname = os.path.join(stack_dir, "evt_stack_cts.fits")
 	stack_expmap_fname = os.path.join(stack_dir, "evt_stack_exp.fits")
+	stack_eefmap_fname = os.path.join(stack_dir, "evt_stack_eef.fits")
 	srcdet_src_fname = os.path.join(stack_dir, "stack_src.fits")
 	srcdet_reg_fname = os.path.join(stack_dir, "stack_src.reg")
 	srcdet_bkg_fname = os.path.join(stack_dir, "stack_bkgmap.fits")
+	eefmap_log = os.path.join(stack_dir, "fxteefmap.log")
 	srcdet_log = os.path.join(stack_dir, "srcdet.log")
+	eefmap_cmd = " ".join([
+		"fxteefmap",
+		f'"{stack_image_fname}"',
+		"--out", f'"{stack_eefmap_fname}"',
+		"--expmap", f'"{stack_expmap_fname}"',
+		"--mission", "ep-fxt",
+		"--emin", "0.3",
+		"--emax", "10.0",
+		"--log-file", f'"{eefmap_log}"',
+	])
+	run_cmd(eefmap_cmd, logger=main_logger, logname=eefmap_log)
+	emit(main_logger, "info", f"Stacked EEF map bundle written to {stack_eefmap_fname}")
 	srcdet_cmd = " ".join([
 		"fxtsrcdet",
 		f'"{stack_image_fname}"',
 		"--expmap", f'"{stack_expmap_fname}"',
+		"--eefmap", f'"{stack_eefmap_fname}"',
 		"--mission", "ep-fxt",
 		"--emin", "0.3",
 		"--emax", "10.0",
