@@ -27,7 +27,7 @@ from fxtcombine.utils.fxtprep import get_input_files
 from fxtcombine.utils.image import reproject_events_xy_to_refwcs
 
 
-def combine_spec(
+def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
 		out_dir="./",module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",skip_existing=False,
 		logger: logging.Logger | None = None,
@@ -94,18 +94,16 @@ def combine_spec(
 		emit(main_logger, "info", "Input obsid_lst is a file.")
 		with open(obsid_lst,"r") as f:
 			lines = f.readlines()
-		obsids = [line.strip() for line in lines]
+		obsids = [line.strip() for line in lines if line.strip()]
 	else:	# input is an array, e.g., `xxxxx,yyyyy,zzzzz`
 		emit(main_logger, "info", "Input obsid_lst is a list.")
-		obsids = obsid_lst.split(",")
+		obsids = [obsid.strip() for obsid in obsid_lst.split(",") if obsid.strip()]
 
 	obsid_lst = []
 	for obsid in obsids:
 		obsid_dir = os.path.join(src_dir,obsid)
-		if os.path.exists(obsid_dir):
+		if os.path.isdir(obsid_dir):
 			obsid_lst.append(obsid)
-		else:
-			emit(main_logger, "warning", f"{src_dir}/{obsid} does not exist!")
 
 	emit(main_logger, "info", f"Valid OBSIDs for processing: {obsid_lst}")
 	if not obsid_lst:
@@ -138,7 +136,7 @@ def combine_spec(
 			expr=expr,grade=grade,
 			skip_existing=skip_existing,
 			obsid_logger=obsid_logger,
-		)
+		) # TODO: print logger at each stage?
 		all_prod_dict[obsid] = obsid_prod_dict
 
 
@@ -442,7 +440,7 @@ def main() -> None:
 	args = build_parser().parse_args()
 	log_file = args.log_file if args.log_file is not None else Path(args.out_dir) / "log" / "fxtcombine.log"
 	cli_logger = build_cli_logger("eFXTDAS.fxtcombine", args.log_level, log_file)
-	combine_spec(
+	fxtcombine_pipeline(
 		src_dir=args.src_dir,
 		ra=args.ra,
 		dec=args.dec,
@@ -460,3 +458,6 @@ def main() -> None:
 
 if __name__ == "__main__":
 	main()
+
+
+combine_spec = fxtcombine_pipeline

@@ -42,9 +42,9 @@ fxtcombine /data/epfxt \
 ### Python Usage
 
 ```python
-from fxtcombine.pipeline import combine_spec
+from fxtcombine.pipeline import fxtcombine_pipeline
 
-combine_spec(
+fxtcombine_pipeline(
     src_dir="/data/epfxt",
     obsid_lst="02001234567,02001234568",
     ra=9.25937,
