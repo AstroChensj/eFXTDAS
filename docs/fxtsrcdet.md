@@ -572,31 +572,29 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 
    - Diagnose the background map `bkgmap.fits`, the aggregate source mask, and the per-scale correlation maps from the Python return value. In practice, strange detections are often caused by an over-carved or under-supported background model rather than by the final fitting code alone.
 
-2. Why can very sparse stacked images produce far too many wavelet candidates?
+2. How do I select wavelet scales for my X-ray image?
 
-   - In a sparse counts image, the local background per pixel can be far below `1` count. On the smallest wavelet scales, isolated `1`-count fluctuations can then look formally significant. This is why stacked low-background images often benefit from trying `--scales 2,4,8,16` instead of the default `1,2,4,8,16`, and from checking the candidate counts reported in the log:
+   - Scale choice should mainly depend on how sparse the image is and on the angular size of the sources you expect to detect. For typical EP-FXT point-source work, the default `1,2,4,8,16` is a reasonable starting point. But for very sparse images, especially stacked images with low mean counts per valid pixel, the smallest scale can become too sensitive to isolated `1`-count fluctuations. In that regime, `2,4,8,16` is often more stable.
+   - In practice, monitor the source-count checkpoints in the log:
      - raw wavelet candidates
      - science candidates after filtering
      - after PSF-aware fitting
      - after background rejection
      - after duplicate pruning
+   - If adding scale `1` causes an explosion of raw candidates, unstable background carving, or many compact edge-like detections, then the image is probably too sparse for that smallest scale. Also note that the final catalog is not a monotonic superset of the raw wavelet detections: adding scale `1` can produce more provisional candidates but fewer final science sources because it changes later deblending, fitting, and pruning.
 
-3. Why can adding scale `1` produce fewer final sources than using only `2,4,8,16`?
-
-   - The final catalog is not a monotonic superset of the raw wavelet detections. Adding scale `1` usually creates many extra compact provisional candidates. Those extra candidates then change the later single-source fit, grouped fit, deblending, background rejection, and duplicate pruning. So it is entirely possible for `1,2,4,8,16` to yield more raw candidates but fewer final science sources than `2,4,8,16`.
-
-4. Why do different pixels use different best smoothing scales in the background map? Is that physical?
+3. Why do different pixels use different best smoothing scales in the background map? Is that physical?
 
    - The adaptive background model is choosing a local estimator bandwidth, not claiming that the physical sky background truly has a different intrinsic smoothing scale at every pixel. Pixels near carved source holes, detector edges, or low-exposure regions have less valid support and therefore need broader smoothing to obtain a stable source-free background estimate. Clean interior pixels can often use a smaller smoothing scale.
 
-5. How is the current background map prevented from becoming too cheese-like?
+4. How is the current background map prevented from becoming too cheese-like?
 
    - The current implementation no longer lets every provisional wavelet candidate carve the background map. By default, a candidate is used for both background carving and later PSF-aware fitting only if it satisfies:
      - `len(support_scales) >= 2`
      - `counts >= 4`
    - In addition, weak-support pixels no longer default to zero background. They now fall back to the broadest adaptive smoothing model, and only globally invalid pixels outside the allowed analysis region are forced to zero.
 
-6. What does the user mask actually do?
+5. What does the user mask actually do?
 
    - The optional `--mask` input is a global analysis-validity mask. It is combined with the exposure map and applied consistently to:
      - wavelet detection

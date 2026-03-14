@@ -27,6 +27,7 @@ fxtcombine /data/epfxt \
   --dec 9.16681 \
   --image-energy-ranges "0.3:10.0,10.0:12.0" \
   --lightcurve-energy-ranges "0.1:12.0,10.0:12.0" \
+  --jobs 4 \
   --out-dir combine_out
 ```
 
@@ -59,6 +60,7 @@ fxtcombine_pipeline(
     datatype="evt",
     image_energy_ranges="0.3:10.0,10.0:12.0",
     lightcurve_energy_ranges="0.1:12.0,10.0:12.0",
+    jobs=4,
     skip_existing=False,
 )
 ```
@@ -108,6 +110,15 @@ fxtcombine_pipeline(
       exposure map contains `NaN` or `Inf`
     - the generated `stack_mask.fits` is passed directly to `fxtsrcdet`
 - workflow controls:
+  - `--jobs`
+    - number of parallel OBSID workers used in Stage 1
+    - each worker owns one OBSID and writes only inside that OBSID's own
+      `products/` and `products/log/` directory
+    - default: `1`
+  - `--srcdet-scales`
+    - wavelet scales in pixels forwarded to `fxtsrcdet` for stacked source
+      detection
+    - default: `1,2,4,8,16`
   - `--srcdet-background-sigma-grid`
     - Gaussian smoothing scales in pixels forwarded to `fxtsrcdet` for its
       adaptive background model
@@ -333,6 +344,9 @@ For each selected OBSID and each selected event file:
 9. run `fxteefmap` on each requested image energy band to produce one per-OBSID EEF bundle per band
 
 This stage creates the per-OBSID products that are later stacked.
+It can optionally be parallelized over OBSIDs with `--jobs`, but each OBSID is
+still processed serially inside its own worker so different observations do not
+touch the same output files.
 
 ### 2. Image and Exposure Stacking
 
@@ -420,6 +434,9 @@ The main user-facing pipeline controls are:
 - `--datatype`
 - `--grade`
 - `--expr`
+- `--jobs`
+- `--srcdet-scales`
+- `--srcdet-background-sigma-grid`
 - `--skip-existing`
 
 ## FAQ

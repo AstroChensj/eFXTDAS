@@ -53,6 +53,8 @@ def build_regions(
     match_threshold_arcsec: float = FXT_POSITION_ERR90_ARCSEC,
     optaxis_x: float | None = None,
     optaxis_y: float | None = None,
+    src_regfile: Path | None = None,
+    bkg_regfile: Path | None = None,
     logger: logging.Logger | None = None,
 ) -> dict[str, Any]:
     """Build source and background extraction regions.
@@ -94,6 +96,12 @@ def build_regions(
         Optional optical-axis x coordinate in 1-based image pixels.
     optaxis_y : float | None
         Optional optical-axis y coordinate in 1-based image pixels.
+    src_regfile : Path | None
+        Optional output path for the source region file. When supplied, the
+        region file is written inside this function.
+    bkg_regfile : Path | None
+        Optional output path for the background region file. When supplied, the
+        region file is written inside this function.
     logger : logging.Logger | None
         Optional logger used for progress and warning messages. When omitted,
         messages are printed directly.
@@ -103,6 +111,22 @@ def build_regions(
     region_info : dict[str, Any]
         Dictionary describing the matched source, final radii, and exclusion regions.
     """
+    emit(logger, "info", "=================================")
+    emit(logger, "info", "**** Welcome to FXTREGIONS! ****")
+    emit(logger, "info", "=================================")
+    emit(logger, "info", "**** Input Checklist ****")
+    emit(logger, "info", f"Image file: {image_path}")
+    emit(logger, "info", f"Catalog file: {catalog_path}")
+    emit(logger, "info", f"Background map: {bkgmap_path}")
+    emit(logger, "info", f"Target coordinate: ICRS({ra_deg}, {dec_deg})")
+    emit(logger, "info", f"Mission / instrument / filter: {mission}, {instrument}, {filter_name}")
+    emit(logger, "info", f"Energy band: {emin_keV}, {emax_keV} keV")
+    emit(logger, "info", f"Requested mode: {mode}")
+    emit(logger, "info", f"Match threshold: {match_threshold_arcsec} arcsec")
+    emit(logger, "info", f"Output source region: {src_regfile}")
+    emit(logger, "info", f"Output background region: {bkg_regfile}")
+    # emit(logger, "info", "**** Region Building ****")
+
     #--- read image and wcs
     emit(logger, "info", f"Loading image: {image_path}")
     image_ccd = read_ccd(image_path)
@@ -118,6 +142,7 @@ def build_regions(
     catalog = load_catalog(catalog_path)
 
     #--- match target to catalog
+    emit(logger, "info", "Matching target to catalog ...")
     target = SkyCoord(ra_deg, dec_deg, unit="deg")
     match_idx, adopted_coord, match_sep = match_target(catalog, target, match_threshold_arcsec)
     matched_row = None if match_idx is None else catalog[match_idx]
@@ -168,6 +193,7 @@ def build_regions(
     ext_col = find_column(catalog, ["EXT"])
 
     #--- determine source type, construct source model (psf for point source, or gaussian-convolved psf for extended)
+    emit(logger, "info", "Determining source type and local PSF ...")
     source_type = "point" if not matched else str(matched_row[source_type_col]).lower()
     fitted_extent_sigma_pix = 0.0 if not matched else float(matched_row[ext_col]) / pixel_scale
     kernel, rr, cum = source_kernel(psf_context, theta_arcmin, source_type, fitted_extent_sigma_pix)
@@ -175,6 +201,7 @@ def build_regions(
     psf_r99_pix = np.interp(0.99, cum, rr)
 
     #--- determine local background
+    emit(logger, "info", "Fetching local background ...")
     bkg_image = None if bkg_ccd is None else np.asarray(bkg_ccd.data, dtype=np.float64)
     ##--- if user supplies bkg map, use it to estimate local bkg
     if bkg_image is not None:
@@ -229,6 +256,7 @@ def build_regions(
     )
 
     #--- determine source extraction radius, and background annulus inner and outer radii
+    emit(logger, "info", "**** Stage 1: determine TARGET SOURCE, and TARGET BACKGROUND regions ****")
     if target_ctx.effective_mode == "manual":  # MANUAL mode (user supplies MANUAL mode; or AUTO mode but target undetected)
         src_radius_arcsec_eff = (
             float(src_radius_arcsec)
@@ -283,6 +311,7 @@ def build_regions(
         )
 
     #--- determine confusing source exclusion size in source extraction circle and background annulus
+    emit(logger, "info", "**** Stage 2: determine CONFUSING SOURCE exclusion size in TARGET SOURCE and TARGET BACKGROUND regions ****")
     source_excludes: list[str] = []
     background_excludes: list[str] = []
     warned_undetected_src_exclusion = False
@@ -376,7 +405,7 @@ def build_regions(
     src_region = ds9_circle(adopted_coord, src_radius_pix * pixel_scale)
     bkg_region = ds9_annulus(adopted_coord, bkg_inner_pix * pixel_scale, bkg_outer_pix * pixel_scale)
 
-    return {
+    region_info = {
         "matched_index": match_idx,
         "match_separation_arcsec": target_ctx.match_separation_arcsec,
         "adopted_coord": target_ctx.adopted_coord,
@@ -396,6 +425,36 @@ def build_regions(
         "matched": target_ctx.matched,
         "target_context": target_ctx,
     }
+    if src_regfile is not None:
+        write_region_file(src_regfile, region_info["source_region"], [])
+    if bkg_regfile is not None:
+        write_region_file(bkg_regfile, region_info["background_region"], region_info["background_excludes"])
+
+    emit(logger, "info", f"Matched source index: {region_info['matched_index']}")
+    emit(logger, "info", f"Match separation: {region_info['match_separation_arcsec']:.3f} arcsec")
+    emit(logger, "info", f"Mode: requested={region_info['requested_mode']} effective={region_info['effective_mode']}")
+    emit(logger, "info", f"Background mode: {region_info['background_mode']}")
+    if region_info["local_source_counts"] is None:
+        emit(logger, "info", "Local source counts: unavailable for undetected target")
+    else:
+        emit(logger, "info", f"Local source counts: {region_info['local_source_counts']:.3f}")
+    emit(logger, "info", f"Forced net counts: {region_info['forced_net_counts']:.3f}")
+    emit(logger, "info", f"Local background: {region_info['local_background_counts_per_pixel']:.6f} count/pixel")
+    emit(logger, "info", f"Source radius: {region_info['source_radius_arcsec']:.3f} arcsec")
+    emit(
+        logger,
+        "info",
+        (
+            "Background annulus: "
+            f"{region_info['background_inner_arcsec']:.3f} - {region_info['background_outer_arcsec']:.3f} arcsec"
+        ),
+    )
+    if src_regfile is not None:
+        emit(logger, "info", f"Wrote source region: {src_regfile}")
+    if bkg_regfile is not None:
+        emit(logger, "info", f"Wrote background region: {bkg_regfile}")
+
+    return region_info
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -467,32 +526,11 @@ def main() -> None:
         match_threshold_arcsec=args.match_threshold,
         optaxis_x=args.optaxis_x,
         optaxis_y=args.optaxis_y,
+        src_regfile=args.src_regfile,
+        bkg_regfile=args.bkg_regfile,
         logger=logger,
     )
-    # write_region_file(args.src_regfile, info["source_region"], info["source_excludes"])
-    write_region_file(args.src_regfile, info["source_region"], [])  # NOTE: fxtarfgen does not recognize complex source region, so keep the simplest
-    write_region_file(args.bkg_regfile, info["background_region"], info["background_excludes"])
-    emit(logger, "info", f"Matched source index: {info['matched_index']}")
-    emit(logger, "info", f"Match separation: {info['match_separation_arcsec']:.3f} arcsec")
-    emit(logger, "info", f"Mode: requested={info['requested_mode']} effective={info['effective_mode']}")
-    emit(logger, "info", f"Background mode: {info['background_mode']}")
-    if info["local_source_counts"] is None:
-        emit(logger, "info", "Local source counts: unavailable for undetected target")
-    else:
-        emit(logger, "info", f"Local source counts: {info['local_source_counts']:.3f}")
-    emit(logger, "info", f"Forced net counts: {info['forced_net_counts']:.3f}")
-    emit(logger, "info", f"Local background: {info['local_background_counts_per_pixel']:.6f} count/pixel")
-    emit(logger, "info", f"Source radius: {info['source_radius_arcsec']:.3f} arcsec")
-    emit(
-        logger,
-        "info",
-        (
-            "Background annulus: "
-            f"{info['background_inner_arcsec']:.3f} - {info['background_outer_arcsec']:.3f} arcsec"
-        ),
-    )
-    emit(logger, "info", f"Wrote source region: {args.src_regfile}")
-    emit(logger, "info", f"Wrote background region: {args.bkg_regfile}")
+    _ = info
 
 
 if __name__ == "__main__":

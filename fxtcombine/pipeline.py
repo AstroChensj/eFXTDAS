@@ -3,6 +3,7 @@
 Simple calling FXTDAS tasks.
 """
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import json
 import logging
 import numpy as np
@@ -30,11 +31,52 @@ from fxtcombine.utils.fxtchain_simplified import fxtchain_obsid, fxt_extract_spe
 from fxtcombine.utils.fxtprep import get_input_files
 from fxtcombine.utils.image import reproject_events_xy_to_refwcs
 
+
+def _run_stage1_obsid(
+	obsid,
+	src_dir,
+	out_dir,
+	datamode,
+	module,
+	datatype,
+	datatype_lst,
+	expr,
+	grade,
+	image_energy_ranges,
+	lightcurve_energy_ranges,
+	skip_existing,
+):
+	"""Run Stage-1 preprocessing for one OBSID in an isolated worker."""
+	obsid_dir = os.path.join(src_dir, obsid)
+	obsid_out_dir = os.path.join(out_dir, obsid, "products")
+	os.makedirs(obsid_out_dir, exist_ok=True)
+	obsid_log_dir = os.path.join(obsid_out_dir, "log")
+	os.makedirs(obsid_log_dir, exist_ok=True)
+	obsid_logname = os.path.join(obsid_log_dir, "fxtchain.log")
+	obsid_logger = build_file_logger(f"eFXTDAS.fxtcombine.{obsid}.stage1", obsid_logname)
+	emit(obsid_logger, "info", f"**** Stage 1 Worker: {obsid} ****")
+	emit(obsid_logger, "info", f"Input OBSID directory: {obsid_dir}")
+	emit(obsid_logger, "info", f"Output OBSID products directory: {obsid_out_dir}")
+	obsid_file_dict = get_input_files(obsid_dir, datamode, module, datatype)
+	obsid_prod_dict = fxtchain_obsid(
+		obsid_file_dict=obsid_file_dict,
+		datatype_lst=datatype_lst,
+		obsid_out_dir=obsid_out_dir,
+		obsid_log_dir=obsid_log_dir,
+		expr=expr,
+		grade=grade,
+		image_energy_ranges=image_energy_ranges,
+		lightcurve_energy_ranges=lightcurve_energy_ranges,
+		skip_existing=skip_existing,
+		obsid_logger=obsid_logger,
+	)
+	return obsid, obsid_file_dict, obsid_prod_dict
+
 def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
 		out_dir="./",module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",
 		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
-		mask_expfrac=0.3,srcdet_background_sigma_grid="4,8,16,32,64",skip_existing=False,
+		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",skip_existing=False,
 		logger: logging.Logger | None = None,
 	):
 	"""Combine multiple EP-FXT observations into stacked images and spectra.
@@ -74,6 +116,12 @@ def fxtcombine_pipeline(
 		Minimum stacked exposure, expressed as a fraction of the maximum stacked
 		exposure, required for a pixel to remain valid in the stacked mask passed
 		to ``fxtsrcdet``.
+	jobs : int, optional
+		Number of parallel OBSID workers used in Stage 1. Each worker processes
+		one OBSID in its own output directory. ``1`` keeps serial execution.
+	srcdet_scales : str | list[float], optional
+		Wavelet scales in pixels forwarded to ``fxtsrcdet`` for stacked source
+		detection.
 	srcdet_background_sigma_grid : str | list[float], optional
 		Gaussian smoothing scales in pixels forwarded to ``fxtsrcdet`` for its
 		adaptive background model.
@@ -110,12 +158,16 @@ def fxtcombine_pipeline(
 	os.makedirs(log_dir,exist_ok=True)
 	main_logname = os.path.join(log_dir, "fxtcombine.log")
 	main_logger = logger if logger is not None else build_file_logger("eFXTDAS.fxtcombine", main_logname)
+	emit(main_logger, "info", "==================================")
 	emit(main_logger, "info", f"**** Welcome to FXTCOMBINE ! ****")
+	emit(main_logger, "info", "==================================")
 	emit(main_logger, "info", f"Source directory is: {src_dir}")
 	emit(main_logger, "info", f"Source coordinate is: ICRS({ra}, {dec})")
 	emit(main_logger, "info", f"Image energy ranges are: {image_energy_ranges}")
 	emit(main_logger, "info", f"Light-curve energy ranges are: {lightcurve_energy_ranges}")
 	emit(main_logger, "info", f"Stacked-mask minimum exposure fraction is: {mask_expfrac}")
+	emit(main_logger, "info", f"Stage 1 parallel workers are: {jobs}")
+	emit(main_logger, "info", f"fxtsrcdet wavelet scales are: {srcdet_scales}")
 	emit(main_logger, "info", f"fxtsrcdet background sigma grid is: {srcdet_background_sigma_grid}")
 
 
@@ -145,32 +197,56 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"**** Stage 1: initial iterate to get clean events & exposure map for each OBSID ****")
 	all_file_dict = {}
 	all_prod_dict = {}
-	for obsid in obsid_lst:
-		emit(main_logger, "info", f"Processing {obsid} ...")
-		obsid_dir = os.path.join(src_dir,obsid)
-		obsid_out_dir = os.path.join(out_dir,obsid,"products")
-		os.makedirs(obsid_out_dir,exist_ok=True)
-		emit(main_logger, "info", f"Output directory is {obsid_out_dir}")
-		##--- define obsid logger
-		obsid_log_dir = os.path.join(obsid_out_dir,"log")
-		os.makedirs(obsid_log_dir,exist_ok=True)
-		obsid_logname = os.path.join(obsid_log_dir, "fxtchain.log")
-		obsid_logger = build_file_logger(f"eFXTDAS.fxtcombine.{obsid}.stage1", obsid_logname)
-		##--- parse events files
-		obsid_file_dict = get_input_files(obsid_dir,datamode,module,datatype)
-		all_file_dict[obsid] = obsid_file_dict
-		##--- calling sub-modules to run fxtchain for this obsid
-		##--- generates: clean events, band-selected images/light curves, exposure map, EEF map
-		obsid_prod_dict = fxtchain_obsid(
-			obsid_file_dict=obsid_file_dict,datatype_lst=datatype_lst,
-			obsid_out_dir=obsid_out_dir,obsid_log_dir=obsid_log_dir,
-			expr=expr,grade=grade,
-			image_energy_ranges=image_energy_ranges,
-			lightcurve_energy_ranges=lightcurve_energy_ranges,
-			skip_existing=skip_existing,
-			obsid_logger=obsid_logger,
-		) # TODO: print logger at each stage?
-		all_prod_dict[obsid] = obsid_prod_dict
+	jobs = max(int(jobs), 1)
+	if jobs == 1 or len(obsid_lst) == 1:
+		for obsid in obsid_lst:
+			emit(main_logger, "info", f"Processing {obsid} serially ...")
+			obsid_result = _run_stage1_obsid(
+				obsid=obsid,
+				src_dir=src_dir,
+				out_dir=out_dir,
+				datamode=datamode,
+				module=module,
+				datatype=datatype,
+				datatype_lst=datatype_lst,
+				expr=expr,
+				grade=grade,
+				image_energy_ranges=image_energy_ranges,
+				lightcurve_energy_ranges=lightcurve_energy_ranges,
+				skip_existing=skip_existing,
+			)
+			obsid, obsid_file_dict, obsid_prod_dict = obsid_result
+			all_file_dict[obsid] = obsid_file_dict
+			all_prod_dict[obsid] = obsid_prod_dict
+	else:
+		max_workers = min(jobs, len(obsid_lst))
+		emit(main_logger, "info", f"Running Stage 1 in parallel with {max_workers} OBSID worker(s).")
+		with ProcessPoolExecutor(max_workers=max_workers) as executor:
+			future_map = {
+				executor.submit(
+					_run_stage1_obsid,
+					obsid,
+					src_dir,
+					out_dir,
+					datamode,
+					module,
+					datatype,
+					datatype_lst,
+					expr,
+					grade,
+					image_energy_ranges,
+					lightcurve_energy_ranges,
+					skip_existing,
+				): obsid
+				for obsid in obsid_lst
+			}
+			for future in as_completed(future_map):
+				obsid = future_map[future]
+				emit(main_logger, "info", f"Collecting Stage 1 results for {obsid} ...")
+				obsid_name, obsid_file_dict, obsid_prod_dict = future.result()
+				all_file_dict[obsid_name] = obsid_file_dict
+				all_prod_dict[obsid_name] = obsid_prod_dict
+				emit(main_logger, "info", f"Finished Stage 1 for {obsid_name}.")
 
 
 	#--- stack all images, expmaps and eefmaps; evt and fsaevt (if any) stacked separately
@@ -424,6 +500,7 @@ def fxtcombine_pipeline(
 		"--mission", "ep-fxt",
 		"--emin", f"{detect_emin}",
 		"--emax", f"{detect_emax}",
+		"--scales", f'"{srcdet_scales}"',
 		"--background-sigma-grid", f'"{srcdet_background_sigma_grid}"',
 		"--out", f'"{srcdet_src_fname}"',
 		"--regfile", f'"{srcdet_reg_fname}"',
@@ -584,6 +661,17 @@ def build_parser() -> argparse.ArgumentParser:
 		help="Minimum stacked exposure fraction, relative to the stacked exposure maximum, required to keep a pixel in the stacked analysis mask passed to fxtsrcdet. Default: 0.3",
 	)
 	parser.add_argument(
+		"--jobs",
+		type=int,
+		default=1,
+		help="Number of parallel OBSID workers used in Stage 1. Default: 1",
+	)
+	parser.add_argument(
+		"--srcdet-scales",
+		default="1,2,4,8,16",
+		help="Wavelet scales in pixels forwarded to fxtsrcdet for stacked source detection. Default: '1,2,4,8,16'",
+	)
+	parser.add_argument(
 		"--srcdet-background-sigma-grid",
 		default="4,8,16,32,64",
 		help="Gaussian smoothing scales in pixels forwarded to fxtsrcdet for adaptive background modeling. Default: '4,8,16,32,64'",
@@ -623,6 +711,8 @@ def main() -> None:
 		image_energy_ranges=args.image_energy_ranges,
 		lightcurve_energy_ranges=args.lightcurve_energy_ranges,
 		mask_expfrac=args.mask_expfrac,
+		jobs=args.jobs,
+		srcdet_scales=args.srcdet_scales,
 		srcdet_background_sigma_grid=args.srcdet_background_sigma_grid,
 		skip_existing=args.skip_existing,
 		logger=cli_logger,
