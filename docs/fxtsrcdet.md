@@ -97,7 +97,7 @@ per_scale = result["per_scale"]
     - `--optaxis-y`
 - wavelet detection controls:
   - `--scales`
-    - wavelet scales in pixels, for example `1 2 4 8 16`
+    - wavelet scales in pixels, for example `1,2,4,8,16`
   - `--sigthresh`
     - significance threshold for the wavelet detection stage
   - `--bkgsigthresh`
@@ -373,11 +373,14 @@ Mosaic image with final wavelet source catalog overlaid.
 
 The background map is constructed after the initial detection stage:
 
-1. build a valid mask from exposure
-2. carve source regions from the valid image
-3. smooth masked counts and masked exposure over several scales
-4. estimate effective support at each smoothing scale
-5. choose or interpolate the smallest smoothing scale with enough support
+1. build a valid mask from exposure and, if supplied, the user analysis mask
+2. keep only science-style provisional candidates for both background carving and later PSF-aware fitting
+3. carve those selected source regions from the valid image
+4. smooth masked counts and masked exposure over several scales
+5. estimate effective support at each smoothing scale
+6. choose or interpolate the smallest smoothing scale with enough support
+7. where local support is weak, fall back to the broadest-scale background model rather than forcing the background to zero
+8. zero only globally invalid pixels outside the allowed analysis region
 
 This is closer in spirit to `erbackmap` than to a simple annulus-fill background.
 
@@ -489,7 +492,7 @@ User could modify the **user-facing parameters** from CLI or Python input. As fo
 #### Detection Parameters
 
 - wavelet scales:
-  - default `(1, 2, 4, 8, 16)` pixels
+  - default `1,2,4,8,16` pixels
 - detection significance threshold:
   - `sigthresh = 1e-6`
 - background-cleansing significance threshold:
@@ -521,9 +524,10 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 
 #### Background-Map Construction
 
-- Carve detected sources out of the image before adaptive smoothing so source wings do not leak into the background model. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `max(BACKGROUND_CARVE_R90_FACTOR * psf_r90, BACKGROUND_CARVE_SCALE_FACTOR * scale, BACKGROUND_CARVE_MIN_RADIUS_PIX)`. Defaults: `BACKGROUND_CARVE_R90_FACTOR = 0.8`, `BACKGROUND_CARVE_SCALE_FACTOR = 1.5`, `BACKGROUND_CARVE_MIN_RADIUS_PIX = 3.5`.
+- Restrict which provisional detections are allowed to carve the background map so tiny low-significance fragments do not turn the image into cheese. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: carve only if `len(support_scales) >= BACKGROUND_CARVE_MIN_SUPPORT_SCALES` and `counts >= BACKGROUND_CARVE_MIN_COUNTS`. Defaults: `BACKGROUND_CARVE_MIN_SUPPORT_SCALES = 2`, `BACKGROUND_CARVE_MIN_COUNTS = 4.0`.
+- Set the carve radius once a source is admitted for background carving, so source wings do not leak into the background model. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `max(BACKGROUND_CARVE_R90_FACTOR * psf_r90, BACKGROUND_CARVE_SCALE_FACTOR * scale, BACKGROUND_CARVE_MIN_RADIUS_PIX)`. Defaults: `BACKGROUND_CARVE_R90_FACTOR = 0.8`, `BACKGROUND_CARVE_SCALE_FACTOR = 1.5`, `BACKGROUND_CARVE_MIN_RADIUS_PIX = 3.5`.
 - Require a minimum number of effective source-free background counts before trusting a local smoothing scale. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `support >= BACKGROUND_TARGET_COUNTS`. Defaults: `BACKGROUND_TARGET_COUNTS = 100.0`.
-- Zero out pixels whose broadest-scale source-free support is still too poor for a reliable background estimate. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `support_ref > BACKGROUND_MIN_SUPPORT_WEIGHT`. Defaults: `BACKGROUND_MIN_SUPPORT_WEIGHT = 0.1`.
+- Keep the broadest-scale background model as the fallback where local support is weak, instead of forcing those pixels to zero. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `background = np.where(hit, background, model_cube[-1])`. Defaults: the broadest scale comes from the user-facing `background_sigma_grid`, floored by `BACKGROUND_SIGMA_FLOOR_PIX = 4.0`.
 - Prevent pathological spikes in the local background-rate estimate near carved holes or sharp exposure edges. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `percentile(rate_samples, BACKGROUND_RATE_CAP_PERCENTILE) * BACKGROUND_RATE_CAP_FACTOR`. Defaults: `BACKGROUND_RATE_CAP_PERCENTILE = 99.9`, `BACKGROUND_RATE_CAP_FACTOR = 3.0`.
 
 #### Local and Grouped Fitting Geometry
@@ -566,7 +570,41 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 
 1. My detection map looks weird: at places where there look significant signal in the image, no detection is found there; however at places that look like pure background, detection is found.
 
-  - Diagnose the background map `stack_bkgmap.fits`, and/or correlation map (need to generate from Python usage), to see if it is wrong.
+   - Diagnose the background map `bkgmap.fits`, the aggregate source mask, and the per-scale correlation maps from the Python return value. In practice, strange detections are often caused by an over-carved or under-supported background model rather than by the final fitting code alone.
+
+2. Why can very sparse stacked images produce far too many wavelet candidates?
+
+   - In a sparse counts image, the local background per pixel can be far below `1` count. On the smallest wavelet scales, isolated `1`-count fluctuations can then look formally significant. This is why stacked low-background images often benefit from trying `--scales 2,4,8,16` instead of the default `1,2,4,8,16`, and from checking the candidate counts reported in the log:
+     - raw wavelet candidates
+     - science candidates after filtering
+     - after PSF-aware fitting
+     - after background rejection
+     - after duplicate pruning
+
+3. Why can adding scale `1` produce fewer final sources than using only `2,4,8,16`?
+
+   - The final catalog is not a monotonic superset of the raw wavelet detections. Adding scale `1` usually creates many extra compact provisional candidates. Those extra candidates then change the later single-source fit, grouped fit, deblending, background rejection, and duplicate pruning. So it is entirely possible for `1,2,4,8,16` to yield more raw candidates but fewer final science sources than `2,4,8,16`.
+
+4. Why do different pixels use different best smoothing scales in the background map? Is that physical?
+
+   - The adaptive background model is choosing a local estimator bandwidth, not claiming that the physical sky background truly has a different intrinsic smoothing scale at every pixel. Pixels near carved source holes, detector edges, or low-exposure regions have less valid support and therefore need broader smoothing to obtain a stable source-free background estimate. Clean interior pixels can often use a smaller smoothing scale.
+
+5. How is the current background map prevented from becoming too cheese-like?
+
+   - The current implementation no longer lets every provisional wavelet candidate carve the background map. By default, a candidate is used for both background carving and later PSF-aware fitting only if it satisfies:
+     - `len(support_scales) >= 2`
+     - `counts >= 4`
+   - In addition, weak-support pixels no longer default to zero background. They now fall back to the broadest adaptive smoothing model, and only globally invalid pixels outside the allowed analysis region are forced to zero.
+
+6. What does the user mask actually do?
+
+   - The optional `--mask` input is a global analysis-validity mask. It is combined with the exposure map and applied consistently to:
+     - wavelet detection
+     - iterative background estimation
+     - final background-map construction
+     - PSF-aware fitting
+     - final `maskfrac` diagnostics
+   - It does not replace the internal source masks or neighbor-exclusion masks used for deblending and local fitting.
 
 ## Suggested Future Additions
 

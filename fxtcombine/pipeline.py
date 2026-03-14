@@ -173,7 +173,7 @@ def fxtcombine_pipeline(
 		all_prod_dict[obsid] = obsid_prod_dict
 
 
-	#--- stack all images and expmaps; evt and fsaevt (if any) stacked separately
+	#--- stack all images, expmaps and eefmaps; evt and fsaevt (if any) stacked separately
 	emit(main_logger, "info", "**** Stage 2: stacking all images and exposure maps. EVT and FSAEVT are stacked separately. ****")
 	stack_dir = os.path.join(out_dir,"stack")
 	os.makedirs(stack_dir,exist_ok=True)
@@ -354,11 +354,16 @@ def fxtcombine_pipeline(
 					fits.HDUList(eef_hdus).writeto(stack_eefmap_default_fname, overwrite=True)
 					emit(main_logger, "info", f"Default stacked EEF map bundle also written to {stack_eefmap_default_fname}")
 		
-		##--- obtain stacked rate image for each image band
+		##--- obtain stacked rate image for each image band with the same
+		## exposure-validity threshold used by the stacked analysis mask
+		finite_exp = exp_sum[np.isfinite(exp_sum)]
+		max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
+		exp_cut = float(mask_expfrac) * max_exp
+		valid_exp = np.isfinite(exp_sum) & (exp_sum >= exp_cut)
 		for image_key, cts_sum in cts_sum_map.items():
-			rate_sum = cts_sum / exp_sum
-			rate_sum[np.isinf(rate_sum)] = 0
-			rate_sum[np.isnan(rate_sum)] = 0
+			rate_sum = np.zeros_like(cts_sum, dtype=np.float64)
+			valid = valid_exp & np.isfinite(cts_sum) & (~np.isinf(cts_sum))
+			rate_sum[valid] = cts_sum[valid] / exp_sum[valid]
 			rate_sum_fname = os.path.join(stack_dir,f"{image_key}_stack_rate.fits")
 			fits.writeto(rate_sum_fname,rate_sum,refimg.header,overwrite=True)
 			emit(main_logger, "info", f"Stacked rate image written to {rate_sum_fname}")
@@ -373,7 +378,6 @@ def fxtcombine_pipeline(
 			stack_eefmap_default_fname = stack_eefmap_map[detection_image_suffix]
 
 	#--- generate stacked analysis mask for the default detection band
-	# emit(main_logger, "info", "**** Stage 2.5: generate stacked analysis mask ****")
 	stack_mask_fname = os.path.join(stack_dir, "stack_mask.fits")
 	with warnings.catch_warnings():
 		warnings.simplefilter("ignore", VerifyWarning)

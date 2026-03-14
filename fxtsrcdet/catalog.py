@@ -102,7 +102,6 @@ def classify_sources_with_psf(
     background_map: np.ndarray | None = None,
     exposure_map: np.ndarray | None = None,
     analysis_mask: np.ndarray | None = None,
-    expthresh: float = 0.0,
     optaxis_x: float | None = None,
     optaxis_y: float | None = None,
     show_progress: bool = False,
@@ -136,10 +135,6 @@ def classify_sources_with_psf(
     analysis_mask : np.ndarray | None, optional
         Optional boolean mask selecting globally valid pixels for background
         estimation and local fits.
-    expthresh : float, optional
-        Relative exposure threshold used when deriving the validity mask from
-        ``exposure_map``. Pixels with exposure below this fraction of the maximum are
-        excluded from local measurements.
     optaxis_x : float | None, optional
         Optical-axis x coordinate in 1-based image pixels. If omitted, it is inferred
         from the image geometry.
@@ -197,7 +192,6 @@ def classify_sources_with_psf(
             pixel_scale_arcsec,
             exposure_map=exposure_map,
             analysis_mask=analysis_mask,
-            expthresh=expthresh,
             optaxis_x=optaxis_x,
             optaxis_y=optaxis_y,
             eef_radius_maps=eef_radius_maps,

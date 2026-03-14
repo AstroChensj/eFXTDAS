@@ -42,6 +42,8 @@ MIN_GAUSSIAN_SIGMA_PIX = 0.5
 BACKGROUND_CARVE_R90_FACTOR = 0.8
 BACKGROUND_CARVE_SCALE_FACTOR = 1.5
 BACKGROUND_CARVE_MIN_RADIUS_PIX = 3.5
+BACKGROUND_CARVE_MIN_SUPPORT_SCALES = 2
+BACKGROUND_CARVE_MIN_COUNTS = 4.0
 
 # The adaptive background smoother never evaluates sigmas below this floor,
 # even if the user supplies a smaller background-smoothing scale.

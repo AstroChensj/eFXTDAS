@@ -422,6 +422,35 @@ The main user-facing pipeline controls are:
 - `--expr`
 - `--skip-existing`
 
+## FAQ
+
+1. Why does `fxtcombine` ask for energy ranges instead of channel ranges now?
+
+   - Energy ranges are easier to interpret scientifically. Internally, `fxtcombine` converts each requested energy band to the corresponding PI/channel range using the FXT E2PI calibration table, and `xselect` still filters events in PI/channel space.
+
+2. Does a range like `0.3:10.0` include both endpoints?
+
+   - The requested energy interval is converted to the set of PI/channel bins whose calibrated energy intervals overlap that band. The final event filtering is then done on inclusive channel bounds inside `xselect`.
+
+3. Why does only the first image energy band drive `fxtsrcdet` by default?
+
+   - `fxtcombine` can generate many stacked images, but it still needs one default detection image, one default stacked EEF bundle, and one default stacked mask for the stacked source-detection step. The current convention is to use the first requested image energy range for that purpose. All requested image bands still get their own stacked counts, rate, and EEF products.
+
+4. What exactly does `--mask-expfrac` do?
+
+   - It defines the minimum acceptable exposure, relative to the maximum of the stacked exposure map, for a pixel to remain valid in `stack_mask.fits`. Pixels are also rejected if the stacked counts image or stacked exposure map has `NaN` or `Inf`. The same threshold is applied when building stacked per-band rate maps so low-exposure edge pixels do not dominate the visual appearance.
+
+5. If different observations have slightly different WCS rotation, is the stacked image pixel scale wrong?
+
+   - No. The stacked products are explicitly defined on the reference image grid, so the pixel scale of the stacked image is, by construction, the pixel scale of that reference image. Rotation differences between epochs do not make that inconsistent. The main tradeoff is not a wrong pixel scale, but the fidelity of the reprojection and binning scheme onto a single chosen grid.
+
+6. Why is there both `stack_cts.fits` and `e00300_10000_stack_cts.fits`?
+
+   - The first requested image energy band is written twice:
+     - once with a generic legacy name such as `stack_cts.fits` or `stack_rate.fits`
+     - once with its explicit band-labelled name such as `e00300_10000_stack_cts.fits`
+   - This keeps backward compatibility while making all multi-band products explicit.
+
 ## Current Limitations
 
 - `fxtcombine` assumes all selected observations belong to the same astrophysical target.

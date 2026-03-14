@@ -6,6 +6,8 @@ import numpy as np
 
 from fxtpsf_helpers import MissionPSFContext, eef_radius, infer_optical_axis, load_local_eef, sample_radius_map
 from fxtsrcdet.config import (
+    BACKGROUND_CARVE_MIN_COUNTS,
+    BACKGROUND_CARVE_MIN_SUPPORT_SCALES,
     BACKGROUND_CARVE_MIN_RADIUS_PIX,
     BACKGROUND_CARVE_R90_FACTOR,
     BACKGROUND_CARVE_SCALE_FACTOR,
@@ -27,7 +29,6 @@ def create_background_map(
     pixel_scale_arcsec: float,
     exposure_map: np.ndarray | None = None,
     analysis_mask: np.ndarray | None = None,
-    expthresh: float = 0.0,
     optaxis_x: float | None = None,
     optaxis_y: float | None = None,
     sigma_grid: tuple[float, ...] | list[float] | np.ndarray = (4.0, 8.0, 16.0, 32.0, 64.0),
@@ -50,8 +51,6 @@ def create_background_map(
     analysis_mask : np.ndarray | None
         Optional boolean mask selecting globally valid pixels for background
         estimation.
-    expthresh : float
-        Unused placeholder kept for API stability.
     optaxis_x : float | None
         Optional optical-axis x coordinate in 1-based pixels.
     optaxis_y : float | None
@@ -84,13 +83,12 @@ def create_background_map(
     6. For each pixel, choose the smallest smoothing scale that reaches the
        target support level, with interpolation between neighboring scales to
        avoid sharp boundaries.
-    7. Zero the result in invalid or unsupported pixels.
+    7. Zero the result only in globally invalid pixels.
 
     This produces a background map that preserves more structure where local
     support is strong, while automatically switching to broader smoothing where
     the source-free background is sparse.
     """
-    del expthresh
     opt_x, opt_y = infer_optical_axis(image.shape, optaxis_x, optaxis_y)
 
     #--- valid region for bkg estimation: must have non-zero exposure
@@ -104,6 +102,10 @@ def create_background_map(
     #--- valid region for bkg estimation: must carve detected sources out
     source_free_mask = valid_mask.copy()
     for row in rows:
+        if len(getattr(row, "support_scales", [])) < BACKGROUND_CARVE_MIN_SUPPORT_SCALES:
+            continue
+        if float(getattr(row, "counts", 0.0)) < BACKGROUND_CARVE_MIN_COUNTS:
+            continue
         x_ima = float(row.x)
         y_ima = float(row.y)
         local_psf_r90_pix = sample_radius_map(eef_radius_maps, "R90", x_ima, y_ima)
@@ -206,10 +208,8 @@ def create_background_map(
     alpha = np.clip((target_counts - lower_support) / denom, 0.0, 1.0)
     background = (1.0 - alpha) * lower_model + alpha * upper_model
     background = np.where(hit, background, model_cube[-1])  # if target is never reached, use the broadest model
-    ##--- reject pixels with effectively no support
-    support_ref = smooth_image(masked_weight, float(sigma_grid[-1]))
-    background[support_ref <= min_support_weight] = 0.0
-    ##--- reject invalid detector pixels
+    ##--- reject invalid detector pixels only; low-support pixels fall back to
+    ## the broadest-scale model rather than being forced to zero.
     background[~valid_mask] = 0.0
     
     return np.clip(background, 0.0, None)

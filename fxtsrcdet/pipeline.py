@@ -43,6 +43,7 @@ from typing import Any, Iterable
 import numpy as np
 
 from fxtpsf_helpers import build_mission_psf_context, load_radius_map_bundle
+from fxtsrcdet.config import BACKGROUND_CARVE_MIN_COUNTS, BACKGROUND_CARVE_MIN_SUPPORT_SCALES
 from fxtsrcdet.background import create_background_map
 from fxtsrcdet.catalog import classify_sources_with_psf, finalize_catalog_columns, prune_nearby_sources
 from fxtsrcdet.detect import detect_sources
@@ -148,6 +149,18 @@ class PipelineConfig:
     eefmap: Path | None = None
     analysis_mask: Path | None = None
     logger: logging.Logger | None = None
+
+
+def _science_candidates(rows: list[Any]) -> list[Any]:
+    """Filter provisional wavelet candidates for carving and PSF-aware fitting."""
+    kept = []
+    for row in rows:
+        if len(getattr(row, "support_scales", [])) < BACKGROUND_CARVE_MIN_SUPPORT_SCALES:
+            continue
+        if float(getattr(row, "counts", 0.0)) < BACKGROUND_CARVE_MIN_COUNTS:
+            continue
+        kept.append(row)
+    return kept
 
 
 def fxtsrcdet_pipeline(
@@ -452,20 +465,32 @@ def fxtsrcdet_pipeline(
         eef_radius_maps=eef_radius_maps,
     )
     emit(active_logger, "info", f"Wavelet detection produced {len(rows)} provisional candidate(s) across {len(per_scale)} scale(s)")
+    emit(active_logger, "info", f"Source counts: raw wavelet candidates = {len(rows)}")
     if len(rows) == 0:
         emit(active_logger, "warning", "No wavelet candidates were found; downstream catalog will be empty")
+
+    #--- keep only science-style candidates for both background carving and fitting
+    fit_rows = _science_candidates(rows)
+    emit(
+        active_logger,
+        "info",
+        f"Science candidate selection for carving/fitting: {len(rows)} -> {len(fit_rows)} "
+        f"(support_scales >= {BACKGROUND_CARVE_MIN_SUPPORT_SCALES} AND counts >= {BACKGROUND_CARVE_MIN_COUNTS:g})",
+    )
+    emit(active_logger, "info", f"Source counts: science candidates after filtering = {len(fit_rows)}")
+    if len(fit_rows) == 0:
+        emit(active_logger, "warning", "No candidates passed the science-candidate selection; downstream catalog will be empty")
 
     #--- carve out candidates and smooth to create background map
     emit(active_logger, "info", "**** Stage 2: Source-Masked Background Map ****")
     emit(active_logger, "info", "Generating background map ...")
     background_map = create_background_map(
         image_data,
-        rows,
+        fit_rows,
         psf_context=psf_context,
         pixel_scale_arcsec=pixel_scale_arcsec,
         exposure_map=exposure_data,
         analysis_mask=analysis_mask_data,
-        expthresh=cfg.expthresh,
         optaxis_x=cfg.optaxis_x,
         optaxis_y=cfg.optaxis_y,
         sigma_grid=cfg.background_sigma_grid,
@@ -488,7 +513,7 @@ def fxtsrcdet_pipeline(
     emit(active_logger, "info", "**** Stage 3: PSF-Aware Source Fitting and Classification ****")
     emit(active_logger, "info", "Fitting ...")
     rows = classify_sources_with_psf(
-        rows=rows,
+        rows=fit_rows,
         image=image_data,
         pixel_scale_arcsec=pixel_scale_arcsec,
         min_det_like=cfg.min_det_like,
@@ -497,7 +522,6 @@ def fxtsrcdet_pipeline(
         background_map=background_map,
         exposure_map=exposure_data,
         analysis_mask=analysis_mask_data,
-        expthresh=cfg.expthresh,
         optaxis_x=cfg.optaxis_x,
         optaxis_y=cfg.optaxis_y,
         show_progress=cfg.show_progress,
@@ -512,6 +536,7 @@ def fxtsrcdet_pipeline(
         "Classification summary before filtering: "
         + ", ".join(f"{k}={v}" for k, v in sorted(type_counts.items())),
     )
+    emit(active_logger, "info", f"Source counts: after PSF-aware fitting = {len(rows)}")
 
     #--- drop insignificant or spurious sources
     if not cfg.include_background:
@@ -519,11 +544,13 @@ def fxtsrcdet_pipeline(
         before = len(rows)
         rows = [row for row in rows if row.source_type != "background"]
         emit(active_logger, "info", f"Dropped background-classified rows: {before} -> {len(rows)}")
+        emit(active_logger, "info", f"Source counts: after background rejection = {len(rows)}")
         for idx, row in enumerate(rows, start=1):
             row.id = idx
             row.id_src = idx
     else:
         emit(active_logger, "info", "Keeping background-classified rows in output catalog")
+        emit(active_logger, "info", f"Source counts: after background rejection = {len(rows)}")
     if cfg.emin_keV is not None:
         for row in rows:
             row.emin_keV = float(cfg.emin_keV)
@@ -550,8 +577,10 @@ def fxtsrcdet_pipeline(
         before = len(rows)
         rows = prune_nearby_sources(rows)
         emit(active_logger, "info", f"Pruned nearby duplicate sources: {before} -> {len(rows)}")
+        emit(active_logger, "info", f"Source counts: after duplicate pruning = {len(rows)}")
     else:
         emit(active_logger, "info", "Skipping nearby-source pruning")
+        emit(active_logger, "info", f"Source counts: after duplicate pruning = {len(rows)}")
 
     n_point = sum(row.source_type == "point" for row in rows)
     n_ext = sum(row.source_type == "extended" for row in rows)
@@ -614,7 +643,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--optaxis-y", type=float, default=None, help="Optical-axis Y position in 1-based image pixels; defaults to image center")
     p.add_argument("--background-sigma-grid", type=str, default="4,8,16,32,64", help="Gaussian smoothing scales in pixels available to the adaptive background model, e.g. '4,8,16,32,64'")
     #--- wavelet detection parameters
-    p.add_argument("--scales", type=str, default="1 2 4 8 16", help="Wavelet scales in pixels, e.g. '1 2 4 8 16'")
+    p.add_argument("--scales", type=str, default="1,2,4,8,16", help="Wavelet scales in pixels, e.g. '1,2,4,8,16'")
     p.add_argument("--sigthresh", type=float, default=1e-6, help="Detection significance threshold at wavelet stage")
     p.add_argument("--bkgsigthresh", type=float, default=1e-3, help="Background cleansing significance threshold at wavelet stage")
     p.add_argument("--maxiter", type=int, default=2, help="Max background-cleaning iterations at wavelet stage")
