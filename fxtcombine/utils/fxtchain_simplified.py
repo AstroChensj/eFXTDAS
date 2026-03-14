@@ -3,6 +3,7 @@
 Simplified version of FXTDAS FXTCHAIN.
 """
 from astropy.io import fits
+from fxtcombine.utils.channels import channel_range_suffix
 from fxtcombine.utils.logger import emit
 from fxtcombine.utils.cmd import run_cmd, remove_xselect_tmp_files
 import os
@@ -14,6 +15,8 @@ def fxtchain_obsid(
         obsid_file_dict,datatype_lst,
         obsid_out_dir,obsid_log_dir,
         expr="DEFAULT",grade="0-12",
+        image_channel_ranges=None,
+        lightcurve_channel_ranges=None,
         skip_existing=True,
         obsid_logger=None,
     ):
@@ -33,6 +36,10 @@ def fxtchain_obsid(
         GTI expression passed to ``fxtgtigen``.
     grade : str, optional
         Grade filter passed to xselect.
+    image_channel_ranges : list[tuple[int, int]] | None, optional
+        Channel ranges used to generate images through xselect.
+    lightcurve_channel_ranges : list[tuple[int, int]] | None, optional
+        Channel ranges used to generate light curves through xselect.
     skip_existing : bool, optional
         When ``True``, skip substeps whose outputs already exist.
     obsid_logger : logging.Logger | None, optional
@@ -47,6 +54,10 @@ def fxtchain_obsid(
 
     att_fname = next(iter(obsid_file_dict["att"].values()))["filePath"]
     mkf_fname = next(iter(obsid_file_dict["mkf"].values()))["filePath"]
+    if image_channel_ranges is None:
+        image_channel_ranges = [(38, 925)]
+    if lightcurve_channel_ranges is None:
+        lightcurve_channel_ranges = [(0, 1023)]
     # datatype_lst = [datatype for datatype in list(obsid_file_dict.keys()) if datatype not in ["mkf","att","orb"]] # [evt|fsaevt]
     obsid_prod_dict = {}  # datatype [evt|fsaevt] -- module [..a..|..b..] -- product type [clevt|expmap]
     
@@ -164,10 +175,23 @@ def fxtchain_obsid(
             # TODO: remove existing EP_* log to avoid rerunning?
             xsl_fname = os.path.join(sub_log_dir,f"img.xsl")
             evt_cl_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_cl.fits")
-            img_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.img")
-            lc_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.lc")
-            if os.path.exists(evt_cl_fname) and os.path.exists(img_fname) and os.path.exists(lc_fname) and skip_existing:
-                emit(obsid_logger, "info", f"{evt_cl_fname} and {img_fname} and {lc_fname} already exists.")
+            image_fname_map = {
+                channel_range_suffix(channel_range): os.path.join(
+                    obsid_out_dir,
+                    f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{channel_range_suffix(channel_range)}.img",
+                )
+                for channel_range in image_channel_ranges
+            }
+            lc_fname_map = {
+                channel_range_suffix(channel_range): os.path.join(
+                    obsid_out_dir,
+                    f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{channel_range_suffix(channel_range)}.lc",
+                )
+                for channel_range in lightcurve_channel_ranges
+            }
+            expected_stage1_products = [evt_cl_fname] + list(image_fname_map.values()) + list(lc_fname_map.values())
+            if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
+                emit(obsid_logger, "info", f"{evt_cl_fname} and all requested image/light-curve products already exist.")
             else:
                 remove_xselect_tmp_files()
                 with open(xsl_fname,"w") as f:
@@ -186,20 +210,30 @@ def fxtchain_obsid(
                     f.writelines([f"no\n"])
                     f.writelines([f"clear all\n"])
                     f.writelines([f"yes\n"])
-                    ##--- get image
-                    f.writelines([f"set datadir {obsid_out_dir}\n"])
-                    f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
-                    f.writelines([f"filter pha_cutoff 38 925\n"])	# 0.3-10.0 keV image
-                    f.writelines([f"extract image xysize=601 xybinsize=1 xcenter=300 ycenter=300 copyall=yes\n"])
-                    f.writelines([f"save image {img_fname} clobberit=yes\n"])
-                    f.writelines([f"clear pha_cutoff\n"])
-                    f.writelines([f"clear events\n"])
-                    ##--- get entire region light curve (for later manual check on GTI)
-                    f.writelines([f"set datadir {obsid_out_dir}\n"])
-                    f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
-                    f.writelines([f"extract curve copyall=yes\n"])
-                    f.writelines([f"save curve {lc_fname} clobberit=yes\n"])
-                    f.writelines([f"clear events\n"])
+                    ##--- get channel-selected images
+                    for channel_range in image_channel_ranges:
+                        suffix = channel_range_suffix(channel_range)
+                        img_fname = image_fname_map[suffix]
+                        chan_lo, chan_hi = channel_range
+                        f.writelines([f"set datadir {obsid_out_dir}\n"])
+                        f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
+                        f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
+                        f.writelines([f"extract image xysize=601 xybinsize=1 xcenter=300 ycenter=300 copyall=yes\n"])
+                        f.writelines([f"save image {img_fname} clobberit=yes\n"])
+                        f.writelines([f"clear pha_cutoff\n"])
+                        f.writelines([f"clear events\n"])
+                    ##--- get channel-selected light curves
+                    for channel_range in lightcurve_channel_ranges:
+                        suffix = channel_range_suffix(channel_range)
+                        lc_fname = lc_fname_map[suffix]
+                        chan_lo, chan_hi = channel_range
+                        f.writelines([f"set datadir {obsid_out_dir}\n"])
+                        f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
+                        f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
+                        f.writelines([f"extract curve copyall=yes\n"])
+                        f.writelines([f"save curve {lc_fname} clobberit=yes\n"])
+                        f.writelines([f"clear pha_cutoff\n"])
+                        f.writelines([f"clear events\n"])
                     ##--- finish
                     f.writelines([f"clear all proceed=yes\n"])
                     f.writelines([f"quit\n"])
@@ -228,10 +262,14 @@ def fxtchain_obsid(
             #--- append prod_dict
             obsid_prod_dict[datatype][evt_fname_prefix] = {}
             obsid_prod_dict[datatype][evt_fname_prefix]["clevt"] = evt_cl_fname
-            obsid_prod_dict[datatype][evt_fname_prefix]["image"] = img_fname
+            first_image_key = channel_range_suffix(image_channel_ranges[0])
+            first_lc_key = channel_range_suffix(lightcurve_channel_ranges[0])
+            obsid_prod_dict[datatype][evt_fname_prefix]["image"] = image_fname_map[first_image_key]
+            obsid_prod_dict[datatype][evt_fname_prefix]["images"] = image_fname_map
             obsid_prod_dict[datatype][evt_fname_prefix]["vexpmap"] = exp_fname
             obsid_prod_dict[datatype][evt_fname_prefix]["exp"] = fits.getval(exp_fname,ext=0,keyword="EXPOSURE")
-            obsid_prod_dict[datatype][evt_fname_prefix]["alllc"] = lc_fname
+            obsid_prod_dict[datatype][evt_fname_prefix]["alllc"] = lc_fname_map[first_lc_key]
+            obsid_prod_dict[datatype][evt_fname_prefix]["lightcurves"] = lc_fname_map
 
 
             emit(obsid_logger, "info", f"Finish running using {time.time()-t0} s.")

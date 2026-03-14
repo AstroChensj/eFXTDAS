@@ -469,7 +469,8 @@ def main() -> None:
         optaxis_y=args.optaxis_y,
         logger=logger,
     )
-    write_region_file(args.src_regfile, info["source_region"], info["source_excludes"])
+    # write_region_file(args.src_regfile, info["source_region"], info["source_excludes"])
+    write_region_file(args.src_regfile, info["source_region"], [])  # NOTE: fxtarfgen does not recognize complex source region, so keep the simplest
     write_region_file(args.bkg_regfile, info["background_region"], info["background_excludes"])
     emit(logger, "info", f"Matched source index: {info['matched_index']}")
     emit(logger, "info", f"Match separation: {info['match_separation_arcsec']:.3f} arcsec")

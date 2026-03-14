@@ -14,6 +14,13 @@ It is intended as an `srctool`-inspired region builder for FXT data. The tool:
 
 Unlike eSASS `srctool`, the current implementation does not use catalog flags such as `AUTO_EXTRACT` or `AUTO_EXCLUDE`.
 
+```{admonition} Warning on current source region
+:class: warning
+`fxtarfgen` does not recognize complex shape in source region, so at the moment, the exclusion region in source is disabled!
+
+It means that nearby confusing source around target could contaminate source counts. 
+```
+
 ## Basic Usage
 
 ### Command-Line Usage

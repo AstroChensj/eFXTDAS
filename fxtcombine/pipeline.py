@@ -24,15 +24,16 @@ from fxtcombine.config import (
 	BKG_EXTRACT_OUTER_RADIUS,
 )
 from fxtcombine.utils.logger import build_cli_logger, build_file_logger, emit
+from fxtcombine.utils.channels import channel_range_suffix, parse_channel_ranges
 from fxtcombine.utils.cmd import run_cmd
 from fxtcombine.utils.fxtchain_simplified import fxtchain_obsid, fxt_extract_spec
 from fxtcombine.utils.fxtprep import get_input_files
 from fxtcombine.utils.image import reproject_events_xy_to_refwcs
 
-
 def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
-		out_dir="./",module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",skip_existing=False,
+		out_dir="./",module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",
+		image_channel_ranges="38:925",lightcurve_channel_ranges="0:1023",skip_existing=False,
 		logger: logging.Logger | None = None,
 	):
 	"""Combine multiple EP-FXT observations into stacked images and spectra.
@@ -61,6 +62,13 @@ def fxtcombine_pipeline(
 		Grade filter passed to the xselect stage.
 	expr : str, optional
 		GTI selection expression passed to ``fxtgtigen``.
+	image_channel_ranges : str | list[tuple[int, int]], optional
+		Comma-separated inclusive channel ranges used to generate images during
+		Stage 1, for example ``"38:925,100:300"``. The first range is used by
+		default for later stacked source detection.
+	lightcurve_channel_ranges : str | list[tuple[int, int]], optional
+		Comma-separated inclusive channel ranges used to generate light curves
+		during Stage 1.
 	skip_existing : bool, optional
 		When ``True``, reuse existing intermediate products where supported.
 		When ``False``, rerun all steps.
@@ -79,6 +87,14 @@ def fxtcombine_pipeline(
 	module_lst = module.split(",")
 	datamode_lst = datamode.split(",")
 	datatype_lst = datatype.split(",")
+	if isinstance(image_channel_ranges, str):
+		image_channel_ranges = parse_channel_ranges(image_channel_ranges, default=[(38, 925)])
+	else:
+		image_channel_ranges = list(image_channel_ranges)
+	if isinstance(lightcurve_channel_ranges, str):
+		lightcurve_channel_ranges = parse_channel_ranges(lightcurve_channel_ranges, default=[(0, 1023)])
+	else:
+		lightcurve_channel_ranges = list(lightcurve_channel_ranges)
 
 	#--- define logger
 	os.makedirs(out_dir,exist_ok=True)
@@ -89,6 +105,8 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"**** Welcome to FXTCOMBINE ! ****")
 	emit(main_logger, "info", f"Source directory is: {src_dir}")
 	emit(main_logger, "info", f"Source coordinate is: ICRS({ra}, {dec})")
+	emit(main_logger, "info", f"Image channel ranges are: {image_channel_ranges}")
+	emit(main_logger, "info", f"Light-curve channel ranges are: {lightcurve_channel_ranges}")
 
 
 	#--- get obsid list
@@ -137,6 +155,8 @@ def fxtcombine_pipeline(
 			obsid_file_dict=obsid_file_dict,datatype_lst=datatype_lst,
 			obsid_out_dir=obsid_out_dir,obsid_log_dir=obsid_log_dir,
 			expr=expr,grade=grade,
+			image_channel_ranges=image_channel_ranges,
+			lightcurve_channel_ranges=lightcurve_channel_ranges,
 			skip_existing=skip_existing,
 			obsid_logger=obsid_logger,
 		) # TODO: print logger at each stage?
@@ -147,21 +167,22 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", "**** Stage 2: stacking all images and exposure maps. EVT and FSAEVT are stacked separately. ****")
 	stack_dir = os.path.join(out_dir,"stack")
 	os.makedirs(stack_dir,exist_ok=True)
+	detection_image_suffix = channel_range_suffix(image_channel_ranges[0])
 	for datatype in datatype_lst:	# [evt|fsaevt]
 		emit(main_logger, "info", f"For {datatype} ...")
 		clevt_fname_lst = []
-		img_fname_lst = []
 		exp_fname_lst = []
 		exp_lst = []
+		img_fname_map = { channel_range_suffix(channel_range): [] for channel_range in image_channel_ranges }
 
 		for obsid,obsid_prod_dict in all_prod_dict.items():
 			for evt_fname_prefix,evt_prod_dict in obsid_prod_dict[datatype].items():
 				clevt_fname_lst.append(evt_prod_dict["clevt"])
-				img_fname_lst.append(evt_prod_dict["image"])
+				for image_key in img_fname_map:
+					img_fname_map[image_key].append(evt_prod_dict["images"][image_key])
 				exp_fname_lst.append(evt_prod_dict["vexpmap"])
 				exp_lst.append(evt_prod_dict["exp"])
 		clevt_fname_lst = np.array(clevt_fname_lst)
-		img_fname_lst = np.array(img_fname_lst)
 		exp_fname_lst = np.array(exp_fname_lst)
 		exp_lst = np.array(exp_lst)
 		if len(clevt_fname_lst) == 0:
@@ -170,28 +191,30 @@ def fxtcombine_pipeline(
 		##--- sort according to expo
 		idx_sort = np.argsort(exp_lst)[::-1]
 		clevt_fname_lst = clevt_fname_lst[idx_sort]
-		img_fname_lst = img_fname_lst[idx_sort]
 		exp_fname_lst = exp_fname_lst[idx_sort]
 		exp_lst = exp_lst[idx_sort]
+		for image_key, img_list in img_fname_map.items():
+			img_fname_map[image_key] = np.array(img_list)[idx_sort]
 		if datatype == "evt":
 			exp_tot = np.sum(exp_lst)
 
 		##--- logging all files
 		emit(main_logger, "info", f"You have the following clean events files: {clevt_fname_lst}")
-		emit(main_logger, "info", f"You have the following images: {img_fname_lst}")
+		for image_key, img_fname_lst in img_fname_map.items():
+			emit(main_logger, "info", f"You have the following images for {image_key}: {img_fname_lst}")
 		emit(main_logger, "info", f"You have the following vign-exposure maps: {exp_fname_lst}")
 		emit(main_logger, "info", f"Their corresponding exposures are: {exp_lst}")
 
-		##--- choosing the reference frame (with longest exposure)
+		##--- choose a common reference frame from the first requested image band
+		refimg_fname_lst = img_fname_map[detection_image_suffix]
 		with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
 			warnings.simplefilter("ignore", VerifyWarning)
 			warnings.simplefilter("ignore", FITSFixedWarning)
-			with fits.open(img_fname_lst[0]) as hdu:
+			with fits.open(refimg_fname_lst[0]) as hdu:
 				refimg = hdu[0]
 				refimg_wcs = WCS(refimg.header)
 				refimg_shape = refimg.data.shape
-				cts_sum = np.zeros(refimg_shape)
-		emit(main_logger, "info", f"The reference frame is {img_fname_lst[0]}.")
+		emit(main_logger, "info", f"The reference frame is {refimg_fname_lst[0]}.")
 		emit(main_logger, "info", f"Reference WCS is {refimg_wcs}.")
 
 		with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
@@ -204,50 +227,45 @@ def fxtcombine_pipeline(
 				exp_sum = np.zeros(refexp_shape)
 		assert refimg_shape == refexp_shape, f"The image and exposure should have same shape, but now gets {refimg_shape} and {refexp_shape}!"
 
-		# ##--- reproject and stack image
-		# main_logger.info(f"Reprojecting and stacking images ...")
-		# for img_fname_i in img_fname_lst:
-		# 	with fits.open(img_fname_i) as hdu:
-		# 		img_i = hdu[0]
-		# 		data_i = img_i.data
-		# 		wcs_i  = WCS(img_i.header)
-		# 	###--- flux/count-conserving reprojection
-		# 	data_i_reproj,footprint_i = reproject_exact((data_i,wcs_i),refimg_wcs,shape_out=refimg_shape)
-		# 	###--- footprint is 0..1 overlap fraction; use it to ignore empty pixels
-		# 	m = np.isfinite(data_i_reproj) & (footprint_i > 0)
-		# 	cts_sum[m] += data_i_reproj[m]
-		# cts_sum_fname = os.path.join(stack_dir,f"{datatype}_stack_cts.fits")
-		# fits.writeto(cts_sum_fname,cts_sum,refimg.header,overwrite=True)
-		# main_logger.info(f"Stacked count image written to {cts_sum_fname}")
-
-		##--- reproject and stack image
-		emit(main_logger, "info", f"Reprojecting and stacking images ...")
-		for i in range(len(clevt_fname_lst)):
-			clevt_fname = clevt_fname_lst[i]
-			img_fname = img_fname_lst[i]
-			with warnings.catch_warnings():
-				warnings.simplefilter("ignore", VerifyWarning)
-				with fits.open(clevt_fname) as hdu:
-					clevt_data = hdu[1].data
-			clevt_x = clevt_data["X"]
-			clevt_y = clevt_data["Y"]
-			with warnings.catch_warnings():
-				warnings.simplefilter("ignore", VerifyWarning)
-				warnings.simplefilter("ignore", FITSFixedWarning)
-				with fits.open(img_fname) as hdu:
-					img_wcs = WCS(hdu[0].header)
-					img = reproject_events_xy_to_refwcs(
-						clevt_x,clevt_y,
-						img_wcs,refimg_wcs,
-						shape_ref=refimg_shape,	# (ny, nx)
-						weight=None,
-						method="nearest",  		# "nearest" or "floor"
-						event_origin=1.0,
-					)
-			cts_sum += img
-		cts_sum_fname = os.path.join(stack_dir,f"{datatype}_stack_cts.fits")
-		fits.writeto(cts_sum_fname,cts_sum,refimg.header,overwrite=True)
-		emit(main_logger, "info", f"Stacked count image written to {cts_sum_fname}")
+		##--- reproject and stack images for each requested image band
+		for channel_range in image_channel_ranges:
+			image_key = channel_range_suffix(channel_range)
+			chan_lo, chan_hi = channel_range
+			cts_sum = np.zeros(refimg_shape)
+			emit(main_logger, "info", f"Reprojecting and stacking images for {image_key} ...")
+			for i in range(len(clevt_fname_lst)):
+				clevt_fname = clevt_fname_lst[i]
+				img_fname = img_fname_map[image_key][i]
+				with warnings.catch_warnings():
+					warnings.simplefilter("ignore", VerifyWarning)
+					with fits.open(clevt_fname) as hdu:
+						clevt_data = hdu[1].data
+				mask_channel = (clevt_data["CHANNEL"] >= chan_lo) & (clevt_data["CHANNEL"] <= chan_hi)
+				clevt_x = clevt_data["X"][mask_channel]
+				clevt_y = clevt_data["Y"][mask_channel]
+				with warnings.catch_warnings():
+					warnings.simplefilter("ignore", VerifyWarning)
+					warnings.simplefilter("ignore", FITSFixedWarning)
+					with fits.open(img_fname) as hdu:
+						img_wcs = WCS(hdu[0].header)
+						img = reproject_events_xy_to_refwcs(
+							clevt_x,clevt_y,
+							img_wcs,refimg_wcs,
+							shape_ref=refimg_shape,	# (ny, nx)
+							weight=None,
+							method="nearest",  		# "nearest" or "floor"
+							event_origin=1.0,
+						)
+				cts_sum += img
+			cts_sum_fname = os.path.join(stack_dir,f"{datatype}_{image_key}_stack_cts.fits")
+			fits.writeto(cts_sum_fname,cts_sum,refimg.header,overwrite=True)
+			emit(main_logger, "info", f"Stacked count image written to {cts_sum_fname}")
+			if image_key == detection_image_suffix:
+				default_cts_sum_fname = cts_sum_fname
+				default_cts_sum = cts_sum.copy()
+				legacy_cts_sum_fname = os.path.join(stack_dir,f"{datatype}_stack_cts.fits")
+				fits.writeto(legacy_cts_sum_fname,cts_sum,refimg.header,overwrite=True)
+				emit(main_logger, "info", f"Default stacked count image also written to {legacy_cts_sum_fname}")
 
 		##--- reproject and stack expmap
 		emit(main_logger, "info", f"Reprojecting and stacking exposure maps ...")
@@ -269,18 +287,24 @@ def fxtcombine_pipeline(
 		emit(main_logger, "info", f"Stacked exposure map written to {exp_sum_fname}")
 
 		##--- rate map
-		rate_sum = cts_sum / exp_sum
+		rate_sum = default_cts_sum / exp_sum
 		rate_sum[np.isinf(rate_sum)] = 0
 		rate_sum[np.isnan(rate_sum)] = 0
-		rate_sum_fname = os.path.join(stack_dir,f"{datatype}_stack_rate.fits")
+		rate_sum_fname = os.path.join(stack_dir,f"{datatype}_{detection_image_suffix}_stack_rate.fits")
 		fits.writeto(rate_sum_fname,rate_sum,refimg.header,overwrite=True)
 		emit(main_logger, "info", f"Stacked rate image written to {rate_sum_fname}")
+		legacy_rate_sum_fname = os.path.join(stack_dir,f"{datatype}_stack_rate.fits")
+		fits.writeto(legacy_rate_sum_fname,rate_sum,refimg.header,overwrite=True)
+		emit(main_logger, "info", f"Default stacked rate image also written to {legacy_rate_sum_fname}")
+		if datatype == "evt":
+			stack_expmap_default_fname = os.path.join(stack_dir,f"{datatype}_stack_exp.fits")
+			stack_image_default_fname = default_cts_sum_fname
 
 
 	#--- source detection on stacked evt products and region generation
 	emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
-	stack_image_fname = os.path.join(stack_dir, "evt_stack_cts.fits")
-	stack_expmap_fname = os.path.join(stack_dir, "evt_stack_exp.fits")
+	stack_image_fname = stack_image_default_fname
+	stack_expmap_fname = stack_expmap_default_fname
 	stack_eefmap_fname = os.path.join(stack_dir, "evt_stack_eef.fits")
 	srcdet_src_fname = os.path.join(stack_dir, "stack_src.fits")
 	srcdet_reg_fname = os.path.join(stack_dir, "stack_src.reg")
@@ -449,6 +473,16 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 	parser.add_argument("--grade", default="0-12", help="Grade filter passed to xselect. Default: 0-12")
 	parser.add_argument("--expr", default="DEFAULT", help="GTI selection expression. Default: DEFAULT")
+	parser.add_argument(
+		"--image-channel-ranges",
+		default="38:925",
+		help="Comma-separated inclusive channel ranges used to generate Stage-1 images, e.g. 38:925,100:300. The first range is used for stacked source detection by default.",
+	)
+	parser.add_argument(
+		"--lightcurve-channel-ranges",
+		default="0:1023",
+		help="Comma-separated inclusive channel ranges used to generate Stage-1 light curves, e.g. 0:1023,100:300.",
+	)
 	parser.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level for CLI and output log file")
 	parser.add_argument("--log-file", type=Path, default=None, help="Optional main log file path; defaults to <out-dir>/log/fxtcombine.log")
 	parser.add_argument(
@@ -481,6 +515,8 @@ def main() -> None:
 		datatype=args.datatype,
 		grade=args.grade,
 		expr=args.expr,
+		image_channel_ranges=args.image_channel_ranges,
+		lightcurve_channel_ranges=args.lightcurve_channel_ranges,
 		skip_existing=args.skip_existing,
 		logger=cli_logger,
 	)
