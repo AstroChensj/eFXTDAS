@@ -3,7 +3,45 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
+
+RESET = "\033[0m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RED = "\033[31m"
+CYAN = "\033[36m"
+BOLD_WHITE = "\033[1;37m"
+
+
+def _is_header_message(message: str) -> bool:
+    """Return whether a message looks like a banner or section header."""
+    stripped = message.strip()
+    return (
+        stripped.startswith("====")
+        or stripped.endswith("====")
+        or stripped.startswith("****")
+        or stripped.endswith("****")
+    )
+
+
+class ColorFormatter(logging.Formatter):
+    """ANSI-colored formatter for interactive terminal logs."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        if not os.getenv("TERM") or os.getenv("NO_COLOR"):
+            return message
+        if _is_header_message(record.getMessage()):
+            color = CYAN if "=" in record.getMessage() else BOLD_WHITE
+        else:
+            color = {
+                "INFO": GREEN,
+                "WARNING": YELLOW,
+                "ERROR": RED,
+                "CRITICAL": RED,
+            }.get(record.levelname, "")
+        return f"{color}{message}{RESET}" if color else message
 
 
 def _ensure_handler(
@@ -15,7 +53,10 @@ def _ensure_handler(
 ) -> logging.Logger:
     """Attach one configured handler if an equivalent one is not already present."""
     handler.setLevel(level)
-    handler.setFormatter(logging.Formatter(fmt))
+    if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+        handler.setFormatter(ColorFormatter(fmt))
+    else:
+        handler.setFormatter(logging.Formatter(fmt))
     logger.addHandler(handler)
     logger.setLevel(level)
     logger.propagate = False
