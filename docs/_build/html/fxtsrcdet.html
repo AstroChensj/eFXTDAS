@@ -483,8 +483,8 @@ window.runMermaid = runMermaid;</script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'fxtsrcdet';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="fxteefmap" href="fxteefmap.html" />
-    <link rel="prev" title="eFXTDAS Documentation" href="index.html" />
+    <link rel="next" title="fxtregions" href="fxtregions.html" />
+    <link rel="prev" title="fxtcombine" href="fxtcombine.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="" />
@@ -576,10 +576,10 @@ window.runMermaid = runMermaid;</script>
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxtcombine.html"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
 </ul>
 
     </div>
@@ -749,13 +749,18 @@ window.runMermaid = runMermaid;</script>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-detection-parameters">User-Facing Detection Parameters</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-catalog-parameters">User-Facing Catalog Parameters</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-heuristic-constants">Internal Heuristic Constants</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#wavelet-candidate-construction">Wavelet / Candidate Construction</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Background-Map Construction</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-and-grouped-fitting-geometry">Local and Grouped Fitting Geometry</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-final-catalog-cleanup">Classification and Final Catalog Cleanup</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-paramters">User-Facing Paramters</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#detection-parameters">Detection Parameters</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#catalog-parameters">Catalog Parameters</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-heuristic-constants">Internal Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#wavelet-candidate-construction">Wavelet / Candidate Construction</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Background-Map Construction</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#local-and-grouped-fitting-geometry">Local and Grouped Fitting Geometry</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-final-catalog-cleanup">Classification and Final Catalog Cleanup</a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#public-catalog-region">Public Catalog Region</a></li>
 </ul>
 </li>
@@ -836,23 +841,297 @@ TODO: add logger.py for standard logger.</p>
 <section id="inputs">
 <h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>counts image FITS</p></li>
-<li><p>optional exposure map FITS</p></li>
-<li><p>optional multi-extension EEF-radius map from <code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></p></li>
-<li><p>mission / instrument / filter / energy metadata for PSF selection</p></li>
+<li><p>required:</p>
+<ul>
+<li><p>input counts image FITS</p>
+<ul>
+<li><p>positional argument: <code class="docutils literal notranslate"><span class="pre">image</span></code></p></li>
+<li><p>this is the image on which wavelet detection, background estimation, and
+catalog fitting are performed</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>optional calibration / context inputs:</p>
+<ul>
+<li><p>exposure map FITS: <code class="docutils literal notranslate"><span class="pre">--expmap</span></code></p>
+<ul>
+<li><p>used to define valid pixels and to make the background map exposure-aware</p></li>
+</ul>
+</li>
+<li><p>precomputed multi-extension EEF-radius map from <code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code>: <code class="docutils literal notranslate"><span class="pre">--eefmap</span></code></p>
+<ul>
+<li><p>when supplied, <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> uses this directly for PSF-aware aperture and
+morphology work</p></li>
+</ul>
+</li>
+<li><p>mission / instrument / filter / energy metadata:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--mission</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--instrument</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--filter</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--emin</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--emax</span></code></p></li>
+<li><p>these are used to construct the spatial PSF model if <code class="docutils literal notranslate"><span class="pre">--eefmap</span></code> is not
+provided</p></li>
+</ul>
+</li>
+<li><p>optional optical-axis override:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--optaxis-x</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--optaxis-y</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>wavelet detection controls:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--scales</span></code></p>
+<ul>
+<li><p>wavelet scales in pixels, for example <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">2</span> <span class="pre">4</span> <span class="pre">8</span> <span class="pre">16</span></code></p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--sigthresh</span></code></p>
+<ul>
+<li><p>significance threshold for the wavelet detection stage</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--bkgsigthresh</span></code></p>
+<ul>
+<li><p>significance threshold used when cleansing likely source pixels during
+per-scale background estimation</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--maxiter</span></code></p>
+<ul>
+<li><p>maximum number of iterative background-cleansing passes per scale</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--iterstop</span></code></p>
+<ul>
+<li><p>minimum fractional change needed to continue the cleansing iteration</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--expthresh</span></code></p>
+<ul>
+<li><p>minimum relative exposure required for a pixel to be treated as valid</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--ellsigma</span></code></p>
+<ul>
+<li><p>ellipse scaling factor used when converting wavelet detections into
+provisional image-plane source regions</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>final catalog / source-classification controls:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--min-det-like</span></code></p>
+<ul>
+<li><p>minimum detection-likelihood threshold for keeping a source as
+non-background</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--min-ext-like</span></code></p>
+<ul>
+<li><p>minimum extent-likelihood threshold for classifying a source as extended</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--ecf</span></code></p>
+<ul>
+<li><p>optional energy-conversion factor for turning count rate into flux</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>output / debugging controls:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--out</span></code></p>
+<ul>
+<li><p>output source-catalog FITS file</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--regfile</span></code></p>
+<ul>
+<li><p>output DS9 region file in image coordinates</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--sky-regfile</span></code></p>
+<ul>
+<li><p>optional DS9 region file in sky coordinates if the input image has
+celestial WCS</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--save-mask</span></code></p>
+<ul>
+<li><p>optional aggregate source-mask FITS file</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--save-significance</span></code></p>
+<ul>
+<li><p>optional best-significance FITS map</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--save-bkgmap</span></code></p>
+<ul>
+<li><p>optional carved-and-smoothed background FITS map</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--debug-columns</span></code></p>
+<ul>
+<li><p>keep internal columns in the source table for debugging</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--include-background</span></code></p>
+<ul>
+<li><p>keep rows classified as background in the output catalog</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--no-prune-sources</span></code></p>
+<ul>
+<li><p>disable nearby-source duplicate pruning</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--log-level</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--log-file</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--no-progress</span></code></p></li>
+</ul>
+</li>
 </ul>
 </section>
 <section id="outputs">
 <h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
+<p>For a run such as:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtsrcdet<span class="w"> </span>img.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--expmap<span class="w"> </span>expmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>sources.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--regfile<span class="w"> </span>sources.reg<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--sky-regfile<span class="w"> </span>sources_fk5.reg<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--save-mask<span class="w"> </span>agg_mask.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--save-significance<span class="w"> </span>best_sig.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--save-bkgmap<span class="w"> </span>bkgmap.fits
+</pre></div>
+</div>
+<p>the output tree is conceptually:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;working-directory&gt;/
+|-- img.fits
+|-- expmap.fits
+|-- sources.fits
+|-- sources.reg
+|-- sources_fk5.reg
+|-- agg_mask.fits
+|-- best_sig.fits
+|-- bkgmap.fits
+|-- sources.log
+</pre></div>
+</div>
+<p>If only the required outputs are requested, the minimal tree is:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;working-directory&gt;/
+|-- img.fits
+|-- sources.fits
+|-- sources.reg
+|-- sources.log
+</pre></div>
+</div>
+<p>The products mean:</p>
 <ul class="simple">
-<li><p>source catalog FITS</p></li>
-<li><p>image-coordinate region file</p></li>
-<li><p>optional sky-coordinate region file</p></li>
-<li><p>optional intermediate maps:</p>
+<li><p><code class="docutils literal notranslate"><span class="pre">sources.fits</span></code></p>
 <ul>
-<li><p>aggregate source mask</p></li>
-<li><p>best-significance map</p></li>
-<li><p>background map</p></li>
+<li><p>final source catalog in FITS table form</p></li>
+<li><p>one row per retained final source</p></li>
+<li><p>includes source position, count/rate measurements, wavelet scale
+information, PSF-aware fitting results, and classification columns</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sources.reg</span></code></p>
+<ul>
+<li><p>DS9 region file in image coordinates</p></li>
+<li><p>useful for overlaying detections directly on the input FITS image in
+detector/image pixel space</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sources_fk5.reg</span></code></p>
+<ul>
+<li><p>optional DS9 region file in celestial coordinates</p></li>
+<li><p>written only when <code class="docutils literal notranslate"><span class="pre">--sky-regfile</span></code> is requested and the input image carries
+celestial WCS</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agg_mask.fits</span></code></p>
+<ul>
+<li><p>optional aggregate source-support mask from the initial wavelet stage</p></li>
+<li><p>useful for debugging how source-like support accumulates across scales</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">best_sig.fits</span></code></p>
+<ul>
+<li><p>optional best-significance map</p></li>
+<li><p>stores the strongest wavelet significance behavior seen at each pixel across
+all scales</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bkgmap.fits</span></code></p>
+<ul>
+<li><p>optional final carved-and-smoothed background map</p></li>
+<li><p>this is the most useful intermediate diagnostic product for later aperture
+or spectral region work</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sources.log</span></code></p>
+<ul>
+<li><p>CLI log file</p></li>
+<li><p>by default this is written beside <code class="docutils literal notranslate"><span class="pre">sources.fits</span></code> as <code class="docutils literal notranslate"><span class="pre">&lt;out&gt;.log</span></code></p></li>
+</ul>
+</li>
+</ul>
+<p>Internally, the Python API also returns a richer in-memory result dictionary:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>result
+|-- rows
+|-- per_scale
+|-- agg_mask
+|-- best_sig
+|-- background_map
+|-- psf_context
+|-- pixel_scale_arcsec
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">rows</span></code></p>
+<ul>
+<li><p>final clean source catalog rows</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">per_scale</span></code></p>
+<ul>
+<li><p>one <code class="docutils literal notranslate"><span class="pre">ScaleResult</span></code> per wavelet scale, containing per-scale background,
+correlation, and source-mask products</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agg_mask</span></code></p>
+<ul>
+<li><p>aggregated source-support mask</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">best_sig</span></code></p>
+<ul>
+<li><p>best significance map over all scales</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">background_map</span></code></p>
+<ul>
+<li><p>final background model used by the fitting/classification stage</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">psf_context</span></code></p>
+<ul>
+<li><p>resolved mission/instrument/filter/energy PSF context</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pixel_scale_arcsec</span></code></p>
+<ul>
+<li><p>inferred image pixel scale in arcsec/pixel</p></li>
 </ul>
 </li>
 </ul>
@@ -1058,9 +1337,12 @@ cleansing likely source pixels before forming the final merged source list.</p>
 </section>
 <section id="tunable-parameters-and-heuristic-constants">
 <h2>Tunable Parameters and Heuristic Constants<a class="headerlink" href="#tunable-parameters-and-heuristic-constants" title="Link to this heading">#</a></h2>
-<p>This task contains several user-facing parameters and several internal heuristic constants that strongly affect behavior.</p>
-<section id="user-facing-detection-parameters">
-<h3>User-Facing Detection Parameters<a class="headerlink" href="#user-facing-detection-parameters" title="Link to this heading">#</a></h3>
+<p>This task contains several <strong>user-facing parameters</strong> and several <strong>internal heuristic constants</strong> that could affect behavior.</p>
+<p>User could modify the <strong>user-facing parameters</strong> from CLI or Python input. As for the <strong>internal heuristic constants</strong>, they are stored at <code class="docutils literal notranslate"><span class="pre">fxtsrcdet/config.py</span></code> and thus not exposed directly to the user, and are fixed at empirical reasonable values. The user is suggested to know what they do, and if necessary, modify them and check if results change.</p>
+<section id="user-facing-paramters">
+<h3>User-Facing Paramters<a class="headerlink" href="#user-facing-paramters" title="Link to this heading">#</a></h3>
+<section id="detection-parameters">
+<h4>Detection Parameters<a class="headerlink" href="#detection-parameters" title="Link to this heading">#</a></h4>
 <ul class="simple">
 <li><p>wavelet scales:</p>
 <ul>
@@ -1089,8 +1371,8 @@ cleansing likely source pixels before forming the final merged source list.</p>
 </li>
 </ul>
 </section>
-<section id="user-facing-catalog-parameters">
-<h3>User-Facing Catalog Parameters<a class="headerlink" href="#user-facing-catalog-parameters" title="Link to this heading">#</a></h3>
+<section id="catalog-parameters">
+<h4>Catalog Parameters<a class="headerlink" href="#catalog-parameters" title="Link to this heading">#</a></h4>
 <ul class="simple">
 <li><p>minimum detection likelihood for non-background classification:</p>
 <ul>
@@ -1104,12 +1386,12 @@ cleansing likely source pixels before forming the final merged source list.</p>
 </li>
 </ul>
 </section>
+</section>
 <section id="internal-heuristic-constants">
 <h3>Internal Heuristic Constants<a class="headerlink" href="#internal-heuristic-constants" title="Link to this heading">#</a></h3>
 <p>The non-user-facing heuristics are now collected in <code class="docutils literal notranslate"><span class="pre">fxtsrcdet/config.py</span></code>. They are not exposed directly through the CLI, but they control important behavior in detection, background estimation, fitting, and classification.</p>
-</section>
 <section id="wavelet-candidate-construction">
-<h3>Wavelet / Candidate Construction<a class="headerlink" href="#wavelet-candidate-construction" title="Link to this heading">#</a></h3>
+<h4>Wavelet / Candidate Construction<a class="headerlink" href="#wavelet-candidate-construction" title="Link to this heading">#</a></h4>
 <ul class="simple">
 <li><p>Limit how far the Mexican-hat kernel extends away from the target scale so the wavelet remains finite and computationally practical. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">mexican_hat_kernel()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">radius</span> <span class="pre">=</span> <span class="pre">ceil(MEXICAN_HAT_TRUNCATE</span> <span class="pre">*</span> <span class="pre">scale)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">MEXICAN_HAT_TRUNCATE</span> <span class="pre">=</span> <span class="pre">5.0</span></code>.</p></li>
 <li><p>Define how local a “local maximum” must be when identifying wavelet peaks inside thresholded source regions. Used in <a class="reference download internal" download="" href="_downloads/d56bee698096648cc1165c84d2657bce/detect.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/detect.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">local_maxima()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">maximum_filter(...,</span> <span class="pre">size=LOCAL_MAX_FILTER_SIZE)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">LOCAL_MAX_FILTER_SIZE</span> <span class="pre">=</span> <span class="pre">3</span></code>.</p></li>
@@ -1120,7 +1402,7 @@ cleansing likely source pixels before forming the final merged source list.</p>
 </ul>
 </section>
 <section id="id1">
-<h3>Background-Map Construction<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<h4>Background-Map Construction<a class="headerlink" href="#id1" title="Link to this heading">#</a></h4>
 <ul class="simple">
 <li><p>Carve detected sources out of the image before adaptive smoothing so source wings do not leak into the background model. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">0.8</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">3.5</span></code>.</p></li>
 <li><p>Choose the preferred starting smoothing width for the adaptive background builder. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">smooth_sigma</span> <span class="pre">=</span> <span class="pre">DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">6.0</span></code>.</p></li>
@@ -1131,7 +1413,7 @@ cleansing likely source pixels before forming the final merged source list.</p>
 </ul>
 </section>
 <section id="local-and-grouped-fitting-geometry">
-<h3>Local and Grouped Fitting Geometry<a class="headerlink" href="#local-and-grouped-fitting-geometry" title="Link to this heading">#</a></h3>
+<h4>Local and Grouped Fitting Geometry<a class="headerlink" href="#local-and-grouped-fitting-geometry" title="Link to this heading">#</a></h4>
 <ul class="simple">
 <li><p>Set how large the local single-source fitting stamp should be so the fit has enough context without becoming too contaminated. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(FIT_STAMP_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">FIT_STAMP_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">FIT_STAMP_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">FIT_STAMP_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.75</span></code>, <code class="docutils literal notranslate"><span class="pre">FIT_STAMP_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.75</span></code>, <code class="docutils literal notranslate"><span class="pre">FIT_STAMP_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">6.0</span></code>.</p></li>
 <li><p>Set how far out the local radial profile is measured so morphology stays local and less sensitive to broad contamination. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(PROFILE_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">PROFILE_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">PROFILE_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">PROFILE_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.25</span></code>, <code class="docutils literal notranslate"><span class="pre">PROFILE_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.25</span></code>, <code class="docutils literal notranslate"><span class="pre">PROFILE_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">5.0</span></code>.</p></li>
@@ -1155,7 +1437,7 @@ cleansing likely source pixels before forming the final merged source list.</p>
 </ul>
 </section>
 <section id="classification-and-final-catalog-cleanup">
-<h3>Classification and Final Catalog Cleanup<a class="headerlink" href="#classification-and-final-catalog-cleanup" title="Link to this heading">#</a></h3>
+<h4>Classification and Final Catalog Cleanup<a class="headerlink" href="#classification-and-final-catalog-cleanup" title="Link to this heading">#</a></h4>
 <ul class="simple">
 <li><p>Require the fitted extent solution to be both statistically meaningful and morphologically plausible before assigning the model-based <code class="docutils literal notranslate"><span class="pre">extended</span></code> label. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: require <code class="docutils literal notranslate"><span class="pre">best_sigma</span> <span class="pre">&gt;</span> <span class="pre">EXTENT_CLASSIFY_MIN_SIGMA_PIX</span></code>, <code class="docutils literal notranslate"><span class="pre">best_sigma</span> <span class="pre">&lt;</span> <span class="pre">max(EXTENT_CLASSIFY_MAX_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">EXTENT_CLASSIFY_MAX_SIGMA_PIX)</span></code>, <code class="docutils literal notranslate"><span class="pre">stretch</span> <span class="pre">&gt;=</span> <span class="pre">EXTENT_CLASSIFY_MIN_STRETCH</span></code>, and <code class="docutils literal notranslate"><span class="pre">maskfrac</span> <span class="pre">&gt;=</span> <span class="pre">EXTENT_CLASSIFY_MIN_MASKFRAC</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MIN_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">1.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MAX_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MAX_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">12.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MIN_STRETCH</span> <span class="pre">=</span> <span class="pre">1.25</span></code>, <code class="docutils literal notranslate"><span class="pre">EXTENT_CLASSIFY_MIN_MASKFRAC</span> <span class="pre">=</span> <span class="pre">0.8</span></code>.</p></li>
 <li><p>Allow a strong morphology-based fallback path to classify clearly broadened sources as extended even when the model-based extent path is imperfect. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: require <code class="docutils literal notranslate"><span class="pre">stretch</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_STRETCH</span></code>, <code class="docutils literal notranslate"><span class="pre">r80_meas</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_R80_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r80</span></code>, <code class="docutils literal notranslate"><span class="pre">npix</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_NPIX</span></code>, <code class="docutils literal notranslate"><span class="pre">len(support_scales)</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_SUPPORT_SCALES</span></code>, <code class="docutils literal notranslate"><span class="pre">det_like</span> <span class="pre">&gt;=</span> <span class="pre">max(MORPH_EXTENT_DET_LIKE_FACTOR</span> <span class="pre">*</span> <span class="pre">min_det_like,</span> <span class="pre">MORPH_EXTENT_DET_LIKE_FLOOR)</span></code>, <code class="docutils literal notranslate"><span class="pre">maskfrac</span> <span class="pre">&gt;=</span> <span class="pre">MORPH_EXTENT_MIN_MASKFRAC</span></code>, and <code class="docutils literal notranslate"><span class="pre">r50_meas</span> <span class="pre">&lt;=</span> <span class="pre">MORPH_EXTENT_MAX_R50_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r50</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_STRETCH</span> <span class="pre">=</span> <span class="pre">2.5</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_R80_FACTOR</span> <span class="pre">=</span> <span class="pre">1.8</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_NPIX</span> <span class="pre">=</span> <span class="pre">20</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_SUPPORT_SCALES</span> <span class="pre">=</span> <span class="pre">3</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_DET_LIKE_FACTOR</span> <span class="pre">=</span> <span class="pre">3.0</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_DET_LIKE_FLOOR</span> <span class="pre">=</span> <span class="pre">20.0</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MIN_MASKFRAC</span> <span class="pre">=</span> <span class="pre">0.9</span></code>, <code class="docutils literal notranslate"><span class="pre">MORPH_EXTENT_MAX_R50_FACTOR</span> <span class="pre">=</span> <span class="pre">8.0</span></code>.</p></li>
@@ -1163,6 +1445,7 @@ cleansing likely source pixels before forming the final merged source list.</p>
 <li><p>Reject edge-like low-support detections that are more likely to be artifacts than real astrophysical sources. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">classify_sources_with_psf()</span></code>. Formula: require <code class="docutils literal notranslate"><span class="pre">maskfrac</span> <span class="pre">&lt;</span> <span class="pre">EDGE_BACKGROUND_MAX_MASKFRAC</span></code>, <code class="docutils literal notranslate"><span class="pre">det_like</span> <span class="pre">&lt;</span> <span class="pre">max(EDGE_BACKGROUND_DET_LIKE_FACTOR</span> <span class="pre">*</span> <span class="pre">min_det_like,</span> <span class="pre">EDGE_BACKGROUND_DET_LIKE_FLOOR)</span></code>, <code class="docutils literal notranslate"><span class="pre">npix</span> <span class="pre">&lt;=</span> <span class="pre">EDGE_BACKGROUND_MAX_NPIX</span></code>, and <code class="docutils literal notranslate"><span class="pre">len(support_scales)</span> <span class="pre">&lt;=</span> <span class="pre">EDGE_BACKGROUND_MAX_SUPPORT_SCALES</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_MAX_MASKFRAC</span> <span class="pre">=</span> <span class="pre">0.75</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_DET_LIKE_FACTOR</span> <span class="pre">=</span> <span class="pre">3.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_DET_LIKE_FLOOR</span> <span class="pre">=</span> <span class="pre">20.0</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_MAX_NPIX</span> <span class="pre">=</span> <span class="pre">8</span></code>, <code class="docutils literal notranslate"><span class="pre">EDGE_BACKGROUND_MAX_SUPPORT_SCALES</span> <span class="pre">=</span> <span class="pre">2</span></code>.</p></li>
 <li><p>Suppress weaker duplicate detections that fall inside the PSF footprint of a stronger nearby source. Used in <a class="reference download internal" download="" href="_downloads/cf9dd41989eaad286f06f7f08090185f/catalog.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/catalog.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">prune_nearby_sources()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(PRUNE_SUPPRESS_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">strong_psf,</span> <span class="pre">PRUNE_SUPPRESS_MIN_RADIUS_PIX)</span></code>, after flooring <code class="docutils literal notranslate"><span class="pre">strong_psf</span></code> by <code class="docutils literal notranslate"><span class="pre">PRUNE_MIN_PSF_R90_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">PRUNE_SUPPRESS_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">1.35</span></code>, <code class="docutils literal notranslate"><span class="pre">PRUNE_SUPPRESS_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">8.0</span></code>, <code class="docutils literal notranslate"><span class="pre">PRUNE_MIN_PSF_R90_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>.</p></li>
 </ul>
+</section>
 </section>
 <section id="public-catalog-region">
 <h3>Public Catalog Region<a class="headerlink" href="#public-catalog-region" title="Link to this heading">#</a></h3>
@@ -1193,20 +1476,20 @@ cleansing likely source pixels before forming the final merged source list.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="index.html"
+       href="fxtcombine.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">eFXTDAS Documentation</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></p>
       </div>
     </a>
     <a class="right-next"
-       href="fxteefmap.html"
+       href="fxtregions.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -1252,13 +1535,18 @@ cleansing likely source pixels before forming the final merged source list.</p>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-detection-parameters">User-Facing Detection Parameters</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-catalog-parameters">User-Facing Catalog Parameters</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-heuristic-constants">Internal Heuristic Constants</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#wavelet-candidate-construction">Wavelet / Candidate Construction</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Background-Map Construction</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-and-grouped-fitting-geometry">Local and Grouped Fitting Geometry</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-final-catalog-cleanup">Classification and Final Catalog Cleanup</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#user-facing-paramters">User-Facing Paramters</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#detection-parameters">Detection Parameters</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#catalog-parameters">Catalog Parameters</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-heuristic-constants">Internal Heuristic Constants</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#wavelet-candidate-construction">Wavelet / Candidate Construction</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Background-Map Construction</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#local-and-grouped-fitting-geometry">Local and Grouped Fitting Geometry</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#classification-and-final-catalog-cleanup">Classification and Final Catalog Cleanup</a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#public-catalog-region">Public Catalog Region</a></li>
 </ul>
 </li>

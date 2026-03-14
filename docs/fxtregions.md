@@ -105,18 +105,155 @@ print(info["background_inner_arcsec"], info["background_outer_arcsec"])
 
 ### Inputs
 
-- counts image FITS with celestial WCS
-- detected source catalog from `fxtsrcdet`
-- target `RA`, `Dec`
-- mission / instrument / filter / energy metadata for PSF-aware region sizing
-- optional background map
+- required:
+  - counts image FITS with celestial WCS
+    - positional argument: `image.fits`
+    - used to define the pixel scale, source position on the detector, and
+      local geometry for region construction
+  - detected source catalog from `fxtsrcdet`
+    - positional argument: `sources.fits`
+    - provides the matched target row and neighboring sources used for
+      contaminant exclusion
+  - target sky coordinate:
+    - `--ra`
+    - `--dec`
+- optional calibration / context inputs:
+  - background map FITS: `--bkgmap`
+    - if supplied, local background is sampled directly from this map
+    - if omitted, `fxtregions` falls back to catalog `ML_BKG_0`
+  - mission / instrument / filter / energy metadata:
+    - `--mission`
+    - `--instrument`
+    - `--filter`
+    - `--emin`
+    - `--emax`
+    - these are used to build the local PSF / source-kernel model
+  - optional optical-axis override:
+    - `--optaxis-x`
+    - `--optaxis-y`
+- region-sizing controls:
+  - `--mode auto`
+    - derive source and background radii from the matched-source brightness and
+      local background
+  - `--mode manual`
+    - use explicit user-supplied radii
+  - manual-radius parameters:
+    - `--src-radius`
+    - `--bkg-inner`
+    - `--bkg-outer`
+  - matching threshold:
+    - `--match-threshold`
+    - maximum target-to-catalog separation used to decide whether the target is
+      considered detected
+- output / logging controls:
+  - `--src-regfile`
+    - output source region file
+  - `--bkg-regfile`
+    - output background region file
+  - `--log-level`
+  - `--log-file`
 
 ### Outputs
 
-- source region file
-- background region file
-- contaminant exclusions embedded in the region expressions
-- a summary dictionary from the Python API
+For a run such as:
+
+```bash
+fxtregions \
+  image.fits \
+  sources.fits \
+  --bkgmap bkgmap.fits \
+  --ra 9.25937 \
+  --dec 9.16681 \
+  --mode auto \
+  --src-regfile source.reg \
+  --bkg-regfile background.reg
+```
+
+the output tree is conceptually:
+
+```text
+<working-directory>/
+|-- image.fits
+|-- sources.fits
+|-- bkgmap.fits
+|-- source.reg
+|-- background.reg
+|-- fxtregions.log
+```
+
+If no background map is supplied and the default log naming is used, the
+minimal tree is:
+
+```text
+<working-directory>/
+|-- image.fits
+|-- sources.fits
+|-- source.reg
+|-- background.reg
+|-- fxtregions.log
+```
+
+The products mean:
+
+- `source.reg`
+  - DS9/XSELECT-readable source extraction region
+  - centered on the adopted target coordinate
+  - in current practice, this is written as a plain source aperture without
+    carved source exclusions, because complex source-region geometry can confuse
+    downstream `fxtarfgen`
+- `background.reg`
+  - DS9/XSELECT-readable background annulus region
+  - includes contaminating-source exclusion regions where needed
+- `fxtregions.log`
+  - CLI log file
+  - by default this is written beside the requested output region files
+
+The Python API also returns a richer summary dictionary from
+`build_regions(...)`:
+
+```text
+region_info
+|-- context
+|-- source_region
+|-- background_region
+|-- source_excludes
+|-- background_excludes
+|-- source_radius_arcsec
+|-- background_inner_arcsec
+|-- background_outer_arcsec
+|-- pixel_scale_arcsec
+|-- theta_arcmin
+|-- psf_r90_arcsec
+|-- psf_r99_arcsec
+```
+
+where:
+
+- `context`
+  - matched/adopted target information, effective mode, local background mode,
+    and matched-source metadata
+- `source_region`
+  - DS9 region expression for the source aperture
+- `background_region`
+  - DS9 region expression for the background annulus
+- `source_excludes`
+  - contaminant exclusions derived for the source region logic
+  - currently useful mainly for diagnostics, since the written source region is
+    intentionally kept simple for ARF compatibility
+- `background_excludes`
+  - contaminant exclusions applied to the background region
+- `source_radius_arcsec`
+  - final source extraction radius
+- `background_inner_arcsec`
+  - final background annulus inner radius
+- `background_outer_arcsec`
+  - final background annulus outer radius
+- `pixel_scale_arcsec`
+  - inferred image pixel scale
+- `theta_arcmin`
+  - target off-axis angle in arcminutes
+- `psf_r90_arcsec`, `psf_r99_arcsec`
+  - local PSF reference radii used when choosing automatic apertures
 
 ### Visualization
 
@@ -237,8 +374,9 @@ The following constants are defined in [`fxtregions/config.py`](../fxtregions/co
 
 ### Matching
 
-- `MATCH_THRESHOLD_ARCSEC = 15.0`
-  - Maximum separation for declaring that the requested target is detected in the catalog.
+- `FXT_POSITION_ERR90_ARCSEC = 8.6`
+  - Representative EP-FXT source-position accuracy at 90% confidence.
+  - Used as the default target-to-catalog matching threshold.
 
 ### Default Manual Fallback Radii
 

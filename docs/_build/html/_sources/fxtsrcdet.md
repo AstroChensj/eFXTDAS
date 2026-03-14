@@ -64,20 +64,177 @@ per_scale = result["per_scale"]
 
 ### Inputs
 
-- counts image FITS
-- optional exposure map FITS
-- optional multi-extension EEF-radius map from `fxteefmap`
-- mission / instrument / filter / energy metadata for PSF selection
+- required:
+  - input counts image FITS
+    - positional argument: `image`
+    - this is the image on which wavelet detection, background estimation, and
+      catalog fitting are performed
+- optional calibration / context inputs:
+  - exposure map FITS: `--expmap`
+    - used to define valid pixels and to make the background map exposure-aware
+  - precomputed multi-extension EEF-radius map from `fxteefmap`: `--eefmap`
+    - when supplied, `fxtsrcdet` uses this directly for PSF-aware aperture and
+      morphology work
+  - mission / instrument / filter / energy metadata:
+    - `--mission`
+    - `--instrument`
+    - `--filter`
+    - `--emin`
+    - `--emax`
+    - these are used to construct the spatial PSF model if `--eefmap` is not
+      provided
+  - optional optical-axis override:
+    - `--optaxis-x`
+    - `--optaxis-y`
+- wavelet detection controls:
+  - `--scales`
+    - wavelet scales in pixels, for example `1 2 4 8 16`
+  - `--sigthresh`
+    - significance threshold for the wavelet detection stage
+  - `--bkgsigthresh`
+    - significance threshold used when cleansing likely source pixels during
+      per-scale background estimation
+  - `--maxiter`
+    - maximum number of iterative background-cleansing passes per scale
+  - `--iterstop`
+    - minimum fractional change needed to continue the cleansing iteration
+  - `--expthresh`
+    - minimum relative exposure required for a pixel to be treated as valid
+  - `--ellsigma`
+    - ellipse scaling factor used when converting wavelet detections into
+      provisional image-plane source regions
+- final catalog / source-classification controls:
+  - `--min-det-like`
+    - minimum detection-likelihood threshold for keeping a source as
+      non-background
+  - `--min-ext-like`
+    - minimum extent-likelihood threshold for classifying a source as extended
+  - `--ecf`
+    - optional energy-conversion factor for turning count rate into flux
+- output / debugging controls:
+  - `--out`
+    - output source-catalog FITS file
+  - `--regfile`
+    - output DS9 region file in image coordinates
+  - `--sky-regfile`
+    - optional DS9 region file in sky coordinates if the input image has
+      celestial WCS
+  - `--save-mask`
+    - optional aggregate source-mask FITS file
+  - `--save-significance`
+    - optional best-significance FITS map
+  - `--save-bkgmap`
+    - optional carved-and-smoothed background FITS map
+  - `--debug-columns`
+    - keep internal columns in the source table for debugging
+  - `--include-background`
+    - keep rows classified as background in the output catalog
+  - `--no-prune-sources`
+    - disable nearby-source duplicate pruning
+  - `--log-level`
+  - `--log-file`
+  - `--no-progress`
 
 ### Outputs
 
-- source catalog FITS
-- image-coordinate region file
-- optional sky-coordinate region file
-- optional intermediate maps:
-  - aggregate source mask
-  - best-significance map
-  - background map
+For a run such as:
+
+```bash
+fxtsrcdet img.fits \
+  --expmap expmap.fits \
+  --out sources.fits \
+  --regfile sources.reg \
+  --sky-regfile sources_fk5.reg \
+  --save-mask agg_mask.fits \
+  --save-significance best_sig.fits \
+  --save-bkgmap bkgmap.fits
+```
+
+the output tree is conceptually:
+
+```text
+<working-directory>/
+|-- img.fits
+|-- expmap.fits
+|-- sources.fits
+|-- sources.reg
+|-- sources_fk5.reg
+|-- agg_mask.fits
+|-- best_sig.fits
+|-- bkgmap.fits
+|-- sources.log
+```
+
+If only the required outputs are requested, the minimal tree is:
+
+```text
+<working-directory>/
+|-- img.fits
+|-- sources.fits
+|-- sources.reg
+|-- sources.log
+```
+
+The products mean:
+
+- `sources.fits`
+  - final source catalog in FITS table form
+  - one row per retained final source
+  - includes source position, count/rate measurements, wavelet scale
+    information, PSF-aware fitting results, and classification columns
+- `sources.reg`
+  - DS9 region file in image coordinates
+  - useful for overlaying detections directly on the input FITS image in
+    detector/image pixel space
+- `sources_fk5.reg`
+  - optional DS9 region file in celestial coordinates
+  - written only when `--sky-regfile` is requested and the input image carries
+    celestial WCS
+- `agg_mask.fits`
+  - optional aggregate source-support mask from the initial wavelet stage
+  - useful for debugging how source-like support accumulates across scales
+- `best_sig.fits`
+  - optional best-significance map
+  - stores the strongest wavelet significance behavior seen at each pixel across
+    all scales
+- `bkgmap.fits`
+  - optional final carved-and-smoothed background map
+  - this is the most useful intermediate diagnostic product for later aperture
+    or spectral region work
+- `sources.log`
+  - CLI log file
+  - by default this is written beside `sources.fits` as `<out>.log`
+
+Internally, the Python API also returns a richer in-memory result dictionary:
+
+```text
+result
+|-- rows
+|-- per_scale
+|-- agg_mask
+|-- best_sig
+|-- background_map
+|-- psf_context
+|-- pixel_scale_arcsec
+```
+
+where:
+
+- `rows`
+  - final clean source catalog rows
+- `per_scale`
+  - one `ScaleResult` per wavelet scale, containing per-scale background,
+    correlation, and source-mask products
+- `agg_mask`
+  - aggregated source-support mask
+- `best_sig`
+  - best significance map over all scales
+- `background_map`
+  - final background model used by the fitting/classification stage
+- `psf_context`
+  - resolved mission/instrument/filter/energy PSF context
+- `pixel_scale_arcsec`
+  - inferred image pixel scale in arcsec/pixel
 
 ### Visualization
 
@@ -309,9 +466,12 @@ The final `CatalogRow` stores lowercase internal names. The FITS writer maps tho
 
 ## Tunable Parameters and Heuristic Constants
 
-This task contains several user-facing parameters and several internal heuristic constants that strongly affect behavior.
+This task contains several **user-facing parameters** and several **internal heuristic constants** that could affect behavior.
 
-### User-Facing Detection Parameters
+User could modify the **user-facing parameters** from CLI or Python input. As for the **internal heuristic constants**, they are stored at `fxtsrcdet/config.py` and thus not exposed directly to the user, and are fixed at empirical reasonable values. The user is suggested to know what they do, and if necessary, modify them and check if results change.
+
+### User-Facing Paramters
+#### Detection Parameters
 
 - wavelet scales:
   - default `(1, 2, 4, 8, 16)` pixels
@@ -324,7 +484,7 @@ This task contains several user-facing parameters and several internal heuristic
 - ellipse scale factor used to convert source pixels into a wavelet-stage ellipse:
   - `ellsigma = 3.0`
 
-### User-Facing Catalog Parameters
+#### Catalog Parameters
 
 - minimum detection likelihood for non-background classification:
   - `min_det_like = 6.0`
@@ -335,7 +495,7 @@ This task contains several user-facing parameters and several internal heuristic
 
 The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They are not exposed directly through the CLI, but they control important behavior in detection, background estimation, fitting, and classification.
 
-### Wavelet / Candidate Construction
+#### Wavelet / Candidate Construction
 
 - Limit how far the Mexican-hat kernel extends away from the target scale so the wavelet remains finite and computationally practical. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `mexican_hat_kernel()`. Formula: `radius = ceil(MEXICAN_HAT_TRUNCATE * scale)`. Defaults: `MEXICAN_HAT_TRUNCATE = 5.0`.
 - Define how local a “local maximum” must be when identifying wavelet peaks inside thresholded source regions. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `local_maxima()`. Formula: `maximum_filter(..., size=LOCAL_MAX_FILTER_SIZE)`. Defaults: `LOCAL_MAX_FILTER_SIZE = 3`.
@@ -344,7 +504,7 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 - Prevent a large connected source island from inheriting too much low-significance structure away from its dominant peak. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `combine_scales()`. Formula: `max(PEAK_TRIM_SCALE_FACTOR * scale, PEAK_TRIM_MIN_RADIUS_PIX)`. Defaults: `PEAK_TRIM_SCALE_FACTOR = 2.5`, `PEAK_TRIM_MIN_RADIUS_PIX = 4.0`.
 - Reject tiny one-scale fragments that are more likely to be noise or threshold artifacts than real sources. Used in [`fxtsrcdet/detect.py`](../fxtsrcdet/detect.py) `combine_scales()`. Formula: reject when `npix <= SINGLE_SCALE_FRAGMENT_MAX_NPIX` or `wavelet_peak_score < z_thresh + SINGLE_SCALE_PEAK_SCORE_MARGIN`. Defaults: `SINGLE_SCALE_FRAGMENT_MAX_NPIX = 4`, `SINGLE_SCALE_PEAK_SCORE_MARGIN = 1.0`.
 
-### Background-Map Construction
+#### Background-Map Construction
 
 - Carve detected sources out of the image before adaptive smoothing so source wings do not leak into the background model. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `max(BACKGROUND_CARVE_R90_FACTOR * psf_r90, BACKGROUND_CARVE_SCALE_FACTOR * scale, BACKGROUND_CARVE_MIN_RADIUS_PIX)`. Defaults: `BACKGROUND_CARVE_R90_FACTOR = 0.8`, `BACKGROUND_CARVE_SCALE_FACTOR = 1.5`, `BACKGROUND_CARVE_MIN_RADIUS_PIX = 3.5`.
 - Choose the preferred starting smoothing width for the adaptive background builder. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `smooth_sigma = DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX`. Defaults: `DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX = 6.0`.
@@ -353,7 +513,7 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 - Zero out pixels whose broadest-scale source-free support is still too poor for a reliable background estimate. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `support_ref > BACKGROUND_MIN_SUPPORT_WEIGHT`. Defaults: `BACKGROUND_MIN_SUPPORT_WEIGHT = 0.1`.
 - Prevent pathological spikes in the local background-rate estimate near carved holes or sharp exposure edges. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `percentile(rate_samples, BACKGROUND_RATE_CAP_PERCENTILE) * BACKGROUND_RATE_CAP_FACTOR`. Defaults: `BACKGROUND_RATE_CAP_PERCENTILE = 99.9`, `BACKGROUND_RATE_CAP_FACTOR = 3.0`.
 
-### Local and Grouped Fitting Geometry
+#### Local and Grouped Fitting Geometry
 
 - Set how large the local single-source fitting stamp should be so the fit has enough context without becoming too contaminated. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(FIT_STAMP_R90_FACTOR * psf_r90, FIT_STAMP_SCALE_FACTOR * scale, FIT_STAMP_MIN_RADIUS_PIX)`. Defaults: `FIT_STAMP_R90_FACTOR = 1.75`, `FIT_STAMP_SCALE_FACTOR = 1.75`, `FIT_STAMP_MIN_RADIUS_PIX = 6.0`.
 - Set how far out the local radial profile is measured so morphology stays local and less sensitive to broad contamination. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: `max(PROFILE_R90_FACTOR * psf_r90, PROFILE_SCALE_FACTOR * scale, PROFILE_MIN_RADIUS_PIX)`. Defaults: `PROFILE_R90_FACTOR = 1.25`, `PROFILE_SCALE_FACTOR = 1.25`, `PROFILE_MIN_RADIUS_PIX = 5.0`.
@@ -375,7 +535,7 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 - Define the default beta-model slope and shift range for the standalone extended-fit helper. Used in [`fxtsrcdet/fit.py`](../fxtsrcdet/fit.py) `fit_extended_position_cash()`. Formula: `beta = FIT_EXTENDED_BETA` and `max_shift = FIT_EXTENDED_MAX_SHIFT_PIX`. Defaults: `FIT_EXTENDED_BETA = 2/3`, `FIT_EXTENDED_MAX_SHIFT_PIX = 2.0`.
 - Prevent Gaussian smoothing from collapsing to an unrealistically tiny kernel in low-level helper code. Used in [`fxtsrcdet/utils/imageops.py`](../fxtsrcdet/utils/imageops.py) `smooth_image()`. Formula: `max(sigma, MIN_GAUSSIAN_SIGMA_PIX)`. Defaults: `MIN_GAUSSIAN_SIGMA_PIX = 0.5`.
 
-### Classification and Final Catalog Cleanup
+#### Classification and Final Catalog Cleanup
 
 - Require the fitted extent solution to be both statistically meaningful and morphologically plausible before assigning the model-based `extended` label. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: require `best_sigma > EXTENT_CLASSIFY_MIN_SIGMA_PIX`, `best_sigma < max(EXTENT_CLASSIFY_MAX_R90_FACTOR * psf_r90, EXTENT_CLASSIFY_MAX_SIGMA_PIX)`, `stretch >= EXTENT_CLASSIFY_MIN_STRETCH`, and `maskfrac >= EXTENT_CLASSIFY_MIN_MASKFRAC`. Defaults: `EXTENT_CLASSIFY_MIN_SIGMA_PIX = 1.0`, `EXTENT_CLASSIFY_MAX_R90_FACTOR = 1.5`, `EXTENT_CLASSIFY_MAX_SIGMA_PIX = 12.0`, `EXTENT_CLASSIFY_MIN_STRETCH = 1.25`, `EXTENT_CLASSIFY_MIN_MASKFRAC = 0.8`.
 - Allow a strong morphology-based fallback path to classify clearly broadened sources as extended even when the model-based extent path is imperfect. Used in [`fxtsrcdet/catalog.py`](../fxtsrcdet/catalog.py) `classify_sources_with_psf()`. Formula: require `stretch >= MORPH_EXTENT_MIN_STRETCH`, `r80_meas >= MORPH_EXTENT_MIN_R80_FACTOR * psf_r80`, `npix >= MORPH_EXTENT_MIN_NPIX`, `len(support_scales) >= MORPH_EXTENT_MIN_SUPPORT_SCALES`, `det_like >= max(MORPH_EXTENT_DET_LIKE_FACTOR * min_det_like, MORPH_EXTENT_DET_LIKE_FLOOR)`, `maskfrac >= MORPH_EXTENT_MIN_MASKFRAC`, and `r50_meas <= MORPH_EXTENT_MAX_R50_FACTOR * psf_r50`. Defaults: `MORPH_EXTENT_MIN_STRETCH = 2.5`, `MORPH_EXTENT_MIN_R80_FACTOR = 1.8`, `MORPH_EXTENT_MIN_NPIX = 20`, `MORPH_EXTENT_MIN_SUPPORT_SCALES = 3`, `MORPH_EXTENT_DET_LIKE_FACTOR = 3.0`, `MORPH_EXTENT_DET_LIKE_FLOOR = 20.0`, `MORPH_EXTENT_MIN_MASKFRAC = 0.9`, `MORPH_EXTENT_MAX_R50_FACTOR = 8.0`.

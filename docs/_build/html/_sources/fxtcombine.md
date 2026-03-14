@@ -25,6 +25,8 @@ fxtcombine /data/epfxt \
   --obsid-lst 02001234567,02001234568 \
   --ra 9.25937 \
   --dec 9.16681 \
+  --image-channel-ranges "38:925,925:1023" \
+  --lightcurve-channel-ranges "38:925,925:1023" \
   --out-dir combine_out
 ```
 
@@ -35,6 +37,8 @@ fxtcombine /data/epfxt \
   --obsid-lst obsids.txt \
   --ra 9.25937 \
   --dec 9.16681 \
+  --image-channel-ranges "38:925,925:1023" \
+  --lightcurve-channel-ranges "38:925,925:1023" \
   --out-dir combine_out \
   --skip-existing
 ```
@@ -42,9 +46,9 @@ fxtcombine /data/epfxt \
 ### Python Usage
 
 ```python
-from fxtcombine.pipeline import combine_spec
+from fxtcombine.pipeline import fxtcombine_pipeline
 
-combine_spec(
+fxtcombine_pipeline(
     src_dir="/data/epfxt",
     obsid_lst="02001234567,02001234568",
     ra=9.25937,
@@ -53,6 +57,9 @@ combine_spec(
     module="a,b",
     datamode="ff",
     datatype="evt",
+    image_channel_ranges="38:925,925:1023",
+    lightcurve_channel_ranges="38:925,925:1023",
+    skip_existing=False,
 )
 ```
 
@@ -84,6 +91,162 @@ Typical stacked products include:
 - `stack_bkgpi.fits`
 - `stack_rmf.fits`
 - `stack_arf.fits`
+
+## Output Data Structure
+
+The most useful way to understand `fxtcombine` outputs is as a directory tree
+linked to the three main path-like inputs:
+
+- `src_dir`: input archive with one subdirectory per OBSID
+- `obsid_lst`: which OBSID subdirectories under `src_dir` are actually used
+- `out_dir`: where all combined products are written
+
+### Input/Output Relationship
+
+If the user runs:
+
+```bash
+fxtcombine <src_dir> \
+  --obsid-lst 11900458112,11900465408 \
+  --out-dir <out_dir> \
+  --image-channel-ranges 38:925,100:300 \
+  --lightcurve-channel-ranges 0:1023,100:300
+```
+
+then the layout is conceptually:
+
+```text
+<src_dir>/
+|-- 11900458112/
+|   |-- ... original FXT archive content ...
+|-- 11900465408/
+|   |-- ... original FXT archive content ...
+|-- ...
+
+<out_dir>/
+|-- log/
+|   |-- fxtcombine.log
+|-- 11900458112/
+|   |-- products/
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.coord
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.pi
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.particle
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.badpix
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.grade
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.gti
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_cl.fits
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.expo
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0038_0925.img
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0100_0300.img
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0000_1023.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0100_0300.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.fits
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.pi
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_bkg.pi
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_bkg.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.arf
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.rmf
+|   |   |-- log/
+|   |   |   |-- fxtchain.log
+|   |   |   |-- <step-specific logs>
+|-- 11900465408/
+|   |-- products/
+|   |   |-- ... same product pattern as above ...
+|-- stack/
+|   |-- evt_stack_exp.fits
+|   |-- evt_stack_cts.fits
+|   |-- evt_stack_rate.fits
+|   |-- evt_ch0038_0925_stack_cts.fits
+|   |-- evt_ch0038_0925_stack_rate.fits
+|   |-- evt_ch0100_0300_stack_cts.fits
+|   |-- evt_stack_eef.fits
+|   |-- stack_src.fits
+|   |-- stack_src.reg
+|   |-- stack_bkgmap.fits
+|   |-- target_src.reg
+|   |-- target_bkg.reg
+|   |-- fxteefmap.log
+|   |-- srcdet.log
+|   |-- fxtregions.log
+|   |-- stack_pi.fits
+|   |-- stack_bkgpi.fits
+|   |-- stack_rmf.fits
+|   |-- stack_arf.fits
+|   |-- stack_runXstack.log
+|-- all_obsid.filelist
+|-- all_obsid.json
+```
+
+### Meaning of the Tree
+
+- `src_dir/<obsid>/`
+  - original input archive for each observation
+- `out_dir/<obsid>/products/`
+  - all per-OBSID intermediate and extracted products
+- `out_dir/stack/`
+  - products derived from combining all valid OBSIDs together
+- `out_dir/all_obsid.json`
+  - machine-readable summary of the per-OBSID product paths
+
+### Multi-Band Image and Light-Curve Products
+
+When multiple channel ranges are requested:
+
+- each Stage-1 image band gets its own file:
+  - `..._ch0038_0925.img`
+  - `..._ch0100_0300.img`
+- each Stage-1 light-curve band gets its own file:
+  - `..._ch0000_1023.lc`
+  - `..._ch0100_0300.lc`
+
+For stacking:
+
+- the first requested image band is treated as the default detection band
+- that default band is written twice:
+  - legacy names:
+    - `evt_stack_cts.fits`
+    - `evt_stack_rate.fits`
+  - explicit band-labelled names:
+    - `evt_ch0038_0925_stack_cts.fits`
+    - `evt_ch0038_0925_stack_rate.fits`
+- additional image bands are written only with explicit band labels
+
+### The Summary JSON Structure
+
+`all_obsid.json` stores the same information as a nested dictionary:
+
+```text
+all_obsid.json
+|-- <obsid>
+|   |-- <datatype>
+|   |   |-- <evt_fname_prefix>
+|   |   |   |-- clevt
+|   |   |   |-- image
+|   |   |   |-- images
+|   |   |   |   |-- ch0038_0925
+|   |   |   |   |-- ch0100_0300
+|   |   |   |-- vexpmap
+|   |   |   |-- exp
+|   |   |   |-- alllc
+|   |   |   |-- lightcurves
+|   |   |   |   |-- ch0000_1023
+|   |   |   |   |-- ch0100_0300
+|   |   |   |-- srcpi
+|   |   |   |-- bkgpi
+|   |   |   |-- srclc
+|   |   |   |-- bkglc
+|   |   |   |-- arf
+|   |   |   |-- rmf
+```
+
+Important conventions:
+
+- `image` is always the first requested image band
+- `images` stores all requested image bands
+- `alllc` is always the first requested light-curve band
+- `lightcurves` stores all requested light-curve bands
+- `srcpi`, `bkgpi`, `arf`, and `rmf` appear only after Stage 4
 
 ## Detailed Algorithm and How It Works
 

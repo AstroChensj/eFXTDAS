@@ -47,7 +47,8 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'fxtcombine';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="fxtregions" href="fxtregions.html" />
+    <link rel="next" title="fxtsrcdet" href="fxtsrcdet.html" />
+    <link rel="prev" title="eFXTDAS Documentation" href="index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="" />
@@ -139,10 +140,10 @@
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
 </ul>
 
     </div>
@@ -296,6 +297,13 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#output-data-structure">Output Data Structure</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#input-output-relationship">Input/Output Relationship</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#meaning-of-the-tree">Meaning of the Tree</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-band-image-and-light-curve-products">Multi-Band Image and Light-Curve Products</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-summary-json-structure">The Summary JSON Structure</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-obsid-preprocessing">1. Per-OBSID Preprocessing</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#image-and-exposure-stacking">2. Image and Exposure Stacking</a></li>
@@ -344,6 +352,8 @@
 <span class="w">  </span>--obsid-lst<span class="w"> </span><span class="m">02001234567</span>,02001234568<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--image-channel-ranges<span class="w"> </span><span class="s2">&quot;38:925,925:1023&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--lightcurve-channel-ranges<span class="w"> </span><span class="s2">&quot;38:925,925:1023&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--out-dir<span class="w"> </span>combine_out
 </pre></div>
 </div>
@@ -352,6 +362,8 @@
 <span class="w">  </span>--obsid-lst<span class="w"> </span>obsids.txt<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--image-channel-ranges<span class="w"> </span><span class="s2">&quot;38:925,925:1023&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--lightcurve-channel-ranges<span class="w"> </span><span class="s2">&quot;38:925,925:1023&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--out-dir<span class="w"> </span>combine_out<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--skip-existing
 </pre></div>
@@ -359,9 +371,9 @@
 </section>
 <section id="python-usage">
 <h3>Python Usage<a class="headerlink" href="#python-usage" title="Link to this heading">#</a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fxtcombine.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">combine_spec</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fxtcombine.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">fxtcombine_pipeline</span>
 
-<span class="n">combine_spec</span><span class="p">(</span>
+<span class="n">fxtcombine_pipeline</span><span class="p">(</span>
     <span class="n">src_dir</span><span class="o">=</span><span class="s2">&quot;/data/epfxt&quot;</span><span class="p">,</span>
     <span class="n">obsid_lst</span><span class="o">=</span><span class="s2">&quot;02001234567,02001234568&quot;</span><span class="p">,</span>
     <span class="n">ra</span><span class="o">=</span><span class="mf">9.25937</span><span class="p">,</span>
@@ -370,6 +382,9 @@
     <span class="n">module</span><span class="o">=</span><span class="s2">&quot;a,b&quot;</span><span class="p">,</span>
     <span class="n">datamode</span><span class="o">=</span><span class="s2">&quot;ff&quot;</span><span class="p">,</span>
     <span class="n">datatype</span><span class="o">=</span><span class="s2">&quot;evt&quot;</span><span class="p">,</span>
+    <span class="n">image_channel_ranges</span><span class="o">=</span><span class="s2">&quot;38:925,925:1023&quot;</span><span class="p">,</span>
+    <span class="n">lightcurve_channel_ranges</span><span class="o">=</span><span class="s2">&quot;38:925,925:1023&quot;</span><span class="p">,</span>
+    <span class="n">skip_existing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -405,6 +420,189 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">stack_bkgpi.fits</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">stack_rmf.fits</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">stack_arf.fits</span></code></p></li>
+</ul>
+</section>
+</section>
+<section id="output-data-structure">
+<h2>Output Data Structure<a class="headerlink" href="#output-data-structure" title="Link to this heading">#</a></h2>
+<p>The most useful way to understand <code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> outputs is as a directory tree
+linked to the three main path-like inputs:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">src_dir</span></code>: input archive with one subdirectory per OBSID</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">obsid_lst</span></code>: which OBSID subdirectories under <code class="docutils literal notranslate"><span class="pre">src_dir</span></code> are actually used</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">out_dir</span></code>: where all combined products are written</p></li>
+</ul>
+<section id="input-output-relationship">
+<h3>Input/Output Relationship<a class="headerlink" href="#input-output-relationship" title="Link to this heading">#</a></h3>
+<p>If the user runs:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtcombine<span class="w"> </span>&lt;src_dir&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--obsid-lst<span class="w"> </span><span class="m">11900458112</span>,11900465408<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out-dir<span class="w"> </span>&lt;out_dir&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--image-channel-ranges<span class="w"> </span><span class="m">38</span>:925,100:300<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--lightcurve-channel-ranges<span class="w"> </span><span class="m">0</span>:1023,100:300
+</pre></div>
+</div>
+<p>then the layout is conceptually:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;src_dir&gt;/
+|-- 11900458112/
+|   |-- ... original FXT archive content ...
+|-- 11900465408/
+|   |-- ... original FXT archive content ...
+|-- ...
+
+&lt;out_dir&gt;/
+|-- log/
+|   |-- fxtcombine.log
+|-- 11900458112/
+|   |-- products/
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;.coord
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;.pi
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;.particle
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;.badpix
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;.grade
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;.gti
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_cl.fits
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;.expo
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_ch0038_0925.img
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_ch0100_0300.img
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_ch0000_1023.lc
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_ch0100_0300.lc
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_src.fits
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_src.pi
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_bkg.pi
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_src.lc
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_bkg.lc
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_src.arf
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;_src.rmf
+|   |   |-- log/
+|   |   |   |-- fxtchain.log
+|   |   |   |-- &lt;step-specific logs&gt;
+|-- 11900465408/
+|   |-- products/
+|   |   |-- ... same product pattern as above ...
+|-- stack/
+|   |-- evt_stack_exp.fits
+|   |-- evt_stack_cts.fits
+|   |-- evt_stack_rate.fits
+|   |-- evt_ch0038_0925_stack_cts.fits
+|   |-- evt_ch0038_0925_stack_rate.fits
+|   |-- evt_ch0100_0300_stack_cts.fits
+|   |-- evt_stack_eef.fits
+|   |-- stack_src.fits
+|   |-- stack_src.reg
+|   |-- stack_bkgmap.fits
+|   |-- target_src.reg
+|   |-- target_bkg.reg
+|   |-- fxteefmap.log
+|   |-- srcdet.log
+|   |-- fxtregions.log
+|   |-- stack_pi.fits
+|   |-- stack_bkgpi.fits
+|   |-- stack_rmf.fits
+|   |-- stack_arf.fits
+|   |-- stack_runXstack.log
+|-- all_obsid.filelist
+|-- all_obsid.json
+</pre></div>
+</div>
+</section>
+<section id="meaning-of-the-tree">
+<h3>Meaning of the Tree<a class="headerlink" href="#meaning-of-the-tree" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">src_dir/&lt;obsid&gt;/</span></code></p>
+<ul>
+<li><p>original input archive for each observation</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">out_dir/&lt;obsid&gt;/products/</span></code></p>
+<ul>
+<li><p>all per-OBSID intermediate and extracted products</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">out_dir/stack/</span></code></p>
+<ul>
+<li><p>products derived from combining all valid OBSIDs together</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">out_dir/all_obsid.json</span></code></p>
+<ul>
+<li><p>machine-readable summary of the per-OBSID product paths</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="multi-band-image-and-light-curve-products">
+<h3>Multi-Band Image and Light-Curve Products<a class="headerlink" href="#multi-band-image-and-light-curve-products" title="Link to this heading">#</a></h3>
+<p>When multiple channel ranges are requested:</p>
+<ul class="simple">
+<li><p>each Stage-1 image band gets its own file:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">..._ch0038_0925.img</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">..._ch0100_0300.img</span></code></p></li>
+</ul>
+</li>
+<li><p>each Stage-1 light-curve band gets its own file:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">..._ch0000_1023.lc</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">..._ch0100_0300.lc</span></code></p></li>
+</ul>
+</li>
+</ul>
+<p>For stacking:</p>
+<ul class="simple">
+<li><p>the first requested image band is treated as the default detection band</p></li>
+<li><p>that default band is written twice:</p>
+<ul>
+<li><p>legacy names:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">evt_stack_cts.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evt_stack_rate.fits</span></code></p></li>
+</ul>
+</li>
+<li><p>explicit band-labelled names:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">evt_ch0038_0925_stack_cts.fits</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evt_ch0038_0925_stack_rate.fits</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>additional image bands are written only with explicit band labels</p></li>
+</ul>
+</section>
+<section id="the-summary-json-structure">
+<h3>The Summary JSON Structure<a class="headerlink" href="#the-summary-json-structure" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">all_obsid.json</span></code> stores the same information as a nested dictionary:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>all_obsid.json
+|-- &lt;obsid&gt;
+|   |-- &lt;datatype&gt;
+|   |   |-- &lt;evt_fname_prefix&gt;
+|   |   |   |-- clevt
+|   |   |   |-- image
+|   |   |   |-- images
+|   |   |   |   |-- ch0038_0925
+|   |   |   |   |-- ch0100_0300
+|   |   |   |-- vexpmap
+|   |   |   |-- exp
+|   |   |   |-- alllc
+|   |   |   |-- lightcurves
+|   |   |   |   |-- ch0000_1023
+|   |   |   |   |-- ch0100_0300
+|   |   |   |-- srcpi
+|   |   |   |-- bkgpi
+|   |   |   |-- srclc
+|   |   |   |-- bkglc
+|   |   |   |-- arf
+|   |   |   |-- rmf
+</pre></div>
+</div>
+<p>Important conventions:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">image</span></code> is always the first requested image band</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">images</span></code> stores all requested image bands</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alllc</span></code> is always the first requested light-curve band</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lightcurves</span></code> stores all requested light-curve bands</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">srcpi</span></code>, <code class="docutils literal notranslate"><span class="pre">bkgpi</span></code>, <code class="docutils literal notranslate"><span class="pre">arf</span></code>, and <code class="docutils literal notranslate"><span class="pre">rmf</span></code> appear only after Stage 4</p></li>
 </ul>
 </section>
 </section>
@@ -564,13 +762,22 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="fxtregions.html"
+       href="index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></p>
+        <p class="prev-next-title">eFXTDAS Documentation</p>
       </div>
+    </a>
+    <a class="right-next"
+       href="fxtsrcdet.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
     </a>
 </div>
                 </footer>
@@ -596,6 +803,13 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#output-data-structure">Output Data Structure</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#input-output-relationship">Input/Output Relationship</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#meaning-of-the-tree">Meaning of the Tree</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-band-image-and-light-curve-products">Multi-Band Image and Light-Curve Products</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-summary-json-structure">The Summary JSON Structure</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">

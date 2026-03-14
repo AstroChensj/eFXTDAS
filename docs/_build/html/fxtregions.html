@@ -483,8 +483,8 @@ window.runMermaid = runMermaid;</script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'fxtregions';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="fxtcombine" href="fxtcombine.html" />
-    <link rel="prev" title="fxteefmap" href="fxteefmap.html" />
+    <link rel="next" title="fxteefmap" href="fxteefmap.html" />
+    <link rel="prev" title="fxtsrcdet" href="fxtsrcdet.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="" />
@@ -576,10 +576,10 @@ window.runMermaid = runMermaid;</script>
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxtcombine.html"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
 </ul>
 
     </div>
@@ -778,6 +778,11 @@ window.runMermaid = runMermaid;</script>
 <li><p>writes DS9/XSELECT-readable region files</p></li>
 </ul>
 <p>Unlike eSASS <code class="docutils literal notranslate"><span class="pre">srctool</span></code>, the current implementation does not use catalog flags such as <code class="docutils literal notranslate"><span class="pre">AUTO_EXTRACT</span></code> or <code class="docutils literal notranslate"><span class="pre">AUTO_EXCLUDE</span></code>.</p>
+<div class="warning admonition">
+<p class="admonition-title">Warning on current source region</p>
+<p><code class="docutils literal notranslate"><span class="pre">fxtarfgen</span></code> does not recognize complex shape in source region, so at the moment, the exclusion region in source is disabled!</p>
+<p>It means that nearby confusing source around target could contaminate source counts.</p>
+</div>
 </section>
 <section id="basic-usage">
 <h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
@@ -859,20 +864,238 @@ window.runMermaid = runMermaid;</script>
 <section id="inputs">
 <h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>counts image FITS with celestial WCS</p></li>
-<li><p>detected source catalog from <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p></li>
-<li><p>target <code class="docutils literal notranslate"><span class="pre">RA</span></code>, <code class="docutils literal notranslate"><span class="pre">Dec</span></code></p></li>
-<li><p>mission / instrument / filter / energy metadata for PSF-aware region sizing</p></li>
-<li><p>optional background map</p></li>
+<li><p>required:</p>
+<ul>
+<li><p>counts image FITS with celestial WCS</p>
+<ul>
+<li><p>positional argument: <code class="docutils literal notranslate"><span class="pre">image.fits</span></code></p></li>
+<li><p>used to define the pixel scale, source position on the detector, and
+local geometry for region construction</p></li>
+</ul>
+</li>
+<li><p>detected source catalog from <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p>
+<ul>
+<li><p>positional argument: <code class="docutils literal notranslate"><span class="pre">sources.fits</span></code></p></li>
+<li><p>provides the matched target row and neighboring sources used for
+contaminant exclusion</p></li>
+</ul>
+</li>
+<li><p>target sky coordinate:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--ra</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--dec</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>optional calibration / context inputs:</p>
+<ul>
+<li><p>background map FITS: <code class="docutils literal notranslate"><span class="pre">--bkgmap</span></code></p>
+<ul>
+<li><p>if supplied, local background is sampled directly from this map</p></li>
+<li><p>if omitted, <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code> falls back to catalog <code class="docutils literal notranslate"><span class="pre">ML_BKG_0</span></code></p></li>
+</ul>
+</li>
+<li><p>mission / instrument / filter / energy metadata:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--mission</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--instrument</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--filter</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--emin</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--emax</span></code></p></li>
+<li><p>these are used to build the local PSF / source-kernel model</p></li>
+</ul>
+</li>
+<li><p>optional optical-axis override:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--optaxis-x</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--optaxis-y</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>region-sizing controls:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--mode</span> <span class="pre">auto</span></code></p>
+<ul>
+<li><p>derive source and background radii from the matched-source brightness and
+local background</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--mode</span> <span class="pre">manual</span></code></p>
+<ul>
+<li><p>use explicit user-supplied radii</p></li>
+</ul>
+</li>
+<li><p>manual-radius parameters:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--src-radius</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--bkg-inner</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--bkg-outer</span></code></p></li>
+</ul>
+</li>
+<li><p>matching threshold:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--match-threshold</span></code></p></li>
+<li><p>maximum target-to-catalog separation used to decide whether the target is
+considered detected</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>output / logging controls:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--src-regfile</span></code></p>
+<ul>
+<li><p>output source region file</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--bkg-regfile</span></code></p>
+<ul>
+<li><p>output background region file</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--log-level</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--log-file</span></code></p></li>
+</ul>
+</li>
 </ul>
 </section>
 <section id="outputs">
 <h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
+<p>For a run such as:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtregions<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>image.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sources.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkgmap<span class="w"> </span>bkgmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ra<span class="w"> </span><span class="m">9</span>.25937<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dec<span class="w"> </span><span class="m">9</span>.16681<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mode<span class="w"> </span>auto<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--src-regfile<span class="w"> </span>source.reg<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bkg-regfile<span class="w"> </span>background.reg
+</pre></div>
+</div>
+<p>the output tree is conceptually:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;working-directory&gt;/
+|-- image.fits
+|-- sources.fits
+|-- bkgmap.fits
+|-- source.reg
+|-- background.reg
+|-- fxtregions.log
+</pre></div>
+</div>
+<p>If no background map is supplied and the default log naming is used, the
+minimal tree is:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;working-directory&gt;/
+|-- image.fits
+|-- sources.fits
+|-- source.reg
+|-- background.reg
+|-- fxtregions.log
+</pre></div>
+</div>
+<p>The products mean:</p>
 <ul class="simple">
-<li><p>source region file</p></li>
-<li><p>background region file</p></li>
-<li><p>contaminant exclusions embedded in the region expressions</p></li>
-<li><p>a summary dictionary from the Python API</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source.reg</span></code></p>
+<ul>
+<li><p>DS9/XSELECT-readable source extraction region</p></li>
+<li><p>centered on the adopted target coordinate</p></li>
+<li><p>in current practice, this is written as a plain source aperture without
+carved source exclusions, because complex source-region geometry can confuse
+downstream <code class="docutils literal notranslate"><span class="pre">fxtarfgen</span></code></p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">background.reg</span></code></p>
+<ul>
+<li><p>DS9/XSELECT-readable background annulus region</p></li>
+<li><p>includes contaminating-source exclusion regions where needed</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fxtregions.log</span></code></p>
+<ul>
+<li><p>CLI log file</p></li>
+<li><p>by default this is written beside the requested output region files</p></li>
+</ul>
+</li>
+</ul>
+<p>The Python API also returns a richer summary dictionary from
+<code class="docutils literal notranslate"><span class="pre">build_regions(...)</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>region_info
+|-- context
+|-- source_region
+|-- background_region
+|-- source_excludes
+|-- background_excludes
+|-- source_radius_arcsec
+|-- background_inner_arcsec
+|-- background_outer_arcsec
+|-- pixel_scale_arcsec
+|-- theta_arcmin
+|-- psf_r90_arcsec
+|-- psf_r99_arcsec
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">context</span></code></p>
+<ul>
+<li><p>matched/adopted target information, effective mode, local background mode,
+and matched-source metadata</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source_region</span></code></p>
+<ul>
+<li><p>DS9 region expression for the source aperture</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">background_region</span></code></p>
+<ul>
+<li><p>DS9 region expression for the background annulus</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source_excludes</span></code></p>
+<ul>
+<li><p>contaminant exclusions derived for the source region logic</p></li>
+<li><p>currently useful mainly for diagnostics, since the written source region is
+intentionally kept simple for ARF compatibility</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">background_excludes</span></code></p>
+<ul>
+<li><p>contaminant exclusions applied to the background region</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source_radius_arcsec</span></code></p>
+<ul>
+<li><p>final source extraction radius</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">background_inner_arcsec</span></code></p>
+<ul>
+<li><p>final background annulus inner radius</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">background_outer_arcsec</span></code></p>
+<ul>
+<li><p>final background annulus outer radius</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pixel_scale_arcsec</span></code></p>
+<ul>
+<li><p>inferred image pixel scale</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">theta_arcmin</span></code></p>
+<ul>
+<li><p>target off-axis angle in arcminutes</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">psf_r90_arcsec</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_r99_arcsec</span></code></p>
+<ul>
+<li><p>local PSF reference radii used when choosing automatic apertures</p></li>
+</ul>
+</li>
 </ul>
 </section>
 <section id="visualization">
@@ -1029,9 +1252,10 @@ window.runMermaid = runMermaid;</script>
 <section id="matching">
 <h3>Matching<a class="headerlink" href="#matching" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">MATCH_THRESHOLD_ARCSEC</span> <span class="pre">=</span> <span class="pre">15.0</span></code></p>
+<li><p><code class="docutils literal notranslate"><span class="pre">FXT_POSITION_ERR90_ARCSEC</span> <span class="pre">=</span> <span class="pre">8.6</span></code></p>
 <ul>
-<li><p>Maximum separation for declaring that the requested target is detected in the catalog.</p></li>
+<li><p>Representative EP-FXT source-position accuracy at 90% confidence.</p></li>
+<li><p>Used as the default target-to-catalog matching threshold.</p></li>
 </ul>
 </li>
 </ul>
@@ -1149,20 +1373,20 @@ window.runMermaid = runMermaid;</script>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="fxteefmap.html"
+       href="fxtsrcdet.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p>
       </div>
     </a>
     <a class="right-next"
-       href="fxtcombine.html"
+       href="fxteefmap.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

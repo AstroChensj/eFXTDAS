@@ -25,6 +25,8 @@ fxtcombine /data/epfxt \
   --obsid-lst 02001234567,02001234568 \
   --ra 9.25937 \
   --dec 9.16681 \
+  --image-energy-ranges "0.3:10.0,10.0:12.0" \
+  --lightcurve-energy-ranges "0.3:10.0,10.0:12.0" \
   --out-dir combine_out
 ```
 
@@ -35,6 +37,8 @@ fxtcombine /data/epfxt \
   --obsid-lst obsids.txt \
   --ra 9.25937 \
   --dec 9.16681 \
+  --image-energy-ranges "0.3:10.0,10.0:12.0" \
+  --lightcurve-energy-ranges "0.3:10.0,10.0:12.0" \
   --out-dir combine_out \
   --skip-existing
 ```
@@ -53,37 +57,67 @@ fxtcombine_pipeline(
     module="a,b",
     datamode="ff",
     datatype="evt",
+    image_energy_ranges="0.3:10.0,10.0:12.0",
+    lightcurve_energy_ranges="0.3:10.0,10.0:12.0",
+    skip_existing=False,
 )
 ```
 
 ### Inputs
 
-- source directory with one subdirectory per OBSID
-- target `RA`, `Dec`
-- one or more OBSIDs, passed either as a comma-separated list or a file
-- optional module / datamode / datatype filtering
+- required path-like inputs:
+  - source directory: `src_dir`
+    - one subdirectory per OBSID
+    - each OBSID directory is expected to follow the standard FXT archive
+      layout used by `get_input_files()`
+  - OBSID selection: `--obsid-lst`
+    - either a comma-separated OBSID list or a file containing one OBSID per
+      line
+    - only OBSIDs that both appear in `obsid_lst` and exist under `src_dir`
+      are processed
+  - output directory: `--out-dir`
+    - root directory for all per-OBSID and stacked products
+- required target inputs:
+  - `--ra`
+  - `--dec`
+- optional event-selection inputs:
+  - `--module`
+  - `--datamode`
+  - `--datatype`
+  - `--grade`
+  - `--expr`
+- Stage-1 image and light-curve controls:
+  - `--image-energy-ranges`
+    - comma-separated energy ranges in keV such as `0.3:10.0,10.0:12.0`
+    - each range is converted internally to the corresponding PI/channel range
+      for the relevant FXT module and then applied through `xselect`
+    - one image is generated per range
+    - the first requested image band is used by default for later stacked source
+      detection, and its `emin`/`emax` are also passed to `fxteefmap`,
+      `fxtsrcdet`, and `fxtregions`
+  - `--lightcurve-energy-ranges`
+    - comma-separated energy ranges in keV such as `0.1:12.0,10.0:12.0`
+    - each range is converted internally to the corresponding PI/channel range
+      for the relevant FXT module and then applied through `xselect`
+    - one whole-field light curve is generated per range
+- workflow controls:
+  - `--skip-existing`
+  - `--log-level`
+  - `--log-file`
 
 ### Outputs
 
+`fxtcombine` writes a directory tree under `out_dir` that contains:
+
 - per-OBSID intermediate products under `<out-dir>/<OBSID>/products/`
-- stacked imaging products under `<out-dir>/stack/`
-- stacked source catalog and region products
-- final stacked spectrum products from `runXstack`
-- summary JSON and per-step logs
+- stacked imaging / region / spectral products under `<out-dir>/stack/`
+- summary files such as `all_obsid.json` and `all_obsid.filelist`
+- main and per-step log files
 
-Typical stacked products include:
+The full output layout, including the relationship between `src_dir`,
+`obsid_lst`, and `out_dir`, is shown in the next section:
 
-- `evt_stack_cts.fits`
-- `evt_stack_exp.fits`
-- `evt_stack_rate.fits`
-- `stack_src.fits`
-- `stack_src.reg`
-- `target_src.reg`
-- `target_bkg.reg`
-- `stack_pi.fits`
-- `stack_bkgpi.fits`
-- `stack_rmf.fits`
-- `stack_arf.fits`
+- [Output Data Structure](#output-data-structure)
 
 ## Output Data Structure
 
@@ -102,8 +136,8 @@ If the user runs:
 fxtcombine <src_dir> \
   --obsid-lst 11900458112,11900465408 \
   --out-dir <out_dir> \
-  --image-channel-ranges 38:925,100:300 \
-  --lightcurve-channel-ranges 0:1023,100:300
+  --image-energy-ranges 0.3:10.0,1.0:3.0 \
+  --lightcurve-energy-ranges 0.1:12.0,1.0:3.0
 ```
 
 then the layout is conceptually:
@@ -129,10 +163,12 @@ then the layout is conceptually:
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.gti
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_cl.fits
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.expo
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0038_0925.img
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0100_0300.img
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0000_1023.lc
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_ch0100_0300.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e00300_10000.eef
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.eef
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e00300_10000.img
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.img
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e00100_12000.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.lc
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.fits
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.pi
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_bkg.pi
@@ -147,13 +183,16 @@ then the layout is conceptually:
 |   |-- products/
 |   |   |-- ... same product pattern as above ...
 |-- stack/
-|   |-- evt_stack_exp.fits
-|   |-- evt_stack_cts.fits
-|   |-- evt_stack_rate.fits
-|   |-- evt_ch0038_0925_stack_cts.fits
-|   |-- evt_ch0038_0925_stack_rate.fits
-|   |-- evt_ch0100_0300_stack_cts.fits
-|   |-- evt_stack_eef.fits
+|   |-- stack_exp.fits
+|   |-- stack_cts.fits
+|   |-- stack_rate.fits
+|   |-- stack_eef.fits
+|   |-- e00300_10000_stack_cts.fits
+|   |-- e00300_10000_stack_rate.fits
+|   |-- e00300_10000_stack_eef.fits
+|   |-- e01000_03000_stack_cts.fits
+|   |-- e01000_03000_stack_rate.fits
+|   |-- e01000_03000_stack_eef.fits
 |   |-- stack_src.fits
 |   |-- stack_src.reg
 |   |-- stack_bkgmap.fits
@@ -184,25 +223,29 @@ then the layout is conceptually:
 
 ### Multi-Band Image and Light-Curve Products
 
-When multiple channel ranges are requested:
+When multiple energy ranges are requested:
 
 - each Stage-1 image band gets its own file:
-  - `..._ch0038_0925.img`
-  - `..._ch0100_0300.img`
+  - `..._e00300_10000.img`
+  - `..._e01000_03000.img`
+- each Stage-1 image band also gets its own EEF bundle:
+  - `..._e00300_10000.eef`
+  - `..._e01000_03000.eef`
 - each Stage-1 light-curve band gets its own file:
-  - `..._ch0000_1023.lc`
-  - `..._ch0100_0300.lc`
+  - `..._e00100_12000.lc`
+  - `..._e01000_03000.lc`
 
 For stacking:
 
 - the first requested image band is treated as the default detection band
 - that default band is written twice:
   - legacy names:
-    - `evt_stack_cts.fits`
-    - `evt_stack_rate.fits`
+    - `stack_cts.fits`
+    - `stack_rate.fits`
   - explicit band-labelled names:
-    - `evt_ch0038_0925_stack_cts.fits`
-    - `evt_ch0038_0925_stack_rate.fits`
+    - `e00300_10000_stack_cts.fits`
+    - `e00300_10000_stack_rate.fits`
+    - `e00300_10000_stack_eef.fits`
 - additional image bands are written only with explicit band labels
 
 ### The Summary JSON Structure
@@ -217,14 +260,24 @@ all_obsid.json
 |   |   |   |-- clevt
 |   |   |   |-- image
 |   |   |   |-- images
-|   |   |   |   |-- ch0038_0925
-|   |   |   |   |-- ch0100_0300
+|   |   |   |   |-- e00300_10000
+|   |   |   |   |-- e01000_03000
+|   |   |   |-- image_band_channels
+|   |   |   |   |-- e00300_10000
+|   |   |   |   |-- e01000_03000
 |   |   |   |-- vexpmap
+|   |   |   |-- eefmap
+|   |   |   |-- eefmaps
+|   |   |   |   |-- e00300_10000
+|   |   |   |   |-- e01000_03000
 |   |   |   |-- exp
 |   |   |   |-- alllc
 |   |   |   |-- lightcurves
-|   |   |   |   |-- ch0000_1023
-|   |   |   |   |-- ch0100_0300
+|   |   |   |   |-- e00100_12000
+|   |   |   |   |-- e01000_03000
+|   |   |   |-- lightcurve_band_channels
+|   |   |   |   |-- e00100_12000
+|   |   |   |   |-- e01000_03000
 |   |   |   |-- srcpi
 |   |   |   |-- bkgpi
 |   |   |   |-- srclc
@@ -237,8 +290,10 @@ Important conventions:
 
 - `image` is always the first requested image band
 - `images` stores all requested image bands
+- `image_band_channels` stores the per-module PI/channel ranges derived from the requested image energy bands
 - `alllc` is always the first requested light-curve band
 - `lightcurves` stores all requested light-curve bands
+- `lightcurve_band_channels` stores the per-module PI/channel ranges derived from the requested light-curve energy bands
 - `srcpi`, `bkgpi`, `arf`, and `rmf` appear only after Stage 4
 
 ## Detailed Algorithm and How It Works
@@ -255,9 +310,10 @@ For each selected OBSID and each selected event file:
 6. run `fxtgtigen`
 7. run `xselect` to produce:
    - clean events
-   - a 0.3-10 keV image
-   - a whole-field light curve
+   - one image per requested image energy band
+   - one whole-field light curve per requested light-curve energy band
 8. run `fxtexpogen` to produce a vignetted exposure map
+9. run `fxteefmap` on each requested image energy band to produce one per-OBSID EEF bundle per band
 
 This stage creates the per-OBSID products that are later stacked.
 
@@ -277,10 +333,11 @@ The stacked outputs are written separately for each requested datatype such as `
 
 After the stacked `evt` products are written:
 
-1. `fxtcombine` calls `fxtsrcdet`
-2. `fxtsrcdet` writes the stacked source catalog and source region file
-3. `fxtcombine` calls `fxtregions`
-4. `fxtregions` writes the source and background extraction region files
+1. `fxtcombine` uses the first requested stacked image band and the corresponding stacked EEF bundle
+2. `fxtcombine` calls `fxtsrcdet`
+3. `fxtsrcdet` writes the stacked source catalog and source region file
+4. `fxtcombine` calls `fxtregions`
+5. `fxtregions` writes the source and background extraction region files
 
 The current `fxtcombine` usage of `fxtregions` is in `manual` mode, with fixed source and background radii:
 
