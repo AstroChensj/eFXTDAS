@@ -74,6 +74,9 @@ class PipelineConfig:
         Lower energy bound in keV.
     emax_keV : float | None
         Upper energy bound in keV.
+    background_sigma_grid : tuple[float, ...]
+        Gaussian smoothing scales in pixels available to the adaptive
+        background model.
     scales : tuple[float, ...]
         Wavelet scales in pixels.
     sigthresh : float
@@ -111,6 +114,10 @@ class PipelineConfig:
         Whether CSV output should include internal/debug columns.
     eefmap : Path | None
         Optional precomputed EEF-radius map product from ``fxteefmap``.
+    analysis_mask : Path | None
+        Optional user-supplied boolean analysis mask FITS image. Non-zero
+        pixels are treated as globally valid for detection, background
+        estimation, and fitting.
     logger : logging.Logger | None
         Optional logger used for stage-by-stage pipeline messages. If omitted,
         the pipeline falls back to plain ``print``.
@@ -121,6 +128,7 @@ class PipelineConfig:
     filter_name: str | None = None
     emin_keV: float | None = None
     emax_keV: float | None = None
+    background_sigma_grid: tuple[float, ...] = (4.0, 8.0, 16.0, 32.0, 64.0)
     scales: tuple[float, ...] = (1.0, 2.0, 4.0, 8.0, 16.0)
     sigthresh: float = 1e-6
     bkgsigthresh: float = 1e-3
@@ -138,18 +146,21 @@ class PipelineConfig:
     prune_sources: bool = True
     debug_columns: bool = False
     eefmap: Path | None = None
+    analysis_mask: Path | None = None
     logger: logging.Logger | None = None
 
 
 def fxtsrcdet_pipeline(
     image: np.ndarray | str | Path,
     exposure: np.ndarray | str | Path | None = None,
+    analysis_mask: np.ndarray | str | Path | None = None,
     wcs: Any | None = None,
     mission: str = "ep-fxt",
     instrument: str | None = None,
     filter_name: str | None = None,
     emin_keV: float | None = None,
     emax_keV: float | None = None,
+    background_sigma_grid: Iterable[float] = (4.0, 8.0, 16.0, 32.0, 64.0),
     scales: Iterable[float] = (1.0, 2.0, 4.0, 8.0, 16.0),
     sigthresh: float = 1e-6,
     bkgsigthresh: float = 1e-3,
@@ -178,6 +189,9 @@ def fxtsrcdet_pipeline(
         Input counts image array or image-file path.
     exposure : np.ndarray | str | Path | None
         Optional exposure map array or file path matched to ``image``.
+    analysis_mask : np.ndarray | str | Path | None
+        Optional user-supplied boolean analysis mask array or file path matched
+        to ``image``.
     wcs : Any | None
         Optional celestial WCS for sky-coordinate outputs.
     mission : str
@@ -190,6 +204,9 @@ def fxtsrcdet_pipeline(
         Lower image energy bound in keV.
     emax_keV : float | None
         Upper image energy bound in keV.
+    background_sigma_grid : Iterable[float]
+        Gaussian smoothing scales in pixels available to the adaptive
+        background model.
     scales : Iterable[float]
         Wavelet scales in pixels.
     sigthresh : float
@@ -348,6 +365,7 @@ def fxtsrcdet_pipeline(
         filter_name=filter_name,
         emin_keV=emin_keV,
         emax_keV=emax_keV,
+        background_sigma_grid=tuple(float(sigma) for sigma in background_sigma_grid),
         scales=tuple(float(scale) for scale in scales),
         sigthresh=sigthresh,
         bkgsigthresh=bkgsigthresh,
@@ -365,6 +383,7 @@ def fxtsrcdet_pipeline(
         prune_sources=prune_sources,
         debug_columns=debug_columns,
         eefmap=None if eefmap is None else Path(eefmap),
+        analysis_mask=None if analysis_mask is None else Path(analysis_mask),
         logger=logger,
     )
     active_logger = cfg.logger
@@ -374,21 +393,26 @@ def fxtsrcdet_pipeline(
     emit(active_logger, "info", "**** Input Checklist ****")
     emit(active_logger, "info", f"  image = {image}")
     emit(active_logger, "info", f"  exposure = {exposure if exposure is not None else 'None'}")
+    emit(active_logger, "info", f"  analysis mask = {analysis_mask if analysis_mask is not None else cfg.analysis_mask if cfg.analysis_mask is not None else 'None'}")
     emit(active_logger, "info", f"  wcs supplied = {'yes' if wcs is not None else 'no'}")
     emit(active_logger, "info", f"  mission = {cfg.mission}")
     emit(active_logger, "info", f"  instrument = {cfg.instrument if cfg.instrument is not None else 'None'}")
     emit(active_logger, "info", f"  filter = {cfg.filter_name if cfg.filter_name is not None else 'None'}")
     emit(active_logger, "info", f"  energy band = {cfg.emin_keV} to {cfg.emax_keV} keV")
+    emit(active_logger, "info", f"  background sigma grid = {', '.join(f'{sigma:g}' for sigma in cfg.background_sigma_grid)}")
     emit(active_logger, "info", f"  scales = {', '.join(f'{scale:g}' for scale in cfg.scales)}")
     emit(active_logger, "info", f"  eef map = {cfg.eefmap if cfg.eefmap is not None else 'None'}")
     emit(active_logger, "info", f"  include background rows = {cfg.include_background}")
     emit(active_logger, "info", f"  prune nearby sources = {cfg.prune_sources}")
     emit(active_logger, "info", f"  debug columns = {cfg.debug_columns}")
 
-    image_data, exposure_data, wcs = load_pipeline_inputs(image, exposure, wcs)
+    mask_input = analysis_mask if analysis_mask is not None else cfg.analysis_mask
+    image_data, exposure_data, analysis_mask_data, wcs = load_pipeline_inputs(image, exposure, mask_input, wcs)
     emit(active_logger, "info", f"Loaded image with shape={image_data.shape}")
     if exposure_data is None:
         emit(active_logger, "warning", "No exposure map supplied; exposure-aware masking and photometry will be less reliable")
+    if analysis_mask_data is not None:
+        emit(active_logger, "info", f"Loaded analysis mask with {int(np.count_nonzero(analysis_mask_data))} valid pixel(s)")
     if wcs is None:
         emit(active_logger, "warning", "No celestial WCS available; sky coordinates and sky regions will be unavailable")
 
@@ -413,6 +437,7 @@ def fxtsrcdet_pipeline(
     rows, per_scale, agg_mask, best_sig = detect_sources(
         image=image_data,
         exposure=exposure_data,
+        analysis_mask=analysis_mask_data,
         scales=cfg.scales,
         sigthresh=cfg.sigthresh,
         bkgsigthresh=cfg.bkgsigthresh,
@@ -439,9 +464,11 @@ def fxtsrcdet_pipeline(
         psf_context=psf_context,
         pixel_scale_arcsec=pixel_scale_arcsec,
         exposure_map=exposure_data,
+        analysis_mask=analysis_mask_data,
         expthresh=cfg.expthresh,
         optaxis_x=cfg.optaxis_x,
         optaxis_y=cfg.optaxis_y,
+        sigma_grid=cfg.background_sigma_grid,
         eef_radius_maps=eef_radius_maps,
     )
     valid_background = background_map[np.isfinite(background_map) & (background_map > 0.0)]
@@ -469,6 +496,7 @@ def fxtsrcdet_pipeline(
         psf_context=psf_context,
         background_map=background_map,
         exposure_map=exposure_data,
+        analysis_mask=analysis_mask_data,
         expthresh=cfg.expthresh,
         optaxis_x=cfg.optaxis_x,
         optaxis_y=cfg.optaxis_y,
@@ -508,7 +536,13 @@ def fxtsrcdet_pipeline(
     rows = augment_rows_with_wcs(rows, wcs)
 
     #--- finalize catalog columns
-    rows = finalize_catalog_columns(rows=rows, exposure=exposure_data, pixel_scale_arcsec=pixel_scale_arcsec, ecf=cfg.ecf)
+    rows = finalize_catalog_columns(
+        rows=rows,
+        exposure=exposure_data,
+        analysis_mask=analysis_mask_data,
+        pixel_scale_arcsec=pixel_scale_arcsec,
+        ecf=cfg.ecf,
+    )
     
     #--- optionally prune sources
     if cfg.prune_sources:
@@ -538,6 +572,7 @@ def fxtsrcdet_pipeline(
         "agg_mask": agg_mask,                       # a rough aggregated source mask at initial wavelet stage
         "best_sig": best_sig,                       # best smallest significance value seen at each pixel across all scales
         "background_map": background_map,           # source-carved and smoothed background map
+        "analysis_mask": analysis_mask_data,        # user-supplied global analysis-validity mask
         "psf_context": psf_context,                 # mission-specific PSF context
         "pixel_scale_arcsec": pixel_scale_arcsec,   # arcsec/pixel
     }
@@ -551,12 +586,23 @@ def _parse_scales(raw: str) -> list[float]:
     return vals
 
 
+def _parse_background_sigma_grid(raw: str) -> list[float]:
+    """Parse a user-provided background sigma grid."""
+    vals = [float(x) for x in raw.replace(",", " ").split()]
+    if not vals:
+        raise ValueError("At least one background smoothing scale is required.")
+    if any(val <= 0 for val in vals):
+        raise ValueError("All background smoothing scales must be > 0.")
+    return vals
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line parser for the detector."""
     p = argparse.ArgumentParser(description="wavdetect-style multi-scale X-ray source detection in pure Python")
     #--- basic parameters
     p.add_argument("image", type=Path, help="Input FITS image")
     p.add_argument("--expmap", type=Path, default=None, help="Exposure map FITS image")
+    p.add_argument("--mask", type=Path, default=None, help="Optional user-supplied boolean analysis mask FITS image; non-zero pixels are treated as globally valid")
     #--- psf-related parameters
     p.add_argument("--eefmap", type=Path, default=None, help="Optional precomputed EEF-radius map product from ``fxteefmap`` to compute PSF-aware source apertures")
     p.add_argument("--mission", type=str, default="ep-fxt", help="Mission name to construct spatial-dependent PSF if ``eefmap`` not provided, defaults to ep-fxt")
@@ -566,6 +612,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--emax", type=float, default=None, help="Upper image energy bound in keV to construct spatial-dependent PSF if ``eefmap`` not provided")
     p.add_argument("--optaxis-x", type=float, default=None, help="Optical-axis X position in 1-based image pixels; defaults to image center")
     p.add_argument("--optaxis-y", type=float, default=None, help="Optical-axis Y position in 1-based image pixels; defaults to image center")
+    p.add_argument("--background-sigma-grid", type=str, default="4,8,16,32,64", help="Gaussian smoothing scales in pixels available to the adaptive background model, e.g. '4,8,16,32,64'")
     #--- wavelet detection parameters
     p.add_argument("--scales", type=str, default="1 2 4 8 16", help="Wavelet scales in pixels, e.g. '1 2 4 8 16'")
     p.add_argument("--sigthresh", type=float, default=1e-6, help="Detection significance threshold at wavelet stage")
@@ -607,6 +654,7 @@ def main() -> None:
         filter_name=args.filter,
         emin_keV=args.emin,
         emax_keV=args.emax,
+        background_sigma_grid=tuple(_parse_background_sigma_grid(args.background_sigma_grid)),
         scales=tuple(_parse_scales(args.scales)),
         sigthresh=args.sigthresh,
         bkgsigthresh=args.bkgsigthresh,
@@ -621,12 +669,13 @@ def main() -> None:
         optaxis_x=args.optaxis_x,
         optaxis_y=args.optaxis_y,
         eefmap=args.eefmap,
+        analysis_mask=args.mask,
         include_background=args.include_background,
         prune_sources=not args.no_prune_sources,
         debug_columns=args.debug_columns,
         logger=cli_logger,
     )
-    result = fxtsrcdet_pipeline(image=args.image, exposure=args.expmap, config=config)
+    result = fxtsrcdet_pipeline(image=args.image, exposure=args.expmap, analysis_mask=args.mask, config=config)
     rows = result["rows"]
     write_sources_fits(args.out, rows, debug_columns=config.debug_columns)
     write_ds9_regions(args.regfile, rows)

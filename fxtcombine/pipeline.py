@@ -33,7 +33,8 @@ from fxtcombine.utils.image import reproject_events_xy_to_refwcs
 def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
 		out_dir="./",module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",
-		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",skip_existing=False,
+		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
+		mask_expfrac=0.3,srcdet_background_sigma_grid="4,8,16,32,64",skip_existing=False,
 		logger: logging.Logger | None = None,
 	):
 	"""Combine multiple EP-FXT observations into stacked images and spectra.
@@ -69,6 +70,13 @@ def fxtcombine_pipeline(
 	lightcurve_energy_ranges : str | list[tuple[float, float]], optional
 		Comma-separated energy ranges in keV used to generate light curves during
 		Stage 1.
+	mask_expfrac : float, optional
+		Minimum stacked exposure, expressed as a fraction of the maximum stacked
+		exposure, required for a pixel to remain valid in the stacked mask passed
+		to ``fxtsrcdet``.
+	srcdet_background_sigma_grid : str | list[float], optional
+		Gaussian smoothing scales in pixels forwarded to ``fxtsrcdet`` for its
+		adaptive background model.
 	skip_existing : bool, optional
 		When ``True``, reuse existing intermediate products where supported.
 		When ``False``, rerun all steps.
@@ -107,6 +115,8 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Source coordinate is: ICRS({ra}, {dec})")
 	emit(main_logger, "info", f"Image energy ranges are: {image_energy_ranges}")
 	emit(main_logger, "info", f"Light-curve energy ranges are: {lightcurve_energy_ranges}")
+	emit(main_logger, "info", f"Stacked-mask minimum exposure fraction is: {mask_expfrac}")
+	emit(main_logger, "info", f"fxtsrcdet background sigma grid is: {srcdet_background_sigma_grid}")
 
 
 	#--- get obsid list
@@ -295,7 +305,7 @@ def fxtcombine_pipeline(
 		fits.writeto(exp_sum_fname,exp_sum,refexp.header,overwrite=True)
 		emit(main_logger, "info", f"Stacked exposure map written to {exp_sum_fname}")
 		
-		##--- reproject and stack eefmap
+		##--- reproject and stack eefmap for each requested energy range
 		if datatype == "evt":
 			stack_eefmap_map = {}
 			for energy_range in image_energy_ranges:
@@ -362,6 +372,35 @@ def fxtcombine_pipeline(
 			stack_image_default_fname = default_cts_sum_fname
 			stack_eefmap_default_fname = stack_eefmap_map[detection_image_suffix]
 
+	#--- generate stacked analysis mask for the default detection band
+	# emit(main_logger, "info", "**** Stage 2.5: generate stacked analysis mask ****")
+	stack_mask_fname = os.path.join(stack_dir, "stack_mask.fits")
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore", VerifyWarning)
+		warnings.simplefilter("ignore", FITSFixedWarning)
+		with fits.open(stack_image_default_fname) as hdu:
+			stack_image_data = np.asarray(hdu[0].data, dtype=np.float64)
+			stack_image_header = hdu[0].header.copy()
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore", VerifyWarning)
+		warnings.simplefilter("ignore", FITSFixedWarning)
+		with fits.open(stack_expmap_default_fname) as hdu:
+			stack_exp_data = np.asarray(hdu[0].data, dtype=np.float64)
+	finite_exp = stack_exp_data[np.isfinite(stack_exp_data)]
+	max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
+	exp_cut = float(mask_expfrac) * max_exp
+	stack_mask = (
+		np.isfinite(stack_image_data)
+		& np.isfinite(stack_exp_data)
+		& (stack_exp_data >= exp_cut)
+	)
+	fits.writeto(stack_mask_fname, stack_mask.astype(np.uint8), stack_image_header, overwrite=True)
+	emit(
+		main_logger,
+		"info",
+		f"Stacked analysis mask written to {stack_mask_fname} with threshold {exp_cut:.6g} ({mask_expfrac:.3f} of max exposure {max_exp:.6g})",
+	)
+	emit(main_logger, "info", f"Mask valid pixels: {int(np.count_nonzero(stack_mask))} / {int(stack_mask.size)}")
 
 	#--- source detection on stacked evt products and region generation
 	emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
@@ -376,10 +415,12 @@ def fxtcombine_pipeline(
 		"fxtsrcdet",
 		f'"{stack_image_fname}"',
 		"--expmap", f'"{stack_expmap_fname}"',
+		"--mask", f'"{stack_mask_fname}"',
 		"--eefmap", f'"{stack_eefmap_fname}"',
 		"--mission", "ep-fxt",
 		"--emin", f"{detect_emin}",
 		"--emax", f"{detect_emax}",
+		"--background-sigma-grid", f'"{srcdet_background_sigma_grid}"',
 		"--out", f'"{srcdet_src_fname}"',
 		"--regfile", f'"{srcdet_reg_fname}"',
 		"--save-bkgmap", f'"{srcdet_bkg_fname}"',
@@ -529,8 +570,19 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 	parser.add_argument(
 		"--lightcurve-energy-ranges",
-		default="0.3:10.0,10.0:12.0",
+		default="0.1:12.0",
 		help="Comma-separated energy ranges in keV used to generate Stage-1 light curves, e.g. 0.1:12.0,1.0:3.0.",
+	)
+	parser.add_argument(
+		"--mask-expfrac",
+		type=float,
+		default=0.3,
+		help="Minimum stacked exposure fraction, relative to the stacked exposure maximum, required to keep a pixel in the stacked analysis mask passed to fxtsrcdet. Default: 0.3",
+	)
+	parser.add_argument(
+		"--srcdet-background-sigma-grid",
+		default="4,8,16,32,64",
+		help="Gaussian smoothing scales in pixels forwarded to fxtsrcdet for adaptive background modeling. Default: '4,8,16,32,64'",
 	)
 	parser.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level for CLI and output log file")
 	parser.add_argument("--log-file", type=Path, default=None, help="Optional main log file path; defaults to <out-dir>/log/fxtcombine.log")
@@ -566,6 +618,8 @@ def main() -> None:
 		expr=args.expr,
 		image_energy_ranges=args.image_energy_ranges,
 		lightcurve_energy_ranges=args.lightcurve_energy_ranges,
+		mask_expfrac=args.mask_expfrac,
+		srcdet_background_sigma_grid=args.srcdet_background_sigma_grid,
 		skip_existing=args.skip_existing,
 		logger=cli_logger,
 	)

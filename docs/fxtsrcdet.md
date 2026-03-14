@@ -17,9 +17,6 @@ It performs:
 
 The implementation draws inspiration from CIAO `wavdetect` on the initial detection side and eSASS `ermldet` / `erbackmap` concepts on the source fitting and catalog side.
 
-TODO: add classification debug columns, extent_support, morph_extent_support, etc. 
-TODO: add logger.py for standard logger.
-
 ## Basic Usage
 
 ### Command-Line Usage
@@ -49,6 +46,7 @@ cfg = PipelineConfig(
     filter_name="open",
     emin_keV=0.3,
     emax_keV=10.0,
+    background_sigma_grid=(4, 8, 16, 32, 64),
 )
 
 result = fxtsrcdet_pipeline(
@@ -72,6 +70,10 @@ per_scale = result["per_scale"]
 - optional calibration / context inputs:
   - exposure map FITS: `--expmap`
     - used to define valid pixels and to make the background map exposure-aware
+  - user-supplied analysis mask FITS: `--mask`
+    - non-zero pixels are treated as globally valid
+    - this mask is applied consistently to detection, adaptive background
+      estimation, PSF-aware fitting, and final `maskfrac` diagnostics
   - precomputed multi-extension EEF-radius map from `fxteefmap`: `--eefmap`
     - when supplied, `fxtsrcdet` uses this directly for PSF-aware aperture and
       morphology work
@@ -83,6 +85,13 @@ per_scale = result["per_scale"]
     - `--emax`
     - these are used to construct the spatial PSF model if `--eefmap` is not
       provided
+  - adaptive background-model smoothing grid:
+    - `--background-sigma-grid`
+    - Gaussian smoothing scales in pixels available to the adaptive
+      background model
+    - default: `4,8,16,32,64`
+    - values below the internal floor are promoted to
+      `BACKGROUND_SIGMA_FLOOR_PIX = 4.0`
   - optional optical-axis override:
     - `--optaxis-x`
     - `--optaxis-y`
@@ -142,6 +151,7 @@ For a run such as:
 ```bash
 fxtsrcdet img.fits \
   --expmap expmap.fits \
+  --mask analysis_mask.fits \
   --out sources.fits \
   --regfile sources.reg \
   --sky-regfile sources_fk5.reg \
@@ -156,6 +166,7 @@ the output tree is conceptually:
 <working-directory>/
 |-- img.fits
 |-- expmap.fits
+|-- analysis_mask.fits
 |-- sources.fits
 |-- sources.reg
 |-- sources_fk5.reg
@@ -214,6 +225,7 @@ result
 |-- agg_mask
 |-- best_sig
 |-- background_map
+|-- analysis_mask
 |-- psf_context
 |-- pixel_scale_arcsec
 ```
@@ -231,6 +243,9 @@ where:
   - best significance map over all scales
 - `background_map`
   - final background model used by the fitting/classification stage
+- `analysis_mask`
+  - normalized user-supplied global validity mask, or `None` if no mask was
+    provided
 - `psf_context`
   - resolved mission/instrument/filter/energy PSF context
 - `pixel_scale_arcsec`
@@ -507,8 +522,6 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 #### Background-Map Construction
 
 - Carve detected sources out of the image before adaptive smoothing so source wings do not leak into the background model. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `max(BACKGROUND_CARVE_R90_FACTOR * psf_r90, BACKGROUND_CARVE_SCALE_FACTOR * scale, BACKGROUND_CARVE_MIN_RADIUS_PIX)`. Defaults: `BACKGROUND_CARVE_R90_FACTOR = 0.8`, `BACKGROUND_CARVE_SCALE_FACTOR = 1.5`, `BACKGROUND_CARVE_MIN_RADIUS_PIX = 3.5`.
-- Choose the preferred starting smoothing width for the adaptive background builder. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `smooth_sigma = DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX`. Defaults: `DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX = 6.0`.
-- Control which Gaussian smoothing scales are available to the adaptive background model. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `sorted({max(smooth_sigma, BACKGROUND_SIGMA_FLOOR_PIX), *BACKGROUND_SIGMA_GRID_PIX})`. Defaults: `BACKGROUND_SIGMA_FLOOR_PIX = 4.0`, `BACKGROUND_SIGMA_GRID_PIX = (4.0, 8.0, 16.0, 32.0)`.
 - Require a minimum number of effective source-free background counts before trusting a local smoothing scale. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `support >= BACKGROUND_TARGET_COUNTS`. Defaults: `BACKGROUND_TARGET_COUNTS = 100.0`.
 - Zero out pixels whose broadest-scale source-free support is still too poor for a reliable background estimate. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `support_ref > BACKGROUND_MIN_SUPPORT_WEIGHT`. Defaults: `BACKGROUND_MIN_SUPPORT_WEIGHT = 0.1`.
 - Prevent pathological spikes in the local background-rate estimate near carved holes or sharp exposure edges. Used in [`fxtsrcdet/background.py`](../fxtsrcdet/background.py) `create_background_map()`. Formula: `percentile(rate_samples, BACKGROUND_RATE_CAP_PERCENTILE) * BACKGROUND_RATE_CAP_FACTOR`. Defaults: `BACKGROUND_RATE_CAP_PERCENTILE = 99.9`, `BACKGROUND_RATE_CAP_FACTOR = 3.0`.
@@ -548,6 +561,12 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
 - the final public catalog region is circular
 - point sources use local `r75`
 - extended sources use fitted extended-model `r75`
+
+## Trouble shooting, and FAQ
+
+1. My detection map looks weird: at places where there look significant signal in the image, no detection is found there; however at places that look like pure background, detection is found.
+
+  - Diagnose the background map `stack_bkgmap.fits`, and/or correlation map (need to generate from Python usage), to see if it is wrong.
 
 ## Suggested Future Additions
 

@@ -43,11 +43,9 @@ BACKGROUND_CARVE_R90_FACTOR = 0.8
 BACKGROUND_CARVE_SCALE_FACTOR = 1.5
 BACKGROUND_CARVE_MIN_RADIUS_PIX = 3.5
 
-# The adaptive background smoother uses this preferred starting sigma, but it
-# always evaluates a grid of scales with at least the floor below.
-DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX = 6.0
+# The adaptive background smoother never evaluates sigmas below this floor,
+# even if the user supplies a smaller background-smoothing scale.
 BACKGROUND_SIGMA_FLOOR_PIX = 4.0
-BACKGROUND_SIGMA_GRID_PIX = (4.0, 8.0, 16.0, 32.0)
 
 # Each background pixel chooses the smallest smoothing scale that achieves this
 # approximate effective number of source-free background counts.

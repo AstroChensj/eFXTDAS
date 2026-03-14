@@ -91,15 +91,24 @@ def exposure_at_position(exposure: np.ndarray | None, x: float, y: float) -> flo
     return float(exposure[iy, ix])
 
 
-def mask_fraction(exposure: np.ndarray | None, x: float, y: float, radius_pix: float) -> float:
+def mask_fraction(
+    exposure: np.ndarray | None,
+    x: float,
+    y: float,
+    radius_pix: float,
+    valid_mask: np.ndarray | None = None,
+) -> float:
     """Approximate the valid-area fraction inside a source cutout."""
-    if exposure is None:
+    if valid_mask is None and exposure is None:
         return 1.0
-    pixels = aperture_pixels(exposure.shape, x - 1.0, y - 1.0, radius_pix)
+    ref_shape = valid_mask.shape if valid_mask is not None else exposure.shape
+    pixels = aperture_pixels(ref_shape, x - 1.0, y - 1.0, radius_pix)
     if len(pixels) == 0:
         return 0.0
     yy = pixels[:, 0]
     xx = pixels[:, 1]
+    if valid_mask is not None:
+        return float(np.count_nonzero(valid_mask[yy, xx]) / len(pixels))
     return float(np.count_nonzero(exposure[yy, xx] > 0) / len(pixels))
 
 

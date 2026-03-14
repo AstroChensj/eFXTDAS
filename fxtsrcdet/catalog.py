@@ -101,6 +101,7 @@ def classify_sources_with_psf(
     psf_context: MissionPSFContext,
     background_map: np.ndarray | None = None,
     exposure_map: np.ndarray | None = None,
+    analysis_mask: np.ndarray | None = None,
     expthresh: float = 0.0,
     optaxis_x: float | None = None,
     optaxis_y: float | None = None,
@@ -132,6 +133,9 @@ def classify_sources_with_psf(
     exposure_map : np.ndarray | None, optional
         Exposure map aligned with ``image``. Pixels with no valid exposure are excluded
         from local likelihood fits and radial-profile measurements.
+    analysis_mask : np.ndarray | None, optional
+        Optional boolean mask selecting globally valid pixels for background
+        estimation and local fits.
     expthresh : float, optional
         Relative exposure threshold used when deriving the validity mask from
         ``exposure_map``. Pixels with exposure below this fraction of the maximum are
@@ -192,6 +196,7 @@ def classify_sources_with_psf(
             psf_context,
             pixel_scale_arcsec,
             exposure_map=exposure_map,
+            analysis_mask=analysis_mask,
             expthresh=expthresh,
             optaxis_x=optaxis_x,
             optaxis_y=optaxis_y,
@@ -261,8 +266,14 @@ def classify_sources_with_psf(
         else:
             exp_stamp = None
             valid_mask = np.ones_like(data_stamp, dtype=bool)
+        if analysis_mask is not None:
+            mask_stamp = np.asarray(analysis_mask[y_min:y_min + data_stamp.shape[0], x_min:x_min + data_stamp.shape[1]], dtype=bool)
+            valid_mask &= mask_stamp
         if not np.any(valid_mask):
-            valid_mask = np.ones_like(data_stamp, dtype=bool)
+            if analysis_mask is not None and np.any(mask_stamp):
+                valid_mask = mask_stamp.copy()
+            else:
+                valid_mask = np.ones_like(data_stamp, dtype=bool)
 
         group_id = row_to_group.get(row_index, -1)
         group_members = groups[group_id] if group_id >= 0 else [row_index]
@@ -305,7 +316,14 @@ def classify_sources_with_psf(
         if np.any(neighbor_mask):
             valid_mask = valid_mask & (~neighbor_mask)
             if not np.any(valid_mask):
-                valid_mask = exp_stamp > 0.0 if exp_stamp is not None else np.ones_like(data_stamp, dtype=bool)
+                if exp_stamp is not None:
+                    valid_mask = exp_stamp > 0.0
+                    if analysis_mask is not None:
+                        valid_mask &= mask_stamp
+                elif analysis_mask is not None:
+                    valid_mask = mask_stamp.copy()
+                else:
+                    valid_mask = np.ones_like(data_stamp, dtype=bool)
 
         ##--- build local PSF image for fitting
         psf_kernel_nom = build_psf_kernel(radius_pix, frac) # build empirical psf kernel from eef curve
@@ -466,8 +484,14 @@ def classify_sources_with_psf(
             else:
                 exp_stamp = None
                 valid_mask = np.ones_like(data_stamp, dtype=bool)
+            if analysis_mask is not None:
+                mask_stamp = np.asarray(analysis_mask[y_min:y_min + data_stamp.shape[0], x_min:x_min + data_stamp.shape[1]], dtype=bool)
+                valid_mask &= mask_stamp
             if not np.any(valid_mask):
-                valid_mask = np.ones_like(data_stamp, dtype=bool)
+                if analysis_mask is not None and np.any(mask_stamp):
+                    valid_mask = mask_stamp.copy()
+                else:
+                    valid_mask = np.ones_like(data_stamp, dtype=bool)
 
             ##--- mask stronger out-of-group neighbors falling accidentally inside the grouped fit stamp
             neighbor_mask = np.zeros_like(valid_mask, dtype=bool)
@@ -502,7 +526,14 @@ def classify_sources_with_psf(
             if np.any(neighbor_mask):
                 valid_mask = valid_mask & (~neighbor_mask)
                 if not np.any(valid_mask):
-                    valid_mask = exp_stamp > 0.0 if exp_stamp is not None else np.ones_like(data_stamp, dtype=bool)
+                    if exp_stamp is not None:
+                        valid_mask = exp_stamp > 0.0
+                        if analysis_mask is not None:
+                            valid_mask &= mask_stamp
+                    elif analysis_mask is not None:
+                        valid_mask = mask_stamp.copy()
+                    else:
+                        valid_mask = np.ones_like(data_stamp, dtype=bool)
 
             ##--- create PSF templates for all group members
             templates: list[np.ndarray] = []
@@ -969,6 +1000,7 @@ def prune_nearby_sources(rows: list[CatalogRow]) -> list[CatalogRow]:
 def finalize_catalog_columns(
     rows: list[CatalogRow],
     exposure: np.ndarray | None,
+    analysis_mask: np.ndarray | None,
     pixel_scale_arcsec: float,
     ecf: float,
 ) -> list[CatalogRow]:
@@ -1039,6 +1071,18 @@ def finalize_catalog_columns(
         row.radec_err = math.hypot(ra_err, dec_err)
         row.ml_radius = float(row.ml_radius_pix * pixel_scale_arcsec)
         row.catalog_radius_arcsec = float(row.catalog_radius_pix * pixel_scale_arcsec)
-        row.maskfrac = mask_fraction(exposure, float(row.x_ima), float(row.y_ima), float(row.ml_radius_pix))
+        if exposure is not None:
+            effective_valid_mask = exposure > 0.0
+            if analysis_mask is not None:
+                effective_valid_mask &= np.asarray(analysis_mask, dtype=bool)
+        else:
+            effective_valid_mask = None if analysis_mask is None else np.asarray(analysis_mask, dtype=bool)
+        row.maskfrac = mask_fraction(
+            exposure,
+            float(row.x_ima),
+            float(row.y_ima),
+            float(row.ml_radius_pix),
+            valid_mask=effective_valid_mask,
+        )
         row.dist_nn = float(nn_arcsec[idx])
     return rows

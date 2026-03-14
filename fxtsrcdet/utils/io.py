@@ -35,8 +35,9 @@ def load_img(path: Path) -> np.ndarray:
 def load_pipeline_inputs(
     image: np.ndarray | str | Path,
     exposure: np.ndarray | str | Path | None,
+    analysis_mask: np.ndarray | str | Path | None,
     wcs: Any | None,
-) -> tuple[np.ndarray, np.ndarray | None, Any | None]:
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None, Any | None]:
     """Normalize file and array inputs into in-memory arrays.
 
     Parameters
@@ -45,36 +46,50 @@ def load_pipeline_inputs(
         Input counts image array or image-file path.
     exposure : np.ndarray | str | Path | None
         Optional exposure map array or file path matched to ``image``.
+    analysis_mask : np.ndarray | str | Path | None
+        Optional user-supplied analysis mask array or file path matched to
+        ``image``. Non-zero values are treated as valid pixels.
     wcs : Any | None
         Optional celestial WCS for sky-coordinate outputs.
 
     Returns
     -------
-    normalized_inputs : tuple[np.ndarray, np.ndarray | None, Any | None]
-        Tuple ``(image_data, exposure_data, wcs)`` ready for pipeline use.
+    normalized_inputs : tuple[np.ndarray, np.ndarray | None, np.ndarray | None, Any | None]
+        Tuple ``(image_data, exposure_data, analysis_mask_data, wcs)`` ready for
+        pipeline use.
     """
+    def _normalize_optional_array(
+        value: np.ndarray | str | Path | None,
+        *,
+        name: str,
+        as_bool: bool = False,
+    ) -> np.ndarray | None:
+        if value is None:
+            return None
+        if isinstance(value, (str, Path)):
+            array = load_img(Path(value))
+        elif isinstance(value, np.ndarray):
+            array = np.asarray(value)
+        else:
+            raise TypeError(f"{name} must be a numpy array, path-like, or None")
+        if as_bool:
+            return np.asarray(array != 0, dtype=bool)
+        return np.asarray(array, dtype=np.float64)
+
     if isinstance(image, (str, Path)):
         image_path = Path(image)
         image_data = load_img(image_path)
-        if exposure is not None and isinstance(exposure, (str, Path)):
-            exposure_data = load_img(Path(exposure))
-        elif exposure is not None and not isinstance(exposure, np.ndarray):
-            raise TypeError("exposure must be a numpy array, path-like, or None")
-        else:
-            exposure_data = None if exposure is None else np.asarray(exposure, dtype=np.float64)
+        exposure_data = _normalize_optional_array(exposure, name="exposure", as_bool=False)
+        analysis_mask_data = _normalize_optional_array(analysis_mask, name="analysis_mask", as_bool=True)
         if wcs is None:
             wcs = load_wcs(image_path)
     elif isinstance(image, np.ndarray):
         image_data = np.asarray(image, dtype=np.float64)
-        if exposure is not None and isinstance(exposure, (str, Path)):
-            exposure_data = load_img(Path(exposure))
-        elif exposure is not None and not isinstance(exposure, np.ndarray):
-            raise TypeError("exposure must be a numpy array, path-like, or None")
-        else:
-            exposure_data = None if exposure is None else np.asarray(exposure, dtype=np.float64)
+        exposure_data = _normalize_optional_array(exposure, name="exposure", as_bool=False)
+        analysis_mask_data = _normalize_optional_array(analysis_mask, name="analysis_mask", as_bool=True)
     else:
         raise TypeError("image must be a numpy array or path-like")
-    return image_data, exposure_data, wcs
+    return image_data, exposure_data, analysis_mask_data, wcs
 
 
 def load_header(path: Path) -> Any | None:

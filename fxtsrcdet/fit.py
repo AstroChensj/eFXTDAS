@@ -28,7 +28,9 @@ def cash_stat(data: np.ndarray, model: np.ndarray, valid_mask: np.ndarray | None
     model : np.ndarray
         Expected counts model on the same grid.
     valid_mask : np.ndarray | None
-        Optional boolean mask selecting valid fit pixels.
+        Optional boolean mask selecting valid fit pixels. Upstream callers may
+        combine exposure validity, a user-supplied analysis mask, and local
+        contamination exclusions before passing this mask in.
 
     Returns
     -------
@@ -83,7 +85,9 @@ def fit_amplitude_cash(
     exposure : np.ndarray | None
         Optional local exposure map used to truncate the template.
     valid_mask : np.ndarray | None
-        Optional boolean mask selecting valid fit pixels.
+        Optional boolean mask selecting valid fit pixels. Upstream callers may
+        combine exposure validity, a user-supplied analysis mask, and local
+        contamination exclusions before passing this mask in.
 
     Returns
     -------
@@ -143,7 +147,9 @@ def fit_point_position_cash(
     exposure : np.ndarray | None
         Optional local exposure stamp.
     valid_mask : np.ndarray | None
-        Optional boolean mask selecting valid fit pixels.
+        Optional boolean mask selecting valid fit pixels. Upstream callers may
+        combine exposure validity, a user-supplied analysis mask, and local
+        contamination exclusions before passing this mask in.
     max_shift : float
         Maximum allowed fit shift in pixels per axis.
 
@@ -194,7 +200,9 @@ def fit_extended_position_cash(
     exposure : np.ndarray | None
         Optional local exposure stamp.
     valid_mask : np.ndarray | None
-        Optional boolean mask selecting valid fit pixels.
+        Optional boolean mask selecting valid fit pixels. Upstream callers may
+        combine exposure validity, a user-supplied analysis mask, and local
+        contamination exclusions before passing this mask in.
     beta : float
         Beta-model slope parameter. Defaults to ``FIT_EXTENDED_BETA``, which
         is currently set to the standard conservative cluster-like value.
@@ -260,7 +268,9 @@ def fit_group_amplitudes_cash(
     exposure : np.ndarray | None
         Optional local exposure stamp.
     valid_mask : np.ndarray | None
-        Optional boolean mask selecting valid fit pixels.
+        Optional boolean mask selecting valid fit pixels. Upstream callers may
+        combine exposure validity, a user-supplied analysis mask, and local
+        contamination exclusions before passing this mask in.
 
     Returns
     -------

@@ -26,7 +26,7 @@ fxtcombine /data/epfxt \
   --ra 9.25937 \
   --dec 9.16681 \
   --image-energy-ranges "0.3:10.0,10.0:12.0" \
-  --lightcurve-energy-ranges "0.3:10.0,10.0:12.0" \
+  --lightcurve-energy-ranges "0.1:12.0,10.0:12.0" \
   --out-dir combine_out
 ```
 
@@ -38,7 +38,7 @@ fxtcombine /data/epfxt \
   --ra 9.25937 \
   --dec 9.16681 \
   --image-energy-ranges "0.3:10.0,10.0:12.0" \
-  --lightcurve-energy-ranges "0.3:10.0,10.0:12.0" \
+  --lightcurve-energy-ranges "0.1:12.0,10.0:12.0" \
   --out-dir combine_out \
   --skip-existing
 ```
@@ -58,7 +58,7 @@ fxtcombine_pipeline(
     datamode="ff",
     datatype="evt",
     image_energy_ranges="0.3:10.0,10.0:12.0",
-    lightcurve_energy_ranges="0.3:10.0,10.0:12.0",
+    lightcurve_energy_ranges="0.1:12.0,10.0:12.0",
     skip_existing=False,
 )
 ```
@@ -100,7 +100,18 @@ fxtcombine_pipeline(
     - each range is converted internally to the corresponding PI/channel range
       for the relevant FXT module and then applied through `xselect`
     - one whole-field light curve is generated per range
+  - `--mask-expfrac`
+    - minimum stacked exposure fraction, relative to the maximum of the
+      stacked exposure map, required to keep a pixel in the stacked analysis
+      mask
+    - pixels are also rejected if the default stacked count image or stacked
+      exposure map contains `NaN` or `Inf`
+    - the generated `stack_mask.fits` is passed directly to `fxtsrcdet`
 - workflow controls:
+  - `--srcdet-background-sigma-grid`
+    - Gaussian smoothing scales in pixels forwarded to `fxtsrcdet` for its
+      adaptive background model
+    - default: `4,8,16,32,64`
   - `--skip-existing`
   - `--log-level`
   - `--log-file`
@@ -117,7 +128,7 @@ fxtcombine_pipeline(
 The full output layout, including the relationship between `src_dir`,
 `obsid_lst`, and `out_dir`, is shown in the next section:
 
-- [Output Data Structure](#output-data-structure)
+- `Output Data Structure`
 
 ## Output Data Structure
 
@@ -169,7 +180,7 @@ then the layout is conceptually:
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.img
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e00100_12000.lc
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.lc
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.fits
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src_cl.fits
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.pi
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_bkg.pi
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.lc
@@ -187,6 +198,7 @@ then the layout is conceptually:
 |   |-- stack_cts.fits
 |   |-- stack_rate.fits
 |   |-- stack_eef.fits
+|   |-- stack_mask.fits
 |   |-- e00300_10000_stack_cts.fits
 |   |-- e00300_10000_stack_rate.fits
 |   |-- e00300_10000_stack_eef.fits
@@ -198,7 +210,6 @@ then the layout is conceptually:
 |   |-- stack_bkgmap.fits
 |   |-- target_src.reg
 |   |-- target_bkg.reg
-|   |-- fxteefmap.log
 |   |-- srcdet.log
 |   |-- fxtregions.log
 |   |-- stack_pi.fits
@@ -216,6 +227,8 @@ then the layout is conceptually:
   - original input archive for each observation
 - `out_dir/<obsid>/products/`
   - all per-OBSID intermediate and extracted products
+  - this includes the per-band `.img`, `.lc`, and `.eef` products plus
+    per-OBSID step logs under `products/log/`
 - `out_dir/stack/`
   - products derived from combining all valid OBSIDs together
 - `out_dir/all_obsid.json`
@@ -247,6 +260,9 @@ For stacking:
     - `e00300_10000_stack_rate.fits`
     - `e00300_10000_stack_eef.fits`
 - additional image bands are written only with explicit band labels
+- one stacked analysis mask is built from the default stacked count image and
+  stacked exposure map:
+  - `stack_mask.fits`
 
 ### The Summary JSON Structure
 
@@ -278,6 +294,7 @@ all_obsid.json
 |   |   |   |-- lightcurve_band_channels
 |   |   |   |   |-- e00100_12000
 |   |   |   |   |-- e01000_03000
+|   |   |   |-- srcclevt
 |   |   |   |-- srcpi
 |   |   |   |-- bkgpi
 |   |   |   |-- srclc
@@ -294,7 +311,7 @@ Important conventions:
 - `alllc` is always the first requested light-curve band
 - `lightcurves` stores all requested light-curve bands
 - `lightcurve_band_channels` stores the per-module PI/channel ranges derived from the requested light-curve energy bands
-- `srcpi`, `bkgpi`, `arf`, and `rmf` appear only after Stage 4
+- `srcclevt`, `srcpi`, `bkgpi`, `srclc`, `bkglc`, `arf`, and `rmf` appear only after Stage 4
 
 ## Detailed Algorithm and How It Works
 
@@ -334,10 +351,11 @@ The stacked outputs are written separately for each requested datatype such as `
 After the stacked `evt` products are written:
 
 1. `fxtcombine` uses the first requested stacked image band and the corresponding stacked EEF bundle
-2. `fxtcombine` calls `fxtsrcdet`
-3. `fxtsrcdet` writes the stacked source catalog and source region file
-4. `fxtcombine` calls `fxtregions`
-5. `fxtregions` writes the source and background extraction region files
+2. `fxtcombine` builds `stack_mask.fits` from the default stacked count image and stacked exposure map
+3. `fxtcombine` calls `fxtsrcdet`
+4. `fxtsrcdet` writes the stacked source catalog and source region file
+5. `fxtcombine` calls `fxtregions`
+6. `fxtregions` writes the source and background extraction region files
 
 The current `fxtcombine` usage of `fxtregions` is in `manual` mode, with fixed source and background radii:
 
