@@ -28,9 +28,13 @@ def _is_header_message(message: str) -> bool:
 class ColorFormatter(logging.Formatter):
     """ANSI-colored formatter for interactive terminal logs."""
 
+    def __init__(self, fmt: str, *, enable_color: bool) -> None:
+        super().__init__(fmt)
+        self.enable_color = enable_color
+
     def format(self, record: logging.LogRecord) -> str:
         message = super().format(record)
-        if not os.getenv("TERM") or os.getenv("NO_COLOR"):
+        if not self.enable_color or not os.getenv("TERM") or os.getenv("NO_COLOR"):
             return message
         if _is_header_message(record.getMessage()):
             color = CYAN if "=" in record.getMessage() else BOLD_WHITE
@@ -54,7 +58,9 @@ def _ensure_handler(
     """Attach one configured handler if an equivalent one is not already present."""
     handler.setLevel(level)
     if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
-        handler.setFormatter(ColorFormatter(fmt))
+        stream = getattr(handler, "stream", None)
+        enable_color = bool(getattr(stream, "isatty", lambda: False)())
+        handler.setFormatter(ColorFormatter(fmt, enable_color=enable_color))
     else:
         handler.setFormatter(logging.Formatter(fmt))
     logger.addHandler(handler)

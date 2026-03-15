@@ -592,8 +592,7 @@ def fxtcombine_pipeline(
 		"--nthreads","20",
 		"--same_target",	# activate same-target mode
 	])
-	runXstack_log = f"{stackpi_prefix}runXstack.log"
-	run_cmd(runXstack_cmd,logger=main_logger,logname=runXstack_log)
+	run_cmd(runXstack_cmd,logger=main_logger)
 	
 
 	#--- dump output to json file
@@ -723,4 +722,3 @@ if __name__ == "__main__":
 	main()
 
 
-combine_spec = fxtcombine_pipeline
