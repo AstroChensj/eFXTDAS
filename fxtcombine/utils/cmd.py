@@ -116,3 +116,24 @@ def remove_xselect_tmp_files(workdir="."):
 		tmp_path = os.path.join(workdir, tmp_fname)
 		if os.path.exists(tmp_path):
 			os.remove(tmp_path)
+
+
+def finalize_xselect_log(workdir, target_log):
+	"""Rename xselect's generic log into the pipeline-managed target log.
+
+	Parameters
+	----------
+	workdir : str
+		Working directory used for the xselect subprocess.
+	target_log : str
+		Stage-specific log filename tracked by the wrapper.
+
+	Returns
+	-------
+	None
+	"""
+	generic_log = os.path.join(workdir, "xselect.log")
+	if os.path.exists(generic_log):
+		if os.path.exists(target_log):
+			os.remove(target_log)
+		os.replace(generic_log, target_log)

@@ -5,7 +5,7 @@ Simplified version of FXTDAS FXTCHAIN.
 from astropy.io import fits
 from fxtcombine.utils.energy import energy_range_suffix, energy_range_to_channel_range
 from fxtcombine.utils.logger import emit
-from fxtcombine.utils.cmd import run_cmd, remove_xselect_tmp_files
+from fxtcombine.utils.cmd import finalize_xselect_log, run_cmd, remove_xselect_tmp_files
 import os
 import shutil
 import time
@@ -100,7 +100,7 @@ def fxtchain_obsid(
                     f"outfile={evt_coord_fname}","clobber=yes",
                 ])
                 emit(obsid_logger, "info", "Running fxtcoord ...")
-                fxtcoord_log = os.path.join(sub_log_dir,f"fxtcoord.log")
+                fxtcoord_log = os.path.join(sub_log_dir, f"fxtcoord_{datatype}.log")
                 run_cmd(fxtcoord_cmd, logger=obsid_logger, logname=fxtcoord_log, cwd=sub_log_dir)
 
             #--- run fxtpical
@@ -114,7 +114,7 @@ def fxtchain_obsid(
                     f"outfile={evt_pi_fname}",
                 ])
                 emit(obsid_logger, "info", "Running fxtpical ...")
-                fxtpical_log = os.path.join(sub_log_dir,f"fxtpical.log")
+                fxtpical_log = os.path.join(sub_log_dir, f"fxtpical_{datatype}.log")
                 run_cmd(fxtpical_cmd, logger=obsid_logger, logname=fxtpical_log, cwd=sub_log_dir)
 
             #--- run fxtparticleidentify
@@ -133,7 +133,7 @@ def fxtchain_obsid(
                     f"evtfile={evt_pi_fname}",f"xlength={x_length}",f"ylength={y_length}",
                     f"outfile={evt_particle_fname}",
                 ])
-                fxtparticleidentify_log = os.path.join(sub_log_dir,f"fxtparticleidentify.log")
+                fxtparticleidentify_log = os.path.join(sub_log_dir, f"fxtparticleidentify_{datatype}.log")
                 run_cmd(
                     fxtparticleidentify_cmd,
                     logger=obsid_logger,
@@ -152,7 +152,7 @@ def fxtchain_obsid(
                     f"outfile={evt_badpix_fname}",
                 ])
                 emit(obsid_logger, "info", "Running fxtbadpix ...")
-                fxtbadpix_log = os.path.join(sub_log_dir,f"fxtbadpix.log")
+                fxtbadpix_log = os.path.join(sub_log_dir, f"fxtbadpix_{datatype}.log")
                 run_cmd(fxtbadpix_cmd, logger=obsid_logger, logname=fxtbadpix_log, cwd=sub_log_dir)
 
             #--- run fxtgrade
@@ -166,7 +166,7 @@ def fxtchain_obsid(
                     f"outfile={evt_grade_fname}",
                 ])
                 emit(obsid_logger, "info", "Running fxtgrade ...")
-                fxtgrade_log = os.path.join(sub_log_dir,f"fxtgrade.log")
+                fxtgrade_log = os.path.join(sub_log_dir, f"fxtgrade_{datatype}.log")
                 run_cmd(fxtgrade_cmd, logger=obsid_logger, logname=fxtgrade_log, cwd=sub_log_dir)
 
 
@@ -181,7 +181,7 @@ def fxtchain_obsid(
                     f"outfile={gti_fname}",
                 ])
                 emit(obsid_logger, "info", "Running fxtgtigen ...")
-                fxtgtigen_log = os.path.join(sub_log_dir,f"fxtgtigen.log")
+                fxtgtigen_log = os.path.join(sub_log_dir, f"fxtgtigen_{datatype}.log")
                 run_cmd(fxtgtigen_cmd, logger=obsid_logger, logname=fxtgtigen_log, cwd=sub_log_dir)
 
             #--- run xselect for cleaned events and datatype-specific products
@@ -216,11 +216,11 @@ def fxtchain_obsid(
                         f.writelines([f"read events {os.path.basename(evt_grade_fname)}\n"])
                         f.writelines([f"yes\n"])
                         f.writelines([f"filter grade {grade}\n"])
-                        f.writelines([f"filter time file {os.path.basename(gti_fname)}\n"])
+                        f.writelines([f"filter time file {gti_fname}\n"])
                         f.writelines([f'select event "status==b0"\n'])
                         f.writelines([f"show status\n"])
                         f.writelines([f"extract events copyall=yes\n"])
-                        f.writelines([f"save events {evt_cl_fname} clobberit=yes\n"])
+                        f.writelines([f"save events {os.path.basename(evt_cl_fname)} clobberit=yes\n"])
                         f.writelines([f"no\n"])
                         f.writelines([f"clear all\n"])
                         f.writelines([f"yes\n"])
@@ -232,7 +232,7 @@ def fxtchain_obsid(
                             f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
                             f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
                             f.writelines([f"extract image xysize=601 xybinsize=1 xcenter=300 ycenter=300 copyall=yes\n"])
-                            f.writelines([f"save image {img_fname} clobberit=yes\n"])
+                            f.writelines([f"save image {os.path.basename(img_fname)} clobberit=yes\n"])
                             f.writelines([f"clear pha_cutoff\n"])
                             f.writelines([f"clear events\n"])
                         for energy_range in lightcurve_energy_ranges:
@@ -243,7 +243,7 @@ def fxtchain_obsid(
                             f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
                             f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
                             f.writelines([f"extract curve copyall=yes\n"])
-                            f.writelines([f"save curve {lc_fname} clobberit=yes\n"])
+                            f.writelines([f"save curve {os.path.basename(lc_fname)} clobberit=yes\n"])
                             f.writelines([f"clear pha_cutoff\n"])
                             f.writelines([f"clear events\n"])
                         f.writelines([f"clear all proceed=yes\n"])
@@ -253,6 +253,7 @@ def fxtchain_obsid(
                     emit(obsid_logger, "info", "Running xselect ...")
                     xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage1.log")
                     run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
+                    finalize_xselect_log(sub_log_dir, xselect_log)
 
                 exp_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.expo")
                 if os.path.exists(exp_fname) and skip_existing:
@@ -266,7 +267,7 @@ def fxtchain_obsid(
                         f"outfile={exp_fname}","clobber=yes"
                     ])
                     emit(obsid_logger, "info", "Running fxtexpogen ...")
-                    fxtexpogen_log = os.path.join(sub_log_dir,f"fxtexpogen.log")
+                    fxtexpogen_log = os.path.join(sub_log_dir, f"fxtexpogen_{datatype}.log")
                     run_cmd(fxtexpogen_cmd, logger=obsid_logger, logname=fxtexpogen_log, cwd=sub_log_dir)
 
                 eefmap_fname_map = {
@@ -294,7 +295,7 @@ def fxtchain_obsid(
                             "--emax", f"{emax}",
                         ])
                         emit(obsid_logger, "info", f"Running fxteefmap for {image_key} ...")
-                        fxteefmap_log = os.path.join(sub_log_dir,f"fxteefmap_{image_key}.log")
+                        fxteefmap_log = os.path.join(sub_log_dir, f"fxteefmap_{datatype}_{image_key}.log")
                         run_cmd(fxteefmap_cmd, logger=obsid_logger, logname=fxteefmap_log, cwd=sub_log_dir)
 
                 first_image_key = energy_range_suffix(image_energy_ranges[0])
@@ -327,23 +328,23 @@ def fxtchain_obsid(
                         f.writelines([f"read events {os.path.basename(evt_grade_fname)}\n"])
                         f.writelines([f"yes\n"])
                         f.writelines([f"filter grade {grade}\n"])
-                        f.writelines([f"filter time file {os.path.basename(gti_fname)}\n"])
+                        f.writelines([f"filter time file {gti_fname}\n"])
                         f.writelines([f'select event "status==b0"\n'])
                         f.writelines([f"show status\n"])
                         f.writelines([f"extract events copyall=yes\n"])
-                        f.writelines([f"save events {evt_cl_fname} clobberit=yes\n"])
+                        f.writelines([f"save events {os.path.basename(evt_cl_fname)} clobberit=yes\n"])
                         f.writelines([f"no\n"])
                         f.writelines([f"extract spectrum copyall=yes\n"])
-                        f.writelines([f"save spectrum {fsa_spec_fname} clobberit=yes\n"])
+                        f.writelines([f"save spectrum {os.path.basename(fsa_spec_fname)} clobberit=yes\n"])
                         f.writelines([f"filter pha_cutoff 38 925\n"])
                         f.writelines([f'filter column "DETX=3:382 DETY=3:382"\n'])
                         f.writelines([f"extract events copyall=yes\n"])
-                        f.writelines([f"save events {evt_cl_fname} clobberit=yes\n"])
+                        f.writelines([f"save events {os.path.basename(evt_cl_fname)} clobberit=yes\n"])
                         f.writelines([f"no\n"])
                         f.writelines([f"extract curve copyall=yes\n"])
-                        f.writelines([f"save curve {fsa_lc_fname} clobberit=yes\n"])
+                        f.writelines([f"save curve {os.path.basename(fsa_lc_fname)} clobberit=yes\n"])
                         f.writelines([f"extract image xysize=601 xybinsize=1 xcenter=300 ycenter=300 copyall=yes\n"])
-                        f.writelines([f"save image {fsa_img_fname} clobberit=yes\n"])
+                        f.writelines([f"save image {os.path.basename(fsa_img_fname)} clobberit=yes\n"])
                         f.writelines([f"clear all proceed=yes\n"])
                         f.writelines([f"quit\n"])
                         f.writelines([f"no\n"])
@@ -351,6 +352,7 @@ def fxtchain_obsid(
                     emit(obsid_logger, "info", "Running xselect for fsaevt ...")
                     xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage1.log")
                     run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
+                    finalize_xselect_log(sub_log_dir, xselect_log)
 
                 if os.path.exists(instbkg_pi_fname) and skip_existing:
                     emit(obsid_logger, "info", f"{instbkg_pi_fname} already exists.")
@@ -361,7 +363,7 @@ def fxtchain_obsid(
                         f"outfile={instbkg_pi_fname}",
                     ])
                     emit(obsid_logger, "info", "Running fxtbkggen ...")
-                    fxtbkggen_log = os.path.join(sub_log_dir,"fxtbkggen.log")
+                    fxtbkggen_log = os.path.join(sub_log_dir, f"fxtbkggen_{datatype}.log")
                     run_cmd(fxtbkggen_cmd, logger=obsid_logger, logname=fxtbkggen_log, cwd=sub_log_dir)
 
                 obsid_prod_dict[datatype][evt_fname_prefix]["fsa_spec"] = fsa_spec_fname
@@ -458,7 +460,7 @@ def fxt_extract_spec(
                     ##--- extract source events
                     f.writelines([f"filter region {src_reg_fname}\n"])  # use relpath would fail to load
                     f.writelines([f"extract events copyall=yes\n"])
-                    f.writelines([f"save events {srcevt_fname} clobberit=yes\n"])
+                    f.writelines([f"save events {os.path.basename(srcevt_fname)} clobberit=yes\n"])
                     f.writelines([f"no\n"])
                     f.writelines([f"clear all\n"])
                     f.writelines([f"yes\n"])
@@ -467,25 +469,25 @@ def fxt_extract_spec(
                     f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
                     f.writelines([f"filter region {src_reg_fname}\n"])
                     f.writelines([f"extract spectrum copyall=yes\n"])
-                    f.writelines([f"save spectrum {srcpi_fname} clobberit=yes\n"])
+                    f.writelines([f"save spectrum {os.path.basename(srcpi_fname)} clobberit=yes\n"])
                     f.writelines([f"clear region\n"])
                     ##--- extract background spectra
                     f.writelines([f"filter region {bkg_reg_fname}\n"])
                     f.writelines([f"extract spectrum copyall=yes\n"])
-                    f.writelines([f"save spectrum {bkgpi_fname} clobberit=yes\n"])
+                    f.writelines([f"save spectrum {os.path.basename(bkgpi_fname)} clobberit=yes\n"])
                     f.writelines([f"clear region\n"])
                     ##--- extract source light curve
                     f.writelines([f"filter region {src_reg_fname}\n"])
                     f.writelines([f"filter pha_cutoff {lc_chan_lo} {lc_chan_hi}\n"])
                     f.writelines([f"extract curve copyall=yes\n"])
-                    f.writelines([f"save curve {srclc_fname} clobberit=yes\n"])
+                    f.writelines([f"save curve {os.path.basename(srclc_fname)} clobberit=yes\n"])
                     f.writelines([f"clear region\n"])
                     f.writelines([f"clear pha_cutoff\n"])
                     ##--- extract background light curve
                     f.writelines([f"filter region {bkg_reg_fname}\n"])
                     f.writelines([f"filter pha_cutoff {lc_chan_lo} {lc_chan_hi}\n"])
                     f.writelines([f"extract curve copyall=yes\n"])
-                    f.writelines([f"save curve {bkglc_fname} clobberit=yes\n"])
+                    f.writelines([f"save curve {os.path.basename(bkglc_fname)} clobberit=yes\n"])
                     f.writelines([f"clear region\n"])
                     f.writelines([f"clear pha_cutoff\n"])
                     ##--- finish
@@ -496,6 +498,7 @@ def fxt_extract_spec(
                 emit(obsid_logger, "info", "Running xselect ...")
                 xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage4_spec.log")
                 run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
+                finalize_xselect_log(sub_log_dir, xselect_log)
 
             #--- run arfgen
             arf_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_src.arf")
