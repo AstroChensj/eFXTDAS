@@ -209,7 +209,7 @@ def fxtchain_obsid(
                 if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
                     emit(obsid_logger, "info", f"{evt_cl_fname} and all requested image/light-curve products already exist.")
                 else:
-                    remove_xselect_tmp_files(sub_log_dir)
+                    remove_xselect_tmp_files(obsid_out_dir)
                     with open(xsl_fname,"w") as f:
                         f.writelines([f"EP\n"])
                         f.writelines([f"set datadir {obsid_out_dir}\n"])
@@ -252,8 +252,8 @@ def fxtchain_obsid(
                     xsl_cmd = f"xselect @{xsl_fname}"
                     emit(obsid_logger, "info", "Running xselect ...")
                     xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage1.log")
-                    run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
-                    finalize_xselect_log(sub_log_dir, xselect_log)
+                    run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=obsid_out_dir)
+                    finalize_xselect_log(obsid_out_dir, xselect_log)
 
                 exp_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.expo")
                 if os.path.exists(exp_fname) and skip_existing:
@@ -321,7 +321,7 @@ def fxtchain_obsid(
                 if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
                     emit(obsid_logger, "info", f"{evt_cl_fname} and default FSA products already exist.")
                 else:
-                    remove_xselect_tmp_files(sub_log_dir)
+                    remove_xselect_tmp_files(obsid_out_dir)
                     with open(xsl_fname,"w") as f:
                         f.writelines([f"EP\n"])
                         f.writelines([f"set datadir {obsid_out_dir}\n"])
@@ -351,8 +351,8 @@ def fxtchain_obsid(
                     xsl_cmd = f"xselect @{xsl_fname}"
                     emit(obsid_logger, "info", "Running xselect for fsaevt ...")
                     xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage1.log")
-                    run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
-                    finalize_xselect_log(sub_log_dir, xselect_log)
+                    run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=obsid_out_dir)
+                    finalize_xselect_log(obsid_out_dir, xselect_log)
 
                 if os.path.exists(instbkg_pi_fname) and skip_existing:
                     emit(obsid_logger, "info", f"{instbkg_pi_fname} already exists.")
@@ -451,7 +451,7 @@ def fxt_extract_spec(
             if all(os.path.exists(path) for path in expected_spec_products) and skip_existing:
                 emit(obsid_logger, "info", "Source/background spectral-extraction products already exist.")
             else:
-                remove_xselect_tmp_files(sub_log_dir)
+                remove_xselect_tmp_files(obsid_out_dir)
                 with open(xsl_fname,"w") as f:
                     f.writelines([f"EP\n"])
                     f.writelines([f"set datadir {obsid_out_dir}\n"])
@@ -497,8 +497,8 @@ def fxt_extract_spec(
                 xsl_cmd = f"xselect @{xsl_fname}"
                 emit(obsid_logger, "info", "Running xselect ...")
                 xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage4_spec.log")
-                run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
-                finalize_xselect_log(sub_log_dir, xselect_log)
+                run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=obsid_out_dir)
+                finalize_xselect_log(obsid_out_dir, xselect_log)
 
             #--- run arfgen
             arf_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_src.arf")
