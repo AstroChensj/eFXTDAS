@@ -15,7 +15,7 @@ The current workflow:
 - runs `fxtregions` to generate source and background extraction regions
 - re-enters each OBSID to extract source/background spectra and response products from `evt`
 - calls external `runXstack` to build the final stacked source spectrum, background spectrum, RMF, and ARF
-- sums per-OBSID `fsaevt` instrumental-background spectra into a stacked `stack_instbkg.pha`
+- sums per-OBSID `fsaevt` instrumental-background spectra into a stacked `stack_instbkgpi.fits`
 
 This makes `fxtcombine` the top-level orchestration task in the current `eFXTDAS` toolkit.
 
@@ -198,34 +198,68 @@ then the layout is conceptually:
 |   |-- fxtcombine.log
 |-- 11900458112/
 |   |-- products/
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.coord
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.pi
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.particle
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.badpix
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.grade
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.gti
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_cl.fits
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>.expo
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e00300_10000.eef
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.eef
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e00300_10000.img
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.img
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e00100_12000.lc
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_e01000_03000.lc
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src_cl.fits
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.pi
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_bkg.pi
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.lc
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_bkg.lc
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.arf
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>_src.rmf
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.pha
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.coord
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.pi
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.particle
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.badpix
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.grade
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.gti
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_cl.fits
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.expo
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_e00300_10000.eef
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_e01000_03000.eef
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_e00300_10000.img
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_e01000_03000.img
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_e00100_12000.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_e01000_03000.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_src_cl.fits
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_src.pi
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_bkg.pi
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_src.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_bkg.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_src.arf
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_src.rmf
+|   |   |-- target_src.reg
+|   |   |-- target_bkg.reg
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.coord
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.pi
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.particle
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.badpix
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.grade
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.gti
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>_cl.fits
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.pi
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.lc
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.img
-|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>_instbkg.pha
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>_instbkgpi.fits
 |   |   |-- log/
 |   |   |   |-- fxtchain.log
-|   |   |   |-- <step-specific logs>
+|   |   |   |-- <module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>/
+|   |   |   |   |-- evt_stage1.xsl
+|   |   |   |   |-- evt_stage4_spec.xsl
+|   |   |   |   |-- fxtcoord_evt.log
+|   |   |   |   |-- fxtpical_evt.log
+|   |   |   |   |-- fxtparticleidentify_evt.log
+|   |   |   |   |-- fxtbadpix_evt.log
+|   |   |   |   |-- fxtgrade_evt.log
+|   |   |   |   |-- fxtgtigen_evt.log
+|   |   |   |   |-- xselect_evt_stage1.log
+|   |   |   |   |-- fxtexpogen_evt.log
+|   |   |   |   |-- fxteefmap_evt_e00300_10000.log
+|   |   |   |   |-- fxteefmap_evt_e01000_03000.log
+|   |   |   |   |-- xselect_evt_stage4_spec.log
+|   |   |   |   |-- fxtarfgen.log
+|   |   |   |   |-- fxtrmfgen.log
+|   |   |   |-- <module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>/
+|   |   |   |   |-- fsaevt_stage1.xsl
+|   |   |   |   |-- fxtcoord_fsaevt.log
+|   |   |   |   |-- fxtpical_fsaevt.log
+|   |   |   |   |-- fxtparticleidentify_fsaevt.log
+|   |   |   |   |-- fxtbadpix_fsaevt.log
+|   |   |   |   |-- fxtgrade_fsaevt.log
+|   |   |   |   |-- fxtgtigen_fsaevt.log
+|   |   |   |   |-- xselect_fsaevt_stage1.log
+|   |   |   |   |-- fxtbkggen_fsaevt.log
 |-- 11900465408/
 |   |-- products/
 |   |   |-- ... same product pattern as above ...
@@ -255,7 +289,8 @@ then the layout is conceptually:
 |   |-- stack_bkgpi.fits
 |   |-- stack_rmf.fits
 |   |-- stack_arf.fits
-|   |-- stack_instbkg.pha
+|   |-- stack_instbkgpi.fits
+|   |-- stack_runXstack.log
 ```
 
 ### Meaning of the Tree
@@ -268,13 +303,41 @@ then the layout is conceptually:
     per-OBSID step logs under `products/log/`
   - when `fsaevt` is requested, this also includes the cleaned FSA products and
     one predicted instrumental-background spectrum from `fxtbkggen`
+  - when Stage 4 runs, the copied extraction regions
+    `target_src.reg` and `target_bkg.reg` are also placed here for the
+    per-OBSID spectral extraction
 - `stack_dir/`
   - products derived from combining all valid OBSIDs together
-  - `stack_instbkg.pha` appears here when `fsaevt` is requested
+  - `stack_instbkgpi.fits` appears here when `fsaevt` is requested
 - `stack_dir/all_obsid.json`
   - machine-readable summary of the per-OBSID product paths
 - `stack_dir/all_obsid.filelist`
   - source-spectrum file list passed to `runXstack`
+
+### Output Logs
+
+The most useful logs for debugging are:
+
+- `out_dir/log/fxtcombine.log`
+  - top-level orchestration log for the whole run
+- `out_dir/<obsid>/products/log/fxtchain.log`
+  - high-level per-OBSID log showing which Stage-1 or Stage-4 substep failed
+- `out_dir/<obsid>/products/log/<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>/`
+  - detailed task logs for one event file
+  - this is the first place to inspect if an individual FXTDAS task failed
+- `stack_dir/srcdet.log`
+  - stacked `fxtsrcdet` output
+- `stack_dir/fxtregions.log`
+  - stacked `fxtregions` output
+- `stack_dir/stack_runXstack.log`
+  - `runXstack` log for stacked spectral combination
+
+Recommended debugging order:
+
+1. start with `out_dir/log/fxtcombine.log` to identify the failing OBSID or stacked step
+2. if the failure is per-OBSID, check `products/log/fxtchain.log`
+3. then open the corresponding detailed task log in the datatype-specific subdirectory
+4. if the failure is in stacked detection or stacking, inspect the relevant log under `stack_dir`
 
 ### Multi-Band Image and Light-Curve Products
 
@@ -493,7 +556,7 @@ For `evt`, `fxtcombine` prepares a file list of all extracted source spectra and
 
 with same-target mode enabled.
 
-For `fsaevt`, `fxtcombine` does not call `runXstack`. Instead it sums the per-OBSID instrumental-background spectra from `fxtbkggen` into `stack_instbkg.pha`, sums their `EXPOSURE`, averages `BACKSCAL`, and reports the standard deviation of `BACKSCAL`. If the relative scatter of `BACKSCAL` is large, a warning is emitted that the stacked instrumental-background spectrum may not be reliable.
+For `fsaevt`, `fxtcombine` does not call `runXstack`. Instead it sums the per-OBSID instrumental-background spectra from `fxtbkggen` into `stack_instbkgpi.fits`, sums their `EXPOSURE`, averages `BACKSCAL`, and reports the standard deviation of `BACKSCAL`. If the relative scatter of `BACKSCAL` is large, a warning is emitted that the stacked instrumental-background spectrum may not be reliable.
 
 So this stage can produce:
 
@@ -569,7 +632,7 @@ The main user-facing pipeline controls are:
 
 7. What does `fsaevt` do inside `fxtcombine`?
 
-   - `fsaevt` is not used for stacked imaging, source detection, or source/background region generation. Instead, it is used only to generate one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkg.pha`.
+   - `fsaevt` is not used for stacked imaging, source detection, or source/background region generation. Instead, it is used only to generate one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkgpi.fits`.
 
 8. Why does the `fsaevt` path use `DETX=3:382 DETY=3:382`?
 

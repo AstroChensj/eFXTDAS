@@ -630,7 +630,7 @@ def fxtcombine_pipeline(
 				if instbkgpi:
 					instbkg_paths.append(instbkgpi)
 		if instbkg_paths:
-			stack_instbkg_fname = os.path.join(stack_dir, "stack_instbkg.pha")
+			stack_instbkg_fname = os.path.join(stack_dir, "stack_instbkgpi.fits")
 			stack_instbkg_spectra(instbkg_paths, stack_instbkg_fname, logger=main_logger)
 		else:
 			emit(main_logger, "warning", "No per-OBSID instrumental background spectra were found to stack.")
@@ -650,7 +650,7 @@ def fxtcombine_pipeline(
 		emit(main_logger, "info", f"Stacked RMF: {os.path.join(stack_dir, 'stack_rmf.fits')}")
 		emit(main_logger, "info", f"Stacked ARF: {os.path.join(stack_dir, 'stack_arf.fits')}")
 	if has_fsaevt:
-		emit(main_logger, "info", f"Stacked instrumental background PI: {os.path.join(stack_dir, 'stack_instbkg.pha')}")
+		emit(main_logger, "info", f"Stacked instrumental background PI: {os.path.join(stack_dir, 'stack_instbkgpi.fits')}")
 	emit(main_logger, "info", f"Please check each OBSID product dir for grade plot, and light curve, for sanity check!")
 	emit(main_logger, "info", f"Summary of generated files (per OBSID) saved to {summary_fname}")
 	emit(main_logger, "info", f"{all_prod_dict}")
