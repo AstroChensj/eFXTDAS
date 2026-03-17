@@ -130,10 +130,16 @@ fxtcombine_pipeline(
     - wavelet scales in pixels forwarded to `fxtsrcdet` for stacked source
       detection
     - default: `1,2,4,8,16`
-  - `--srcdet-background-sigma-grid`
+- `--srcdet-background-sigma-grid`
     - Gaussian smoothing scales in pixels forwarded to `fxtsrcdet` for its
       adaptive background model
     - default: `4,8,16,32,64`
+  - `--summary-json`
+    - optional summary JSON path
+    - default: `<stack_dir>/all_obsid.json`
+  - `--srcpi-filelist`
+    - optional `runXstack` source-spectrum file list path
+    - default: `<stack_dir>/all_obsid.filelist`
   - `--skip-existing`
   - `--log-level`
   - `--log-file`
@@ -144,7 +150,7 @@ fxtcombine_pipeline(
 
 - per-OBSID intermediate products under `<out-dir>/<OBSID>/products/`
 - stacked imaging / region / spectral products under `stack_dir`
-- summary files such as `all_obsid.json` and `all_obsid.filelist`
+- summary files such as `all_obsid.json` and `all_obsid.filelist` under `stack_dir`
 - main and per-step log files
 
 The full output layout, including the relationship between `src_dir`,
@@ -161,6 +167,8 @@ linked to the four main path-like inputs:
 - `obsid_lst`: which OBSID subdirectories under `src_dir` are actually used
 - `out_dir`: where all combined products are written
 - `stack_dir`: where the stacked combined science products are written
+- `summary_json`: summary JSON path, defaulting to `<stack_dir>/all_obsid.json`
+- `srcpi_filelist`: `runXstack` file list path, defaulting to `<stack_dir>/all_obsid.filelist`
 
 ### Input/Output Relationship
 
@@ -221,10 +229,10 @@ then the layout is conceptually:
 |-- 11900465408/
 |   |-- products/
 |   |   |-- ... same product pattern as above ...
-|-- all_obsid.filelist
-|-- all_obsid.json
 
 <stack_dir>/
+|-- all_obsid.filelist
+|-- all_obsid.json
 |   |-- stack_exp.fits
 |   |-- stack_cts.fits
 |   |-- stack_rate.fits
@@ -263,8 +271,10 @@ then the layout is conceptually:
 - `stack_dir/`
   - products derived from combining all valid OBSIDs together
   - `stack_instbkg.pha` appears here when `fsaevt` is requested
-- `out_dir/all_obsid.json`
+- `stack_dir/all_obsid.json`
   - machine-readable summary of the per-OBSID product paths
+- `stack_dir/all_obsid.filelist`
+  - source-spectrum file list passed to `runXstack`
 
 ### Multi-Band Image and Light-Curve Products
 
@@ -298,7 +308,8 @@ For stacking:
 
 ### The Summary JSON Structure
 
-`all_obsid.json` stores the same information as a nested dictionary:
+By default, `all_obsid.json` stores the same information as a nested dictionary
+under `stack_dir`:
 
 ```text
 all_obsid.json
@@ -356,7 +367,7 @@ Example: collect all light-curve filenames from `all_obsid.json`:
 import json
 from pathlib import Path
 
-summary_path = Path("combine_out/all_obsid.json")
+summary_path = Path("combine_stack/all_obsid.json")
 
 with summary_path.open() as f:
     data = json.load(f)
@@ -386,7 +397,7 @@ If only the default first-band light curve is needed for each event file:
 ```python
 import json
 
-with open("combine_out/all_obsid.json") as f:
+with open("combine_stack/all_obsid.json") as f:
     data = json.load(f)
 
 default_lc = []

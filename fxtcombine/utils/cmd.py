@@ -49,7 +49,7 @@ def _emit_command_output(
 
 def run_cmd(
 		cmd_str,
-		logger=None,logname="./run.log",cwd=None
+		logger=None,logname=None,cwd=None
 	):
 	"""Run one shell command and raise on failure.
 
@@ -59,8 +59,9 @@ def run_cmd(
 		Command string executed through the shell.
 	logger : logging.Logger | None, optional
 		Optional logger used for command and error messages.
-	logname : str, optional
-		Path of the file used to store combined stdout and stderr.
+	logname : str | None, optional
+		Path of the file used to store combined stdout and stderr. When omitted,
+		no wrapper-managed log file is written.
 	cwd : str | None, optional
 		Working directory used for the subprocess.
 
@@ -83,7 +84,7 @@ def run_cmd(
 		stderr=subprocess.STDOUT,
 		cwd=cwd,
 	)
-	if logger is not None:
+	if logger is not None and logname is not None:
 		with open(logname, "w") as log_file:
 			log_file.write(result.stdout or "")
 	if result.returncode != 0:

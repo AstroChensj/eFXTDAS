@@ -79,7 +79,8 @@ def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
 		out_dir="./",stack_dir=None,module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",
 		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
-		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",skip_existing=False,
+		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",
+		summary_json=None,srcpi_filelist=None,skip_existing=False,
 		logger: logging.Logger | None = None,
 	):
 	"""Combine multiple EP-FXT observations into stacked images and spectra.
@@ -131,6 +132,12 @@ def fxtcombine_pipeline(
 	srcdet_background_sigma_grid : str | list[float], optional
 		Gaussian smoothing scales in pixels forwarded to ``fxtsrcdet`` for its
 		adaptive background model.
+	summary_json : str | None, optional
+		Path of the summary JSON file. When omitted,
+		``<stack_dir>/all_obsid.json`` is used.
+	srcpi_filelist : str | None, optional
+		Path of the source-spectrum file list passed to ``runXstack``. When
+		omitted, ``<stack_dir>/all_obsid.filelist`` is used.
 	skip_existing : bool, optional
 		When ``True``, reuse existing intermediate products where supported.
 		When ``False``, rerun all steps.
@@ -147,6 +154,8 @@ def fxtcombine_pipeline(
 	src_dir = os.path.abspath(src_dir)
 	out_dir = os.path.abspath(out_dir)
 	stack_dir = os.path.abspath(stack_dir) if stack_dir is not None else os.path.join(out_dir, "stack")
+	summary_json = os.path.abspath(summary_json) if summary_json is not None else os.path.join(stack_dir, "all_obsid.json")
+	srcpi_filelist = os.path.abspath(srcpi_filelist) if srcpi_filelist is not None else os.path.join(stack_dir, "all_obsid.filelist")
 	module_lst = module.split(",")
 	datamode_lst = datamode.split(",")
 	datatype_lst = datatype.split(",")
@@ -171,6 +180,8 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Source directory is: {src_dir}")
 	emit(main_logger, "info", f"Per-OBSID output directory is: {out_dir}")
 	emit(main_logger, "info", f"Stacked output directory is: {stack_dir}")
+	emit(main_logger, "info", f"Summary JSON path is: {summary_json}")
+	emit(main_logger, "info", f"Source-spectrum file list path is: {srcpi_filelist}")
 	emit(main_logger, "info", f"Source coordinate is: ICRS({ra}, {dec})")
 	emit(main_logger, "info", f"Image energy ranges are: {image_energy_ranges}")
 	emit(main_logger, "info", f"Light-curve energy ranges are: {lightcurve_energy_ranges}")
@@ -594,7 +605,7 @@ def fxtcombine_pipeline(
 		if not srcpi_paths:
 			raise ValueError("No source spectra were extracted; cannot run runXstack.")
 
-		srcpi_fname_lst_file = os.path.join(out_dir,"all_obsid.filelist")
+		srcpi_fname_lst_file = srcpi_filelist
 		with open(srcpi_fname_lst_file,"w") as f:
 			for srcpi_path in srcpi_paths:
 				f.writelines(f"{srcpi_path}\n")
@@ -626,7 +637,7 @@ def fxtcombine_pipeline(
 	
 
 	#--- dump output to json file
-	summary_fname = os.path.join(out_dir,"all_obsid.json")
+	summary_fname = summary_json
 	with open(summary_fname,"w") as f:
 		json.dump(all_prod_dict,f,indent=4)
 
@@ -668,6 +679,8 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 	parser.add_argument("--out-dir", default="./", help="Output directory. Default: current directory.")
 	parser.add_argument("--stack-dir", default=None, help="Optional stacked-product directory. Default: <out-dir>/stack")
+	parser.add_argument("--summary-json", default=None, help="Optional summary JSON path. Default: <stack-dir>/all_obsid.json")
+	parser.add_argument("--srcpi-filelist", default=None, help="Optional runXstack source-spectrum file list path. Default: <stack-dir>/all_obsid.filelist")
 	parser.add_argument("--module", default="a,b", help="Comma-separated module selection. Default: a,b")
 	parser.add_argument("--datamode", default="ff", help="Comma-separated datamode selection. Default: ff")
 	parser.add_argument(
@@ -737,6 +750,8 @@ def main() -> None:
 		obsid_lst=args.obsid_lst,
 		out_dir=args.out_dir,
 		stack_dir=args.stack_dir,
+		summary_json=args.summary_json,
+		srcpi_filelist=args.srcpi_filelist,
 		module=args.module,
 		datamode=args.datamode,
 		datatype=args.datatype,
