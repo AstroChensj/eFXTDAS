@@ -61,7 +61,7 @@ def fxtchain_obsid(
     # datatype_lst = [datatype for datatype in list(obsid_file_dict.keys()) if datatype not in ["mkf","att","orb"]] # [evt|fsaevt]
     obsid_prod_dict = {}  # datatype [evt|fsaevt] -- module [..a..|..b..] -- product type [clevt|expmap]
     
-    for datatype in datatype_lst:
+    for datatype in datatype_lst:   # [evt|fsaevt]
 
         obsid_prod_dict[datatype] = {}
 
@@ -179,138 +179,190 @@ def fxtchain_obsid(
                 fxtgtigen_log = os.path.join(sub_log_dir,f"fxtgtigen.log")
                 run_cmd(fxtgtigen_cmd,logger=obsid_logger,logname=fxtgtigen_log)
 
-            #--- run xselect to get clean events plus requested band-limited images/light curves
-            # TODO: remove existing EP_* log to avoid rerunning?
+            #--- run xselect for cleaned events and datatype-specific products
             xsl_fname = os.path.join(sub_log_dir,f"img.xsl")
             evt_cl_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_cl.fits")
-            image_fname_map = {
-                energy_range_suffix(energy_range): os.path.join(
-                    obsid_out_dir,
-                    f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{energy_range_suffix(energy_range)}.img",
-                )
-                for energy_range in image_energy_ranges
-            }
-            lc_fname_map = {
-                energy_range_suffix(energy_range): os.path.join(
-                    obsid_out_dir,
-                    f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{energy_range_suffix(energy_range)}.lc",
-                )
-                for energy_range in lightcurve_energy_ranges
-            }
-            expected_stage1_products = [evt_cl_fname] + list(image_fname_map.values()) + list(lc_fname_map.values())
-            if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
-                emit(obsid_logger, "info", f"{evt_cl_fname} and all requested image/light-curve products already exist.")
-            else:
-                remove_xselect_tmp_files()
-                with open(xsl_fname,"w") as f:
-                    f.writelines([f"EP\n"])
-                    f.writelines([f"set datadir {obsid_out_dir}\n"])
-                    f.writelines([f"read events {os.path.basename(evt_grade_fname)}\n"])
-                    f.writelines([f"yes\n"])
-                    ##--- filter clean events
-                    # TODO: binsize?
-                    f.writelines([f"filter grade {grade}\n"])
-                    f.writelines([f"filter time file {os.path.basename(gti_fname)}\n"])
-                    f.writelines([f'select event "status==b0"\n'])
-                    f.writelines([f"show status\n"])
-                    f.writelines([f"extract events copyall=yes\n"])
-                    f.writelines([f"save events {evt_cl_fname} clobberit=yes\n"])
-                    f.writelines([f"no\n"])
-                    f.writelines([f"clear all\n"])
-                    f.writelines([f"yes\n"])
-                    ##--- get energy-selected images
-                    for energy_range in image_energy_ranges:
-                        suffix = energy_range_suffix(energy_range)
-                        img_fname = image_fname_map[suffix]
-                        chan_lo, chan_hi = image_band_channels[suffix]
-                        f.writelines([f"set datadir {obsid_out_dir}\n"])
-                        f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
-                        f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
-                        f.writelines([f"extract image xysize=601 xybinsize=1 xcenter=300 ycenter=300 copyall=yes\n"])
-                        f.writelines([f"save image {img_fname} clobberit=yes\n"])
-                        f.writelines([f"clear pha_cutoff\n"])
-                        f.writelines([f"clear events\n"])
-                    ##--- get energy-selected light curves
-                    for energy_range in lightcurve_energy_ranges:
-                        suffix = energy_range_suffix(energy_range)
-                        lc_fname = lc_fname_map[suffix]
-                        chan_lo, chan_hi = lightcurve_band_channels[suffix]
-                        f.writelines([f"set datadir {obsid_out_dir}\n"])
-                        f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
-                        f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
-                        f.writelines([f"extract curve copyall=yes\n"])
-                        f.writelines([f"save curve {lc_fname} clobberit=yes\n"])
-                        f.writelines([f"clear pha_cutoff\n"])
-                        f.writelines([f"clear events\n"])
-                    ##--- finish
-                    f.writelines([f"clear all proceed=yes\n"])
-                    f.writelines([f"quit\n"])
-                    f.writelines([f"no\n"])
-                xsl_cmd = f"xselect @{xsl_fname}"
-                emit(obsid_logger, "info", "Running xselect ...")
-                xselect_log = os.path.join(sub_log_dir,f"xselect.log")
-                run_cmd(xsl_cmd,logger=obsid_logger,logname=xselect_log)
+            obsid_prod_dict[datatype][evt_fname_prefix] = {"clevt": evt_cl_fname}
 
-            #--- run fxtexpogen
-            exp_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.expo")
-            if os.path.exists(exp_fname) and skip_existing:
-                emit(obsid_logger, "info", f"{exp_fname} already exists.")
-            else:
-                fxtexpogen_cmd = " ".join([
-                    "fxtexpogen",
-                    f"mkffile={mkf_fname}",f"evtfile={evt_cl_fname}",
-                    f"energy=1.5","area_scale=no","edgecovermask=0",
-                    "use_clustering=yes","ra_threshold=2.0","pa_threshold=0.01",
-                    f"outfile={exp_fname}","clobber=yes"
-                ])
-                emit(obsid_logger, "info", "Running fxtexpogen ...")
-                fxtexpogen_log = os.path.join(sub_log_dir,f"fxtexpogen.log")
-                run_cmd(fxtexpogen_cmd,logger=obsid_logger,logname=fxtexpogen_log)
-
-            #--- run fxteefmap (from eFXTDAS) for each requested image band
-            eefmap_fname_map = {
-                energy_range_suffix(energy_range): os.path.join(
-                    obsid_out_dir,
-                    f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{energy_range_suffix(energy_range)}.eef",
-                )
-                for energy_range in image_energy_ranges
-            }
-            for energy_range in image_energy_ranges:
-                image_key = energy_range_suffix(energy_range)
-                eefmap_fname = eefmap_fname_map[image_key]
-                img_fname = image_fname_map[image_key]
-                emin, emax = energy_range
-                if os.path.exists(eefmap_fname) and skip_existing:
-                    emit(obsid_logger, "info", f"{eefmap_fname} already exists.")
+            ##--- for evt
+            if datatype == "evt":
+                image_fname_map = {
+                    energy_range_suffix(energy_range): os.path.join(
+                        obsid_out_dir,
+                        f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{energy_range_suffix(energy_range)}.img",
+                    )
+                    for energy_range in image_energy_ranges
+                }
+                lc_fname_map = {
+                    energy_range_suffix(energy_range): os.path.join(
+                        obsid_out_dir,
+                        f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{energy_range_suffix(energy_range)}.lc",
+                    )
+                    for energy_range in lightcurve_energy_ranges
+                }
+                expected_stage1_products = [evt_cl_fname] + list(image_fname_map.values()) + list(lc_fname_map.values())
+                if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
+                    emit(obsid_logger, "info", f"{evt_cl_fname} and all requested image/light-curve products already exist.")
                 else:
-                    fxteefmap_cmd = " ".join([
-                        "fxteefmap",
-                        f"{img_fname}",
-                        "--out", f"{eefmap_fname}",
-                        "--expmap", f"{exp_fname}",
-                        "--mission", "ep-fxt",
-                        "--emin", f"{emin}",
-                        "--emax", f"{emax}",
-                    ])
-                    emit(obsid_logger, "info", f"Running fxteefmap for {image_key} ...")
-                    fxteefmap_log = os.path.join(sub_log_dir,f"fxteefmap_{image_key}.log")
-                    run_cmd(fxteefmap_cmd,logger=obsid_logger,logname=fxteefmap_log)
+                    remove_xselect_tmp_files()
+                    with open(xsl_fname,"w") as f:
+                        f.writelines([f"EP\n"])
+                        f.writelines([f"set datadir {obsid_out_dir}\n"])
+                        f.writelines([f"read events {os.path.basename(evt_grade_fname)}\n"])
+                        f.writelines([f"yes\n"])
+                        f.writelines([f"filter grade {grade}\n"])
+                        f.writelines([f"filter time file {os.path.basename(gti_fname)}\n"])
+                        f.writelines([f'select event "status==b0"\n'])
+                        f.writelines([f"show status\n"])
+                        f.writelines([f"extract events copyall=yes\n"])
+                        f.writelines([f"save events {evt_cl_fname} clobberit=yes\n"])
+                        f.writelines([f"no\n"])
+                        f.writelines([f"clear all\n"])
+                        f.writelines([f"yes\n"])
+                        for energy_range in image_energy_ranges:
+                            suffix = energy_range_suffix(energy_range)
+                            img_fname = image_fname_map[suffix]
+                            chan_lo, chan_hi = image_band_channels[suffix]
+                            f.writelines([f"set datadir {obsid_out_dir}\n"])
+                            f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
+                            f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
+                            f.writelines([f"extract image xysize=601 xybinsize=1 xcenter=300 ycenter=300 copyall=yes\n"])
+                            f.writelines([f"save image {img_fname} clobberit=yes\n"])
+                            f.writelines([f"clear pha_cutoff\n"])
+                            f.writelines([f"clear events\n"])
+                        for energy_range in lightcurve_energy_ranges:
+                            suffix = energy_range_suffix(energy_range)
+                            lc_fname = lc_fname_map[suffix]
+                            chan_lo, chan_hi = lightcurve_band_channels[suffix]
+                            f.writelines([f"set datadir {obsid_out_dir}\n"])
+                            f.writelines([f"read events {os.path.basename(evt_cl_fname)}\n"])
+                            f.writelines([f"filter pha_cutoff {chan_lo} {chan_hi}\n"])
+                            f.writelines([f"extract curve copyall=yes\n"])
+                            f.writelines([f"save curve {lc_fname} clobberit=yes\n"])
+                            f.writelines([f"clear pha_cutoff\n"])
+                            f.writelines([f"clear events\n"])
+                        f.writelines([f"clear all proceed=yes\n"])
+                        f.writelines([f"quit\n"])
+                        f.writelines([f"no\n"])
+                    xsl_cmd = f"xselect @{xsl_fname}"
+                    emit(obsid_logger, "info", "Running xselect ...")
+                    xselect_log = os.path.join(sub_log_dir,f"xselect.log")
+                    run_cmd(xsl_cmd,logger=obsid_logger,logname=xselect_log)
 
-            #--- append prod_dict
-            obsid_prod_dict[datatype][evt_fname_prefix] = {}
-            obsid_prod_dict[datatype][evt_fname_prefix]["clevt"] = evt_cl_fname
-            first_image_key = energy_range_suffix(image_energy_ranges[0])
-            first_lc_key = energy_range_suffix(lightcurve_energy_ranges[0])
-            obsid_prod_dict[datatype][evt_fname_prefix]["image"] = image_fname_map[first_image_key]
-            obsid_prod_dict[datatype][evt_fname_prefix]["images"] = image_fname_map
-            obsid_prod_dict[datatype][evt_fname_prefix]["image_band_channels"] = image_band_channels
-            obsid_prod_dict[datatype][evt_fname_prefix]["vexpmap"] = exp_fname
-            obsid_prod_dict[datatype][evt_fname_prefix]["eefmap"] = eefmap_fname_map[first_image_key]
-            obsid_prod_dict[datatype][evt_fname_prefix]["eefmaps"] = eefmap_fname_map
-            obsid_prod_dict[datatype][evt_fname_prefix]["exp"] = fits.getval(exp_fname,ext=0,keyword="EXPOSURE")
-            obsid_prod_dict[datatype][evt_fname_prefix]["alllc"] = lc_fname_map[first_lc_key]
-            obsid_prod_dict[datatype][evt_fname_prefix]["lightcurves"] = lc_fname_map
-            obsid_prod_dict[datatype][evt_fname_prefix]["lightcurve_band_channels"] = lightcurve_band_channels
+                exp_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.expo")
+                if os.path.exists(exp_fname) and skip_existing:
+                    emit(obsid_logger, "info", f"{exp_fname} already exists.")
+                else:
+                    fxtexpogen_cmd = " ".join([
+                        "fxtexpogen",
+                        f"mkffile={mkf_fname}",f"evtfile={evt_cl_fname}",
+                        f"energy=1.5","area_scale=no","edgecovermask=0",
+                        "use_clustering=yes","ra_threshold=2.0","pa_threshold=0.01",
+                        f"outfile={exp_fname}","clobber=yes"
+                    ])
+                    emit(obsid_logger, "info", "Running fxtexpogen ...")
+                    fxtexpogen_log = os.path.join(sub_log_dir,f"fxtexpogen.log")
+                    run_cmd(fxtexpogen_cmd,logger=obsid_logger,logname=fxtexpogen_log)
+
+                eefmap_fname_map = {
+                    energy_range_suffix(energy_range): os.path.join(
+                        obsid_out_dir,
+                        f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{energy_range_suffix(energy_range)}.eef",
+                    )
+                    for energy_range in image_energy_ranges
+                }
+                for energy_range in image_energy_ranges:
+                    image_key = energy_range_suffix(energy_range)
+                    eefmap_fname = eefmap_fname_map[image_key]
+                    img_fname = image_fname_map[image_key]
+                    emin, emax = energy_range
+                    if os.path.exists(eefmap_fname) and skip_existing:
+                        emit(obsid_logger, "info", f"{eefmap_fname} already exists.")
+                    else:
+                        fxteefmap_cmd = " ".join([
+                            "fxteefmap",
+                            f"{img_fname}",
+                            "--out", f"{eefmap_fname}",
+                            "--expmap", f"{exp_fname}",
+                            "--mission", "ep-fxt",
+                            "--emin", f"{emin}",
+                            "--emax", f"{emax}",
+                        ])
+                        emit(obsid_logger, "info", f"Running fxteefmap for {image_key} ...")
+                        fxteefmap_log = os.path.join(sub_log_dir,f"fxteefmap_{image_key}.log")
+                        run_cmd(fxteefmap_cmd,logger=obsid_logger,logname=fxteefmap_log)
+
+                first_image_key = energy_range_suffix(image_energy_ranges[0])
+                first_lc_key = energy_range_suffix(lightcurve_energy_ranges[0])
+                obsid_prod_dict[datatype][evt_fname_prefix]["image"] = image_fname_map[first_image_key]
+                obsid_prod_dict[datatype][evt_fname_prefix]["images"] = image_fname_map
+                obsid_prod_dict[datatype][evt_fname_prefix]["image_band_channels"] = image_band_channels
+                obsid_prod_dict[datatype][evt_fname_prefix]["vexpmap"] = exp_fname
+                obsid_prod_dict[datatype][evt_fname_prefix]["eefmap"] = eefmap_fname_map[first_image_key]
+                obsid_prod_dict[datatype][evt_fname_prefix]["eefmaps"] = eefmap_fname_map
+                obsid_prod_dict[datatype][evt_fname_prefix]["exp"] = fits.getval(exp_fname,ext=0,keyword="EXPOSURE")
+                obsid_prod_dict[datatype][evt_fname_prefix]["alllc"] = lc_fname_map[first_lc_key]
+                obsid_prod_dict[datatype][evt_fname_prefix]["lightcurves"] = lc_fname_map
+                obsid_prod_dict[datatype][evt_fname_prefix]["lightcurve_band_channels"] = lightcurve_band_channels
+            
+            ##--- for fsaevt
+            else:
+                fsa_spec_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.pha")
+                fsa_lc_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.lc")
+                fsa_img_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.img")
+                instbkg_pi_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_instbkg.pha")
+                expected_stage1_products = [evt_cl_fname, fsa_spec_fname, fsa_lc_fname, fsa_img_fname]
+                if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
+                    emit(obsid_logger, "info", f"{evt_cl_fname} and default FSA products already exist.")
+                else:
+                    remove_xselect_tmp_files()
+                    with open(xsl_fname,"w") as f:
+                        f.writelines([f"EP\n"])
+                        f.writelines([f"set datadir {obsid_out_dir}\n"])
+                        f.writelines([f"read events {os.path.basename(evt_grade_fname)}\n"])
+                        f.writelines([f"yes\n"])
+                        f.writelines([f"filter grade {grade}\n"])
+                        f.writelines([f"filter time file {os.path.basename(gti_fname)}\n"])
+                        f.writelines([f'select event "status==b0"\n'])
+                        f.writelines([f"show status\n"])
+                        f.writelines([f"extract events copyall=yes\n"])
+                        f.writelines([f"save events {evt_cl_fname} clobberit=yes\n"])
+                        f.writelines([f"no\n"])
+                        f.writelines([f"extract spectrum copyall=yes\n"])
+                        f.writelines([f"save spectrum {fsa_spec_fname} clobberit=yes\n"])
+                        f.writelines([f"filter pha_cutoff 38 925\n"])
+                        f.writelines([f'filter column "DETX=3:382 DETY=3:382"\n'])
+                        f.writelines([f"extract events copyall=yes\n"])
+                        f.writelines([f"save events {evt_cl_fname} clobberit=yes\n"])
+                        f.writelines([f"no\n"])
+                        f.writelines([f"extract curve copyall=yes\n"])
+                        f.writelines([f"save curve {fsa_lc_fname} clobberit=yes\n"])
+                        f.writelines([f"extract image xysize=601 xybinsize=1 xcenter=300 ycenter=300 copyall=yes\n"])
+                        f.writelines([f"save image {fsa_img_fname} clobberit=yes\n"])
+                        f.writelines([f"clear all proceed=yes\n"])
+                        f.writelines([f"quit\n"])
+                        f.writelines([f"no\n"])
+                    xsl_cmd = f"xselect @{xsl_fname}"
+                    emit(obsid_logger, "info", "Running xselect for fsaevt ...")
+                    xselect_log = os.path.join(sub_log_dir,f"xselect.log")
+                    run_cmd(xsl_cmd,logger=obsid_logger,logname=xselect_log)
+
+                if os.path.exists(instbkg_pi_fname) and skip_existing:
+                    emit(obsid_logger, "info", f"{instbkg_pi_fname} already exists.")
+                else:
+                    fxtbkggen_cmd = " ".join([
+                        "fxtbkggen",
+                        f"infile={fsa_spec_fname}",
+                        f"outfile={instbkg_pi_fname}",
+                    ])
+                    emit(obsid_logger, "info", "Running fxtbkggen ...")
+                    fxtbkggen_log = os.path.join(sub_log_dir,"fxtbkggen.log")
+                    run_cmd(fxtbkggen_cmd,logger=obsid_logger,logname=fxtbkggen_log)
+
+                obsid_prod_dict[datatype][evt_fname_prefix]["fsa_spec"] = fsa_spec_fname
+                obsid_prod_dict[datatype][evt_fname_prefix]["fsa_lc"] = fsa_lc_fname
+                obsid_prod_dict[datatype][evt_fname_prefix]["fsa_img"] = fsa_img_fname
+                obsid_prod_dict[datatype][evt_fname_prefix]["instbkgpi"] = instbkg_pi_fname
 
 
             emit(obsid_logger, "info", f"Finish running using {time.time()-t0} s.")

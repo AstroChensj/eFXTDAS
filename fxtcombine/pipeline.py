@@ -30,6 +30,7 @@ from fxtcombine.utils.cmd import run_cmd
 from fxtcombine.utils.fxtchain_simplified import fxtchain_obsid, fxt_extract_spec
 from fxtcombine.utils.fxtprep import get_input_files
 from fxtcombine.utils.image import reproject_events_xy_to_refwcs
+from fxtcombine.utils.spectrum import stack_instbkg_spectra
 
 
 def _run_stage1_obsid(
@@ -72,9 +73,10 @@ def _run_stage1_obsid(
 	)
 	return obsid, obsid_file_dict, obsid_prod_dict
 
+
 def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
-		out_dir="./",module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",
+		out_dir="./",stack_dir=None,module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",
 		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
 		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",skip_existing=False,
 		logger: logging.Logger | None = None,
@@ -94,6 +96,9 @@ def fxtcombine_pipeline(
 		Comma-separated OBSID list or a file containing one OBSID per line.
 	out_dir : str, optional
 		Output directory used for stacked products and per-OBSID intermediates.
+	stack_dir : str | None, optional
+		Output directory used only for combined stacked products. When omitted,
+		``<out_dir>/stack`` is used.
 	module : str, optional
 		Comma-separated module selection, for example ``"a,b"``.
 	datamode : str, optional
@@ -140,6 +145,7 @@ def fxtcombine_pipeline(
 	#--- parse parameter
 	src_dir = os.path.abspath(src_dir)
 	out_dir = os.path.abspath(out_dir)
+	stack_dir = os.path.abspath(stack_dir) if stack_dir is not None else os.path.join(out_dir, "stack")
 	module_lst = module.split(",")
 	datamode_lst = datamode.split(",")
 	datatype_lst = datatype.split(",")
@@ -162,6 +168,8 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"**** Welcome to FXTCOMBINE ! ****")
 	emit(main_logger, "info", "==================================")
 	emit(main_logger, "info", f"Source directory is: {src_dir}")
+	emit(main_logger, "info", f"Per-OBSID output directory is: {out_dir}")
+	emit(main_logger, "info", f"Stacked output directory is: {stack_dir}")
 	emit(main_logger, "info", f"Source coordinate is: ICRS({ra}, {dec})")
 	emit(main_logger, "info", f"Image energy ranges are: {image_energy_ranges}")
 	emit(main_logger, "info", f"Light-curve energy ranges are: {lightcurve_energy_ranges}")
@@ -191,13 +199,18 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Valid OBSIDs for processing: {obsid_lst}")
 	if not obsid_lst:
 		raise ValueError("No valid OBSIDs were found for processing.")
+	has_evt = "evt" in datatype_lst
+	has_fsaevt = "fsaevt" in datatype_lst
 
 
+	#==============================================================================
 	#--- initial iterate: to get clean events & image & exposure map for each obsid
+	#==============================================================================
 	emit(main_logger, "info", f"**** Stage 1: initial iterate to get clean events & exposure map for each OBSID ****")
 	all_file_dict = {}
 	all_prod_dict = {}
 	jobs = max(int(jobs), 1)
+	##--- normal mode: serialized running, one by one
 	if jobs == 1 or len(obsid_lst) == 1:
 		for obsid in obsid_lst:
 			emit(main_logger, "info", f"Processing {obsid} serially ...")
@@ -218,6 +231,7 @@ def fxtcombine_pipeline(
 			obsid, obsid_file_dict, obsid_prod_dict = obsid_result
 			all_file_dict[obsid] = obsid_file_dict
 			all_prod_dict[obsid] = obsid_prod_dict
+	##--- parallel mode: multiple OBSIDs processed simultaneously to speed up this stage
 	else:
 		max_workers = min(jobs, len(obsid_lst))
 		emit(main_logger, "info", f"Running Stage 1 in parallel with {max_workers} OBSID worker(s).")
@@ -249,14 +263,17 @@ def fxtcombine_pipeline(
 				emit(main_logger, "info", f"Finished Stage 1 for {obsid_name}.")
 
 
-	#--- stack all images, expmaps and eefmaps; evt and fsaevt (if any) stacked separately
-	emit(main_logger, "info", "**** Stage 2: stacking all images and exposure maps. EVT and FSAEVT are stacked separately. ****")
-	stack_dir = os.path.join(out_dir,"stack")
+	#===================================================
+	#--- stack all images, expmaps and eefmaps; evt only
+	#===================================================
+	emit(main_logger, "info", "**** Stage 2: stacking evt images, exposure maps, and EEF maps ****")
 	os.makedirs(stack_dir,exist_ok=True)
 	detection_image_suffix = energy_range_suffix(image_energy_ranges[0])
 	detect_emin, detect_emax = image_energy_ranges[0]
-	for datatype in datatype_lst:	# [evt|fsaevt]
-		emit(main_logger, "info", f"For {datatype} ...")
+	if not has_evt:
+		emit(main_logger, "warning", "No evt datatype was requested; skipping Stages 2-4 for stacked imaging, detection, and source extraction.")
+	else:
+		emit(main_logger, "info", "For evt ...")
 		clevt_fname_lst = []
 		exp_fname_lst = []
 		exp_lst = []
@@ -265,7 +282,7 @@ def fxtcombine_pipeline(
 		image_band_channels_map = {}
 
 		for obsid,obsid_prod_dict in all_prod_dict.items():
-			for evt_fname_prefix,evt_prod_dict in obsid_prod_dict[datatype].items():
+			for evt_fname_prefix,evt_prod_dict in obsid_prod_dict["evt"].items():
 				clevt_fname_lst.append(evt_prod_dict["clevt"])
 				for image_key in img_fname_map:
 					img_fname_map[image_key].append(evt_prod_dict["images"][image_key])
@@ -278,7 +295,7 @@ def fxtcombine_pipeline(
 		exp_fname_lst = np.array(exp_fname_lst)
 		exp_lst = np.array(exp_lst)
 		if len(clevt_fname_lst) == 0:
-			raise ValueError(f"No products found for datatype={datatype}. Check your OBSID selection and datatype filters.")
+			raise ValueError("No products found for datatype=evt. Check your OBSID selection and datatype filters.")
 
 		##--- sort according to expo
 		idx_sort = np.argsort(exp_lst)[::-1]
@@ -289,8 +306,7 @@ def fxtcombine_pipeline(
 			img_fname_map[image_key] = np.array(img_list)[idx_sort]
 		for image_key, eef_list in eef_fname_map.items():
 			eef_fname_map[image_key] = np.array(eef_list)[idx_sort]
-		if datatype == "evt":
-			exp_tot = np.sum(exp_lst)
+		exp_tot = np.sum(exp_lst)
 
 		##--- logging all files
 		emit(main_logger, "info", f"You have the following clean events files: {clevt_fname_lst}")
@@ -382,56 +398,54 @@ def fxtcombine_pipeline(
 		emit(main_logger, "info", f"Stacked exposure map written to {exp_sum_fname}")
 		
 		##--- reproject and stack eefmap for each requested energy range
-		if datatype == "evt":
-			stack_eefmap_map = {}
-			for energy_range in image_energy_ranges:
-				image_key = energy_range_suffix(energy_range)
-				eef_fname_lst = eef_fname_map[image_key]
-				emit(main_logger, "info", f"Reprojecting and stacking EEF maps for {image_key} ...")
+		stack_eefmap_map = {}
+		for energy_range in image_energy_ranges:
+			image_key = energy_range_suffix(energy_range)
+			eef_fname_lst = eef_fname_map[image_key]
+			emit(main_logger, "info", f"Reprojecting and stacking EEF maps for {image_key} ...")
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore", VerifyWarning)
+				warnings.simplefilter("ignore", FITSFixedWarning)
+				with fits.open(eef_fname_lst[0]) as hdul:
+					eef_primary_header = hdul[0].header.copy()
+					eef_extnames = [hdu.name for hdu in hdul[1:]]
+			eef_numerators = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
+			for eef_fname_i, exp_fname_i in zip(eef_fname_lst, exp_fname_lst):
 				with warnings.catch_warnings():
 					warnings.simplefilter("ignore", VerifyWarning)
 					warnings.simplefilter("ignore", FITSFixedWarning)
-					with fits.open(eef_fname_lst[0]) as hdul:
-						eef_primary_header = hdul[0].header.copy()
-						eef_extnames = [hdu.name for hdu in hdul[1:]]
-				eef_numerators = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
-				for eef_fname_i, exp_fname_i in zip(eef_fname_lst, exp_fname_lst):
-					with warnings.catch_warnings():
-						warnings.simplefilter("ignore", VerifyWarning)
-						warnings.simplefilter("ignore", FITSFixedWarning)
-						with fits.open(exp_fname_i) as hdu:
-							exp_i = hdu[0]
-							exp_data_i = exp_i.data
-							exp_wcs_i = WCS(exp_i.header)
-					exp_reproj_i, exp_footprint_i = reproject_interp((exp_data_i, exp_wcs_i), refexp_wcs, shape_out=refexp_shape)
-					exp_weight_i = np.where(np.isfinite(exp_reproj_i) & (exp_footprint_i > 0), exp_reproj_i, 0.0)
-					with warnings.catch_warnings():
-						warnings.simplefilter("ignore", VerifyWarning)
-						warnings.simplefilter("ignore", FITSFixedWarning)
-						with fits.open(eef_fname_i) as hdul:
-							eef_wcs_i = WCS(hdul[1].header)
-							for extname in eef_extnames:
-								eef_data_i = hdul[extname].data
-								eef_reproj_i, eef_footprint_i = reproject_interp((eef_data_i, eef_wcs_i), refimg_wcs, shape_out=refimg_shape)
-								valid_i = np.isfinite(eef_reproj_i) & (eef_footprint_i > 0) & (exp_weight_i > 0)
-								eef_numerators[extname][valid_i] += eef_reproj_i[valid_i] * exp_weight_i[valid_i]
-				eef_hdus = [fits.PrimaryHDU(header=eef_primary_header)]
-				for extname in eef_extnames:
-					eef_stack = np.zeros(refimg_shape, dtype=np.float32)
-					valid = exp_sum > 0
-					eef_stack[valid] = (eef_numerators[extname][valid] / exp_sum[valid]).astype(np.float32)
-					eef_hdus.append(fits.ImageHDU(data=eef_stack, header=refimg.header.copy(), name=extname))
-				stack_eefmap_fname = os.path.join(stack_dir, f"{image_key}_stack_eef.fits")
-				fits.HDUList(eef_hdus).writeto(stack_eefmap_fname, overwrite=True)
-				emit(main_logger, "info", f"Stacked EEF map bundle written to {stack_eefmap_fname}")
-				stack_eefmap_map[image_key] = stack_eefmap_fname
-				if image_key == detection_image_suffix:
-					stack_eefmap_default_fname = os.path.join(stack_dir, "stack_eef.fits")
-					fits.HDUList(eef_hdus).writeto(stack_eefmap_default_fname, overwrite=True)
-					emit(main_logger, "info", f"Default stacked EEF map bundle also written to {stack_eefmap_default_fname}")
+					with fits.open(exp_fname_i) as hdu:
+						exp_i = hdu[0]
+						exp_data_i = exp_i.data
+						exp_wcs_i = WCS(exp_i.header)
+				exp_reproj_i, exp_footprint_i = reproject_interp((exp_data_i, exp_wcs_i), refexp_wcs, shape_out=refexp_shape)
+				exp_weight_i = np.where(np.isfinite(exp_reproj_i) & (exp_footprint_i > 0), exp_reproj_i, 0.0)
+				with warnings.catch_warnings():
+					warnings.simplefilter("ignore", VerifyWarning)
+					warnings.simplefilter("ignore", FITSFixedWarning)
+					with fits.open(eef_fname_i) as hdul:
+						eef_wcs_i = WCS(hdul[1].header)
+						for extname in eef_extnames:
+							eef_data_i = hdul[extname].data
+							eef_reproj_i, eef_footprint_i = reproject_interp((eef_data_i, eef_wcs_i), refimg_wcs, shape_out=refimg_shape)
+							valid_i = np.isfinite(eef_reproj_i) & (eef_footprint_i > 0) & (exp_weight_i > 0)
+							eef_numerators[extname][valid_i] += eef_reproj_i[valid_i] * exp_weight_i[valid_i]
+			eef_hdus = [fits.PrimaryHDU(header=eef_primary_header)]
+			for extname in eef_extnames:
+				eef_stack = np.zeros(refimg_shape, dtype=np.float32)
+				valid = exp_sum > 0
+				eef_stack[valid] = (eef_numerators[extname][valid] / exp_sum[valid]).astype(np.float32)
+				eef_hdus.append(fits.ImageHDU(data=eef_stack, header=refimg.header.copy(), name=extname))
+			stack_eefmap_fname = os.path.join(stack_dir, f"{image_key}_stack_eef.fits")
+			fits.HDUList(eef_hdus).writeto(stack_eefmap_fname, overwrite=True)
+			emit(main_logger, "info", f"Stacked EEF map bundle written to {stack_eefmap_fname}")
+			stack_eefmap_map[image_key] = stack_eefmap_fname
+			if image_key == detection_image_suffix:
+				stack_eefmap_default_fname = os.path.join(stack_dir, "stack_eef.fits")
+				fits.HDUList(eef_hdus).writeto(stack_eefmap_default_fname, overwrite=True)
+				emit(main_logger, "info", f"Default stacked EEF map bundle also written to {stack_eefmap_default_fname}")
 		
-		##--- obtain stacked rate image for each image band with the same
-		## exposure-validity threshold used by the stacked analysis mask
+		##--- obtain stacked rate image for each image band
 		finite_exp = exp_sum[np.isfinite(exp_sum)]
 		max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
 		exp_cut = float(mask_expfrac) * max_exp
@@ -448,151 +462,166 @@ def fxtcombine_pipeline(
 				fits.writeto(legacy_rate_sum_fname,rate_sum,refimg.header,overwrite=True)
 				emit(main_logger, "info", f"Default stacked rate image also written to {legacy_rate_sum_fname}")
 		
-		if datatype == "evt":
-			stack_expmap_default_fname = exp_sum_fname
-			stack_image_default_fname = default_cts_sum_fname
-			stack_eefmap_default_fname = stack_eefmap_map[detection_image_suffix]
+		stack_expmap_default_fname = exp_sum_fname
+		stack_image_default_fname = default_cts_sum_fname
+		stack_eefmap_default_fname = stack_eefmap_map[detection_image_suffix]
 
-	#--- generate stacked analysis mask for the default detection band
-	stack_mask_fname = os.path.join(stack_dir, "stack_mask.fits")
-	with warnings.catch_warnings():
-		warnings.simplefilter("ignore", VerifyWarning)
-		warnings.simplefilter("ignore", FITSFixedWarning)
-		with fits.open(stack_image_default_fname) as hdu:
-			stack_image_data = np.asarray(hdu[0].data, dtype=np.float64)
-			stack_image_header = hdu[0].header.copy()
-	with warnings.catch_warnings():
-		warnings.simplefilter("ignore", VerifyWarning)
-		warnings.simplefilter("ignore", FITSFixedWarning)
-		with fits.open(stack_expmap_default_fname) as hdu:
-			stack_exp_data = np.asarray(hdu[0].data, dtype=np.float64)
-	finite_exp = stack_exp_data[np.isfinite(stack_exp_data)]
-	max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
-	exp_cut = float(mask_expfrac) * max_exp
-	stack_mask = (
-		np.isfinite(stack_image_data)
-		& np.isfinite(stack_exp_data)
-		& (stack_exp_data >= exp_cut)
-	)
-	fits.writeto(stack_mask_fname, stack_mask.astype(np.uint8), stack_image_header, overwrite=True)
-	emit(
-		main_logger,
-		"info",
-		f"Stacked analysis mask written to {stack_mask_fname} with threshold {exp_cut:.6g} ({mask_expfrac:.3f} of max exposure {max_exp:.6g})",
-	)
-	emit(main_logger, "info", f"Mask valid pixels: {int(np.count_nonzero(stack_mask))} / {int(stack_mask.size)}")
-
-	#--- source detection on stacked evt products and region generation
-	emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
-	stack_image_fname = stack_image_default_fname
-	stack_expmap_fname = stack_expmap_default_fname
-	stack_eefmap_fname = stack_eefmap_default_fname
-	srcdet_src_fname = os.path.join(stack_dir, "stack_src.fits")
-	srcdet_reg_fname = os.path.join(stack_dir, "stack_src.reg")
-	srcdet_bkg_fname = os.path.join(stack_dir, "stack_bkgmap.fits")
-	srcdet_log = os.path.join(stack_dir, "srcdet.log")
-	srcdet_cmd = " ".join([
-		"fxtsrcdet",
-		f'"{stack_image_fname}"',
-		"--expmap", f'"{stack_expmap_fname}"',
-		"--mask", f'"{stack_mask_fname}"',
-		"--eefmap", f'"{stack_eefmap_fname}"',
-		"--mission", "ep-fxt",
-		"--emin", f"{detect_emin}",
-		"--emax", f"{detect_emax}",
-		"--scales", f'"{srcdet_scales}"',
-		"--background-sigma-grid", f'"{srcdet_background_sigma_grid}"',
-		"--out", f'"{srcdet_src_fname}"',
-		"--regfile", f'"{srcdet_reg_fname}"',
-		"--save-bkgmap", f'"{srcdet_bkg_fname}"',
-		"--log-file", f'"{srcdet_log}"',
-	])
-	run_cmd(srcdet_cmd, logger=main_logger, logname=srcdet_log)
-	emit(main_logger, "info", f"Stacked source catalog written to {srcdet_src_fname}")
-	emit(main_logger, "info", f"Stacked source region file written to {srcdet_reg_fname}")
-	emit(main_logger, "info", f"Stacked background map written to {srcdet_bkg_fname}")
-
-	#--- src & bkg region definition via fxtregions
-	emit(main_logger, "info", "Generating src & bkg regions with fxtregions ...")
-	src_reg_fname = os.path.join(stack_dir, "target_src.reg")
-	bkg_reg_fname = os.path.join(stack_dir, "target_bkg.reg")
-	fxtregions_log = os.path.join(stack_dir, "fxtregions.log")
-	fxtregions_cmd = " ".join([
-		"fxtregions",
-		f'"{stack_image_fname}"',
-		f'"{srcdet_src_fname}"',
-		"--bkgmap", f'"{srcdet_bkg_fname}"',
-		"--ra", f"{float(ra)}",
-		"--dec", f"{float(dec)}",
-		"--mission", "ep-fxt",
-		"--emin", f"{detect_emin}",
-		"--emax", f"{detect_emax}",
-		"--mode", "manual",
-		"--src-radius", f"{SRC_EXTRACT_RADIUS}",
-		"--bkg-inner", f"{BKG_EXTRACT_INNER_RADIUS}",
-		"--bkg-outer", f"{BKG_EXTRACT_OUTER_RADIUS}",
-		"--match-threshold", f"{FXT_POSITION_ERR90_ARCSEC}",
-		"--src-regfile", f'"{src_reg_fname}"',
-		"--bkg-regfile", f'"{bkg_reg_fname}"',
-		"--log-file", f'"{fxtregions_log}"',
-	])
-	run_cmd(fxtregions_cmd, logger=main_logger, logname=fxtregions_log)
-	emit(main_logger, "info", f"Target source region file saved to {src_reg_fname}")
-	emit(main_logger, "info", f"Target source background region file saved to {bkg_reg_fname}")
-
-
-	#--- second iterate: spectral extraction, with contaminating sources excluded
-	emit(main_logger, "info", "**** Stage 4: Iterate again on each obsid to extract spectra ****")
-	for obsid in obsid_lst:
-		emit(main_logger, "info", f"Processing {obsid} ...")
-		obsid_dir = os.path.join(src_dir,obsid)
-		obsid_out_dir = os.path.join(out_dir,obsid,"products")
-		##--- define obsid logger
-		obsid_log_dir = os.path.join(obsid_out_dir,"log")
-		obsid_logname = os.path.join(obsid_log_dir, "fxtchain.log")
-		obsid_logger = build_file_logger(f"eFXTDAS.fxtcombine.{obsid}.stage4", obsid_logname)
-		##--- parse events files
-		obsid_file_dict = all_file_dict[obsid]
-		##--- calling sub-modules to run fxtchain for this obsid
-		##--- extracts spectra/light curves using the stacked regions
-		obsid_prod_dict = all_prod_dict[obsid]
-		obsid_prod_dict = fxt_extract_spec(
-			obsid_file_dict,obsid_prod_dict,datatype_lst,
-			src_reg_fname,bkg_reg_fname,
-			obsid_out_dir,obsid_log_dir,
-			skip_existing=skip_existing,
-			obsid_logger=obsid_logger,
+		##--- generate stacked analysis mask for the default detection band
+		stack_mask_fname = os.path.join(stack_dir, "stack_mask.fits")
+		with warnings.catch_warnings():
+			warnings.simplefilter("ignore", VerifyWarning)
+			warnings.simplefilter("ignore", FITSFixedWarning)
+			with fits.open(stack_image_default_fname) as hdu:
+				stack_image_data = np.asarray(hdu[0].data, dtype=np.float64)
+				stack_image_header = hdu[0].header.copy()
+		with warnings.catch_warnings():
+			warnings.simplefilter("ignore", VerifyWarning)
+			warnings.simplefilter("ignore", FITSFixedWarning)
+			with fits.open(stack_expmap_default_fname) as hdu:
+				stack_exp_data = np.asarray(hdu[0].data, dtype=np.float64)
+		finite_exp = stack_exp_data[np.isfinite(stack_exp_data)]
+		max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
+		exp_cut = float(mask_expfrac) * max_exp
+		stack_mask = (
+			np.isfinite(stack_image_data)
+			& np.isfinite(stack_exp_data)
+			& (stack_exp_data >= exp_cut)
 		)
-		all_prod_dict[obsid] = obsid_prod_dict	# update
+		fits.writeto(stack_mask_fname, stack_mask.astype(np.uint8), stack_image_header, overwrite=True)
+		emit(
+			main_logger,
+			"info",
+			f"Stacked analysis mask written to {stack_mask_fname} with threshold {exp_cut:.6g} ({mask_expfrac:.3f} of max exposure {max_exp:.6g})",
+		)
+		emit(main_logger, "info", f"Mask valid pixels: {int(np.count_nonzero(stack_mask))} / {int(stack_mask.size)}")
 
+
+	#=============================================
+	#--- source detection and region file creation
+	#=============================================
+	if has_evt:
+		emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
+		stack_image_fname = stack_image_default_fname
+		stack_expmap_fname = stack_expmap_default_fname
+		stack_eefmap_fname = stack_eefmap_default_fname
+		srcdet_src_fname = os.path.join(stack_dir, "stack_src.fits")
+		srcdet_reg_fname = os.path.join(stack_dir, "stack_src.reg")
+		srcdet_bkg_fname = os.path.join(stack_dir, "stack_bkgmap.fits")
+		srcdet_log = os.path.join(stack_dir, "srcdet.log")
+		srcdet_cmd = " ".join([
+			"fxtsrcdet",
+			f'"{stack_image_fname}"',
+			"--expmap", f'"{stack_expmap_fname}"',
+			"--mask", f'"{stack_mask_fname}"',
+			"--eefmap", f'"{stack_eefmap_fname}"',
+			"--mission", "ep-fxt",
+			"--emin", f"{detect_emin}",
+			"--emax", f"{detect_emax}",
+			"--scales", f'"{srcdet_scales}"',
+			"--background-sigma-grid", f'"{srcdet_background_sigma_grid}"',
+			"--out", f'"{srcdet_src_fname}"',
+			"--regfile", f'"{srcdet_reg_fname}"',
+			"--save-bkgmap", f'"{srcdet_bkg_fname}"',
+			"--log-file", f'"{srcdet_log}"',
+		])
+		run_cmd(srcdet_cmd, logger=main_logger, logname=srcdet_log)
+		emit(main_logger, "info", f"Stacked source catalog written to {srcdet_src_fname}")
+		emit(main_logger, "info", f"Stacked source region file written to {srcdet_reg_fname}")
+		emit(main_logger, "info", f"Stacked background map written to {srcdet_bkg_fname}")
+
+		emit(main_logger, "info", "Generating src & bkg regions with fxtregions ...")
+		src_reg_fname = os.path.join(stack_dir, "target_src.reg")
+		bkg_reg_fname = os.path.join(stack_dir, "target_bkg.reg")
+		fxtregions_log = os.path.join(stack_dir, "fxtregions.log")
+		fxtregions_cmd = " ".join([
+			"fxtregions",
+			f'"{stack_image_fname}"',
+			f'"{srcdet_src_fname}"',
+			"--bkgmap", f'"{srcdet_bkg_fname}"',
+			"--ra", f"{float(ra)}",
+			"--dec", f"{float(dec)}",
+			"--mission", "ep-fxt",
+			"--emin", f"{detect_emin}",
+			"--emax", f"{detect_emax}",
+			"--mode", "manual",
+			"--src-radius", f"{SRC_EXTRACT_RADIUS}",
+			"--bkg-inner", f"{BKG_EXTRACT_INNER_RADIUS}",
+			"--bkg-outer", f"{BKG_EXTRACT_OUTER_RADIUS}",
+			"--match-threshold", f"{FXT_POSITION_ERR90_ARCSEC}",
+			"--src-regfile", f'"{src_reg_fname}"',
+			"--bkg-regfile", f'"{bkg_reg_fname}"',
+			"--log-file", f'"{fxtregions_log}"',
+		])
+		run_cmd(fxtregions_cmd, logger=main_logger, logname=fxtregions_log)
+		emit(main_logger, "info", f"Target source region file saved to {src_reg_fname}")
+		emit(main_logger, "info", f"Target source background region file saved to {bkg_reg_fname}")
+
+
+	#============================================================================
+	#--- second iterate: spectral extraction, with contaminating sources excluded
+	#============================================================================
+	if has_evt:
+		emit(main_logger, "info", "**** Stage 4: Iterate again on each obsid to extract spectra ****")
+		for obsid in obsid_lst:
+			emit(main_logger, "info", f"Processing {obsid} ...")
+			obsid_out_dir = os.path.join(out_dir,obsid,"products")
+			obsid_log_dir = os.path.join(obsid_out_dir,"log")
+			obsid_logname = os.path.join(obsid_log_dir, "fxtchain.log")
+			obsid_logger = build_file_logger(f"eFXTDAS.fxtcombine.{obsid}.stage4", obsid_logname)
+			obsid_file_dict = all_file_dict[obsid]
+			obsid_prod_dict = all_prod_dict[obsid]
+			obsid_prod_dict = fxt_extract_spec(
+				obsid_file_dict,obsid_prod_dict,["evt"],
+				src_reg_fname,bkg_reg_fname,
+				obsid_out_dir,obsid_log_dir,
+				skip_existing=skip_existing,
+				obsid_logger=obsid_logger,
+			)
+			all_prod_dict[obsid] = obsid_prod_dict
+	
+
+	#=====================
 	#--- spectral stacking
+	#=====================
 	emit(main_logger, "info", "**** Stage 5: spectral stacking ****")
-	srcpi_paths = []
-	for obsid in obsid_lst:
-		obsid_prod_dict = all_prod_dict[obsid]
-		for datatype in datatype_lst:
-			for evt_fname_prefix, evt_dict in obsid_prod_dict[datatype].items():
+	if has_evt:
+		srcpi_paths = []
+		for obsid in obsid_lst:
+			obsid_prod_dict = all_prod_dict[obsid]
+			for evt_fname_prefix, evt_dict in obsid_prod_dict["evt"].items():
 				srcpi_paths.append(evt_dict["srcpi"])
-	if not srcpi_paths:
-		raise ValueError("No source spectra were extracted; cannot run runXstack.")
+		if not srcpi_paths:
+			raise ValueError("No source spectra were extracted; cannot run runXstack.")
 
-	##--- input spectra list preparation
-	srcpi_fname_lst_file = os.path.join(out_dir,"all_obsid.filelist")
-	with open(srcpi_fname_lst_file,"w") as f:
-		for srcpi_path in srcpi_paths:
-			f.writelines(f"{srcpi_path}\n")
+		srcpi_fname_lst_file = os.path.join(out_dir,"all_obsid.filelist")
+		with open(srcpi_fname_lst_file,"w") as f:
+			for srcpi_path in srcpi_paths:
+				f.writelines(f"{srcpi_path}\n")
 
-	##--- run Xstack
-	stackpi_prefix = os.path.join(stack_dir,f"stack_")
-	runXstack_cmd = " ".join([
-		"runXstack",
-		f"{srcpi_fname_lst_file}",
-		"--prefix",f"{stackpi_prefix}",
-		"--rsp_weight_method","FLX",
-		"--nthreads","20",
-		"--same_target",	# activate same-target mode
-	])
-	run_cmd(runXstack_cmd,logger=main_logger)
+		stackpi_prefix = os.path.join(stack_dir,f"stack_")
+		runXstack_cmd = " ".join([
+			"runXstack",
+			f"{srcpi_fname_lst_file}",
+			"--prefix",f"{stackpi_prefix}",
+			"--rsp_weight_method","FLX",
+			"--nthreads","20",
+			"--same_target",
+		])
+		run_cmd(runXstack_cmd,logger=main_logger)
+
+	if has_fsaevt:
+		instbkg_paths = []
+		for obsid in obsid_lst:
+			obsid_prod_dict = all_prod_dict[obsid]
+			for evt_fname_prefix, evt_dict in obsid_prod_dict["fsaevt"].items():
+				instbkgpi = evt_dict.get("instbkgpi")
+				if instbkgpi:
+					instbkg_paths.append(instbkgpi)
+		if instbkg_paths:
+			stack_instbkg_fname = os.path.join(stack_dir, "stack_instbkg.pha")
+			stack_instbkg_spectra(instbkg_paths, stack_instbkg_fname, logger=main_logger)
+		else:
+			emit(main_logger, "warning", "No per-OBSID instrumental background spectra were found to stack.")
 	
 
 	#--- dump output to json file
@@ -602,11 +631,14 @@ def fxtcombine_pipeline(
 
 
 	emit(main_logger, "info", f"**** FXTCOMBINE run successfully! ****")
-	emit(main_logger, "info", f"Total exposure: {exp_tot} s")
-	emit(main_logger, "info", f"Stacked SRC PI: {os.path.join(stack_dir, 'stack_pi.fits')}")
-	emit(main_logger, "info", f"Stacked BKG PI: {os.path.join(stack_dir, 'stack_bkgpi.fits')}")
-	emit(main_logger, "info", f"Stacked RMF: {os.path.join(stack_dir, 'stack_rmf.fits')}")
-	emit(main_logger, "info", f"Stacked ARF: {os.path.join(stack_dir, 'stack_arf.fits')}")
+	if has_evt:
+		emit(main_logger, "info", f"Total exposure: {exp_tot} s")
+		emit(main_logger, "info", f"Stacked SRC PI: {os.path.join(stack_dir, 'stack_pi.fits')}")
+		emit(main_logger, "info", f"Stacked BKG PI: {os.path.join(stack_dir, 'stack_bkgpi.fits')}")
+		emit(main_logger, "info", f"Stacked RMF: {os.path.join(stack_dir, 'stack_rmf.fits')}")
+		emit(main_logger, "info", f"Stacked ARF: {os.path.join(stack_dir, 'stack_arf.fits')}")
+	if has_fsaevt:
+		emit(main_logger, "info", f"Stacked instrumental background PI: {os.path.join(stack_dir, 'stack_instbkg.pha')}")
 	emit(main_logger, "info", f"Please check each OBSID product dir for grade plot, and light curve, for sanity check!")
 	emit(main_logger, "info", f"Summary of generated files (per OBSID) saved to {summary_fname}")
 	emit(main_logger, "info", f"{all_prod_dict}")
@@ -634,6 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
 		help="Comma-separated OBSID list or a file containing one OBSID per line.",
 	)
 	parser.add_argument("--out-dir", default="./", help="Output directory. Default: current directory.")
+	parser.add_argument("--stack-dir", default=None, help="Optional stacked-product directory. Default: <out-dir>/stack")
 	parser.add_argument("--module", default="a,b", help="Comma-separated module selection. Default: a,b")
 	parser.add_argument("--datamode", default="ff", help="Comma-separated datamode selection. Default: ff")
 	parser.add_argument(
@@ -702,6 +735,7 @@ def main() -> None:
 		dec=args.dec,
 		obsid_lst=args.obsid_lst,
 		out_dir=args.out_dir,
+		stack_dir=args.stack_dir,
 		module=args.module,
 		datamode=args.datamode,
 		datatype=args.datatype,
@@ -720,5 +754,3 @@ def main() -> None:
 
 if __name__ == "__main__":
 	main()
-
-
