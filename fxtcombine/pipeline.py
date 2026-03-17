@@ -17,6 +17,7 @@ from astropy.io.fits.verify import VerifyWarning
 from astropy.wcs import WCS
 from astropy.wcs import FITSFixedWarning
 from reproject import reproject_interp
+from tqdm import tqdm
 
 from fxtcombine.config import (
 	FXT_POSITION_ERR90_ARCSEC,
@@ -254,7 +255,7 @@ def fxtcombine_pipeline(
 				): obsid
 				for obsid in obsid_lst
 			}
-			for future in as_completed(future_map):
+			for future in tqdm(as_completed(future_map), total=len(future_map), desc="Stage 1 OBSIDs"):
 				obsid = future_map[future]
 				emit(main_logger, "info", f"Collecting Stage 1 results for {obsid} ...")
 				obsid_name, obsid_file_dict, obsid_prod_dict = future.result()

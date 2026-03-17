@@ -101,7 +101,7 @@ def fxtchain_obsid(
                 ])
                 emit(obsid_logger, "info", "Running fxtcoord ...")
                 fxtcoord_log = os.path.join(sub_log_dir,f"fxtcoord.log")
-                run_cmd(fxtcoord_cmd,logger=obsid_logger,logname=fxtcoord_log)
+                run_cmd(fxtcoord_cmd, logger=obsid_logger, logname=fxtcoord_log, cwd=sub_log_dir)
 
             #--- run fxtpical
             evt_pi_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.pi")
@@ -115,7 +115,7 @@ def fxtchain_obsid(
                 ])
                 emit(obsid_logger, "info", "Running fxtpical ...")
                 fxtpical_log = os.path.join(sub_log_dir,f"fxtpical.log")
-                run_cmd(fxtpical_cmd,logger=obsid_logger,logname=fxtpical_log)
+                run_cmd(fxtpical_cmd, logger=obsid_logger, logname=fxtpical_log, cwd=sub_log_dir)
 
             #--- run fxtparticleidentify
             evt_particle_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.particle")
@@ -134,7 +134,12 @@ def fxtchain_obsid(
                     f"outfile={evt_particle_fname}",
                 ])
                 fxtparticleidentify_log = os.path.join(sub_log_dir,f"fxtparticleidentify.log")
-                run_cmd(fxtparticleidentify_cmd,logger=obsid_logger,logname=fxtparticleidentify_log)
+                run_cmd(
+                    fxtparticleidentify_cmd,
+                    logger=obsid_logger,
+                    logname=fxtparticleidentify_log,
+                    cwd=sub_log_dir,
+                )
 
             #--- run fxtbadpix
             evt_badpix_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.badpix")
@@ -148,7 +153,7 @@ def fxtchain_obsid(
                 ])
                 emit(obsid_logger, "info", "Running fxtbadpix ...")
                 fxtbadpix_log = os.path.join(sub_log_dir,f"fxtbadpix.log")
-                run_cmd(fxtbadpix_cmd,logger=obsid_logger,logname=fxtbadpix_log)
+                run_cmd(fxtbadpix_cmd, logger=obsid_logger, logname=fxtbadpix_log, cwd=sub_log_dir)
 
             #--- run fxtgrade
             evt_grade_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.grade")
@@ -162,7 +167,7 @@ def fxtchain_obsid(
                 ])
                 emit(obsid_logger, "info", "Running fxtgrade ...")
                 fxtgrade_log = os.path.join(sub_log_dir,f"fxtgrade.log")
-                run_cmd(fxtgrade_cmd,logger=obsid_logger,logname=fxtgrade_log)
+                run_cmd(fxtgrade_cmd, logger=obsid_logger, logname=fxtgrade_log, cwd=sub_log_dir)
 
 
             #--- run fxtgtigen
@@ -177,7 +182,7 @@ def fxtchain_obsid(
                 ])
                 emit(obsid_logger, "info", "Running fxtgtigen ...")
                 fxtgtigen_log = os.path.join(sub_log_dir,f"fxtgtigen.log")
-                run_cmd(fxtgtigen_cmd,logger=obsid_logger,logname=fxtgtigen_log)
+                run_cmd(fxtgtigen_cmd, logger=obsid_logger, logname=fxtgtigen_log, cwd=sub_log_dir)
 
             #--- run xselect for cleaned events and datatype-specific products
             xsl_fname = os.path.join(sub_log_dir, f"{datatype}_stage1.xsl")
@@ -262,7 +267,7 @@ def fxtchain_obsid(
                     ])
                     emit(obsid_logger, "info", "Running fxtexpogen ...")
                     fxtexpogen_log = os.path.join(sub_log_dir,f"fxtexpogen.log")
-                    run_cmd(fxtexpogen_cmd,logger=obsid_logger,logname=fxtexpogen_log)
+                    run_cmd(fxtexpogen_cmd, logger=obsid_logger, logname=fxtexpogen_log, cwd=sub_log_dir)
 
                 eefmap_fname_map = {
                     energy_range_suffix(energy_range): os.path.join(
@@ -290,7 +295,7 @@ def fxtchain_obsid(
                         ])
                         emit(obsid_logger, "info", f"Running fxteefmap for {image_key} ...")
                         fxteefmap_log = os.path.join(sub_log_dir,f"fxteefmap_{image_key}.log")
-                        run_cmd(fxteefmap_cmd,logger=obsid_logger,logname=fxteefmap_log)
+                        run_cmd(fxteefmap_cmd, logger=obsid_logger, logname=fxteefmap_log, cwd=sub_log_dir)
 
                 first_image_key = energy_range_suffix(image_energy_ranges[0])
                 first_lc_key = energy_range_suffix(lightcurve_energy_ranges[0])
@@ -357,7 +362,7 @@ def fxtchain_obsid(
                     ])
                     emit(obsid_logger, "info", "Running fxtbkggen ...")
                     fxtbkggen_log = os.path.join(sub_log_dir,"fxtbkggen.log")
-                    run_cmd(fxtbkggen_cmd,logger=obsid_logger,logname=fxtbkggen_log)
+                    run_cmd(fxtbkggen_cmd, logger=obsid_logger, logname=fxtbkggen_log, cwd=sub_log_dir)
 
                 obsid_prod_dict[datatype][evt_fname_prefix]["fsa_spec"] = fsa_spec_fname
                 obsid_prod_dict[datatype][evt_fname_prefix]["fsa_lc"] = fsa_lc_fname
@@ -506,7 +511,7 @@ def fxt_extract_spec(
                 ])
                 emit(obsid_logger, "info", "Running fxtarfgen ...")
                 fxtarfgen_log = os.path.join(sub_log_dir,f"fxtarfgen.log")
-                run_cmd(fxtarfgen_cmd,logger=obsid_logger,logname=fxtarfgen_log)
+                run_cmd(fxtarfgen_cmd, logger=obsid_logger, logname=fxtarfgen_log, cwd=sub_log_dir)
 
             #--- run rmfgen
             rmf_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_src.rmf")
@@ -520,7 +525,7 @@ def fxt_extract_spec(
                 ])
                 emit(obsid_logger, "info", "Running fxtrmfgen ...")
                 fxtrmfgen_log = os.path.join(sub_log_dir,f"fxtrmfgen.log")
-                run_cmd(fxtrmfgen_cmd,logger=obsid_logger,logname=fxtrmfgen_log)
+                run_cmd(fxtrmfgen_cmd, logger=obsid_logger, logname=fxtrmfgen_log, cwd=sub_log_dir)
 
             #--- sanity check on pile-up
             grade_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_src.grade")
