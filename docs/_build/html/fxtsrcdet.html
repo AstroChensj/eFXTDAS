@@ -764,6 +764,7 @@ window.runMermaid = runMermaid;</script>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#public-catalog-region">Public Catalog Region</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trouble-shooting-and-faq">Trouble shooting, and FAQ</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
 </ul>
             </nav>
@@ -793,8 +794,6 @@ window.runMermaid = runMermaid;</script>
 <li><p>DS9 region export in image and sky coordinates</p></li>
 </ul>
 <p>The implementation draws inspiration from CIAO <code class="docutils literal notranslate"><span class="pre">wavdetect</span></code> on the initial detection side and eSASS <code class="docutils literal notranslate"><span class="pre">ermldet</span></code> / <code class="docutils literal notranslate"><span class="pre">erbackmap</span></code> concepts on the source fitting and catalog side.</p>
-<p>TODO: add classification debug columns, extent_support, morph_extent_support, etc.
-TODO: add logger.py for standard logger.</p>
 </section>
 <section id="basic-usage">
 <h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
@@ -824,6 +823,7 @@ TODO: add logger.py for standard logger.</p>
     <span class="n">filter_name</span><span class="o">=</span><span class="s2">&quot;open&quot;</span><span class="p">,</span>
     <span class="n">emin_keV</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
     <span class="n">emax_keV</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+    <span class="n">background_sigma_grid</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
 <span class="p">)</span>
 
 <span class="n">result</span> <span class="o">=</span> <span class="n">fxtsrcdet_pipeline</span><span class="p">(</span>
@@ -859,6 +859,13 @@ catalog fitting are performed</p></li>
 <li><p>used to define valid pixels and to make the background map exposure-aware</p></li>
 </ul>
 </li>
+<li><p>user-supplied analysis mask FITS: <code class="docutils literal notranslate"><span class="pre">--mask</span></code></p>
+<ul>
+<li><p>non-zero pixels are treated as globally valid</p></li>
+<li><p>this mask is applied consistently to detection, adaptive background
+estimation, PSF-aware fitting, and final <code class="docutils literal notranslate"><span class="pre">maskfrac</span></code> diagnostics</p></li>
+</ul>
+</li>
 <li><p>precomputed multi-extension EEF-radius map from <code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code>: <code class="docutils literal notranslate"><span class="pre">--eefmap</span></code></p>
 <ul>
 <li><p>when supplied, <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> uses this directly for PSF-aware aperture and
@@ -876,6 +883,16 @@ morphology work</p></li>
 provided</p></li>
 </ul>
 </li>
+<li><p>adaptive background-model smoothing grid:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--background-sigma-grid</span></code></p></li>
+<li><p>Gaussian smoothing scales in pixels available to the adaptive
+background model</p></li>
+<li><p>default: <code class="docutils literal notranslate"><span class="pre">4,8,16,32,64</span></code></p></li>
+<li><p>values below the internal floor are promoted to
+<code class="docutils literal notranslate"><span class="pre">BACKGROUND_SIGMA_FLOOR_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code></p></li>
+</ul>
+</li>
 <li><p>optional optical-axis override:</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">--optaxis-x</span></code></p></li>
@@ -888,7 +905,7 @@ provided</p></li>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">--scales</span></code></p>
 <ul>
-<li><p>wavelet scales in pixels, for example <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">2</span> <span class="pre">4</span> <span class="pre">8</span> <span class="pre">16</span></code></p></li>
+<li><p>wavelet scales in pixels, for example <code class="docutils literal notranslate"><span class="pre">1,2,4,8,16</span></code></p></li>
 </ul>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--sigthresh</span></code></p>
@@ -1005,6 +1022,7 @@ celestial WCS</p></li>
 <p>For a run such as:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxtsrcdet<span class="w"> </span>img.fits<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--expmap<span class="w"> </span>expmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mask<span class="w"> </span>analysis_mask.fits<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--out<span class="w"> </span>sources.fits<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--regfile<span class="w"> </span>sources.reg<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--sky-regfile<span class="w"> </span>sources_fk5.reg<span class="w"> </span><span class="se">\</span>
@@ -1017,6 +1035,7 @@ celestial WCS</p></li>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;working-directory&gt;/
 |-- img.fits
 |-- expmap.fits
+|-- analysis_mask.fits
 |-- sources.fits
 |-- sources.reg
 |-- sources_fk5.reg
@@ -1092,6 +1111,7 @@ or spectral region work</p></li>
 |-- agg_mask
 |-- best_sig
 |-- background_map
+|-- analysis_mask
 |-- psf_context
 |-- pixel_scale_arcsec
 </pre></div>
@@ -1122,6 +1142,12 @@ correlation, and source-mask products</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">background_map</span></code></p>
 <ul>
 <li><p>final background model used by the fitting/classification stage</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">analysis_mask</span></code></p>
+<ul>
+<li><p>normalized user-supplied global validity mask, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if no mask was
+provided</p></li>
 </ul>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">psf_context</span></code></p>
@@ -1236,11 +1262,14 @@ cleansing likely source pixels before forming the final merged source list.</p>
 <h3>2. Background Map Construction<a class="headerlink" href="#background-map-construction" title="Link to this heading">#</a></h3>
 <p>The background map is constructed after the initial detection stage:</p>
 <ol class="arabic simple">
-<li><p>build a valid mask from exposure</p></li>
-<li><p>carve source regions from the valid image</p></li>
+<li><p>build a valid mask from exposure and, if supplied, the user analysis mask</p></li>
+<li><p>keep only science-style provisional candidates for both background carving and later PSF-aware fitting</p></li>
+<li><p>carve those selected source regions from the valid image</p></li>
 <li><p>smooth masked counts and masked exposure over several scales</p></li>
 <li><p>estimate effective support at each smoothing scale</p></li>
 <li><p>choose or interpolate the smallest smoothing scale with enough support</p></li>
+<li><p>where local support is weak, fall back to the broadest-scale background model rather than forcing the background to zero</p></li>
+<li><p>zero only globally invalid pixels outside the allowed analysis region</p></li>
 </ol>
 <p>This is closer in spirit to <code class="docutils literal notranslate"><span class="pre">erbackmap</span></code> than to a simple annulus-fill background.</p>
 <p>An example of this step is shown in <a class="reference internal" href="#fig-wavelet-bkg"><span class="std std-numref">Fig. 3</span></a>.</p>
@@ -1346,7 +1375,7 @@ cleansing likely source pixels before forming the final merged source list.</p>
 <ul class="simple">
 <li><p>wavelet scales:</p>
 <ul>
-<li><p>default <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">2,</span> <span class="pre">4,</span> <span class="pre">8,</span> <span class="pre">16)</span></code> pixels</p></li>
+<li><p>default <code class="docutils literal notranslate"><span class="pre">1,2,4,8,16</span></code> pixels</p></li>
 </ul>
 </li>
 <li><p>detection significance threshold:</p>
@@ -1404,11 +1433,10 @@ cleansing likely source pixels before forming the final merged source list.</p>
 <section id="id1">
 <h4>Background-Map Construction<a class="headerlink" href="#id1" title="Link to this heading">#</a></h4>
 <ul class="simple">
-<li><p>Carve detected sources out of the image before adaptive smoothing so source wings do not leak into the background model. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">0.8</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">3.5</span></code>.</p></li>
-<li><p>Choose the preferred starting smoothing width for the adaptive background builder. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">smooth_sigma</span> <span class="pre">=</span> <span class="pre">DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX</span> <span class="pre">=</span> <span class="pre">6.0</span></code>.</p></li>
-<li><p>Control which Gaussian smoothing scales are available to the adaptive background model. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">sorted({max(smooth_sigma,</span> <span class="pre">BACKGROUND_SIGMA_FLOOR_PIX),</span> <span class="pre">*BACKGROUND_SIGMA_GRID_PIX})</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_SIGMA_FLOOR_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_SIGMA_GRID_PIX</span> <span class="pre">=</span> <span class="pre">(4.0,</span> <span class="pre">8.0,</span> <span class="pre">16.0,</span> <span class="pre">32.0)</span></code>.</p></li>
+<li><p>Restrict which provisional detections are allowed to carve the background map so tiny low-significance fragments do not turn the image into cheese. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: carve only if <code class="docutils literal notranslate"><span class="pre">len(support_scales)</span> <span class="pre">&gt;=</span> <span class="pre">BACKGROUND_CARVE_MIN_SUPPORT_SCALES</span></code> and <code class="docutils literal notranslate"><span class="pre">counts</span> <span class="pre">&gt;=</span> <span class="pre">BACKGROUND_CARVE_MIN_COUNTS</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_MIN_SUPPORT_SCALES</span> <span class="pre">=</span> <span class="pre">2</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_MIN_COUNTS</span> <span class="pre">=</span> <span class="pre">4.0</span></code>.</p></li>
+<li><p>Set the carve radius once a source is admitted for background carving, so source wings do not leak into the background model. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">max(BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">*</span> <span class="pre">psf_r90,</span> <span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">*</span> <span class="pre">scale,</span> <span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX)</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_R90_FACTOR</span> <span class="pre">=</span> <span class="pre">0.8</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1.5</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_CARVE_MIN_RADIUS_PIX</span> <span class="pre">=</span> <span class="pre">3.5</span></code>.</p></li>
 <li><p>Require a minimum number of effective source-free background counts before trusting a local smoothing scale. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">support</span> <span class="pre">&gt;=</span> <span class="pre">BACKGROUND_TARGET_COUNTS</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_TARGET_COUNTS</span> <span class="pre">=</span> <span class="pre">100.0</span></code>.</p></li>
-<li><p>Zero out pixels whose broadest-scale source-free support is still too poor for a reliable background estimate. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">support_ref</span> <span class="pre">&gt;</span> <span class="pre">BACKGROUND_MIN_SUPPORT_WEIGHT</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_MIN_SUPPORT_WEIGHT</span> <span class="pre">=</span> <span class="pre">0.1</span></code>.</p></li>
+<li><p>Keep the broadest-scale background model as the fallback where local support is weak, instead of forcing those pixels to zero. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">background</span> <span class="pre">=</span> <span class="pre">np.where(hit,</span> <span class="pre">background,</span> <span class="pre">model_cube[-1])</span></code>. Defaults: the broadest scale comes from the user-facing <code class="docutils literal notranslate"><span class="pre">background_sigma_grid</span></code>, floored by <code class="docutils literal notranslate"><span class="pre">BACKGROUND_SIGMA_FLOOR_PIX</span> <span class="pre">=</span> <span class="pre">4.0</span></code>.</p></li>
 <li><p>Prevent pathological spikes in the local background-rate estimate near carved holes or sharp exposure edges. Used in <a class="reference download internal" download="" href="_downloads/efe9ad540f029e856dfc116dbc37af37/background.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet/background.py</span></code></span></a> <code class="docutils literal notranslate"><span class="pre">create_background_map()</span></code>. Formula: <code class="docutils literal notranslate"><span class="pre">percentile(rate_samples,</span> <span class="pre">BACKGROUND_RATE_CAP_PERCENTILE)</span> <span class="pre">*</span> <span class="pre">BACKGROUND_RATE_CAP_FACTOR</span></code>. Defaults: <code class="docutils literal notranslate"><span class="pre">BACKGROUND_RATE_CAP_PERCENTILE</span> <span class="pre">=</span> <span class="pre">99.9</span></code>, <code class="docutils literal notranslate"><span class="pre">BACKGROUND_RATE_CAP_FACTOR</span> <span class="pre">=</span> <span class="pre">3.0</span></code>.</p></li>
 </ul>
 </section>
@@ -1455,6 +1483,61 @@ cleansing likely source pixels before forming the final merged source list.</p>
 <li><p>extended sources use fitted extended-model <code class="docutils literal notranslate"><span class="pre">r75</span></code></p></li>
 </ul>
 </section>
+</section>
+<section id="trouble-shooting-and-faq">
+<h2>Trouble shooting, and FAQ<a class="headerlink" href="#trouble-shooting-and-faq" title="Link to this heading">#</a></h2>
+<ol class="arabic simple">
+<li><p>My detection map looks weird: at places where there look significant signal in the image, no detection is found there; however at places that look like pure background, detection is found.</p>
+<ul class="simple">
+<li><p>Diagnose the background map <code class="docutils literal notranslate"><span class="pre">bkgmap.fits</span></code>, the aggregate source mask, and the per-scale correlation maps from the Python return value. In practice, strange detections are often caused by an over-carved or under-supported background model rather than by the final fitting code alone.</p></li>
+</ul>
+</li>
+<li><p>How do I select wavelet scales for my X-ray image?</p>
+<ul class="simple">
+<li><p>Scale choice should mainly depend on how sparse the image is and on the angular size of the sources you expect to detect. For typical EP-FXT point-source work, the default <code class="docutils literal notranslate"><span class="pre">1,2,4,8,16</span></code> is a reasonable starting point. But for very sparse images, especially stacked images with low mean counts per valid pixel, the smallest scale can become too sensitive to isolated <code class="docutils literal notranslate"><span class="pre">1</span></code>-count fluctuations. In that regime, <code class="docutils literal notranslate"><span class="pre">2,4,8,16</span></code> is often more stable.</p></li>
+<li><p>In practice, monitor the source-count checkpoints in the log:</p>
+<ul>
+<li><p>raw wavelet candidates</p></li>
+<li><p>science candidates after filtering</p></li>
+<li><p>after PSF-aware fitting</p></li>
+<li><p>after background rejection</p></li>
+<li><p>after duplicate pruning</p></li>
+</ul>
+</li>
+<li><p>If adding scale <code class="docutils literal notranslate"><span class="pre">1</span></code> causes an explosion of raw candidates, unstable background carving, or many compact edge-like detections, then the image is probably too sparse for that smallest scale. Also note that the final catalog is not a monotonic superset of the raw wavelet detections: adding scale <code class="docutils literal notranslate"><span class="pre">1</span></code> can produce more provisional candidates but fewer final science sources because it changes later deblending, fitting, and pruning.</p></li>
+</ul>
+</li>
+<li><p>Why do different pixels use different best smoothing scales in the background map? Is that physical?</p>
+<ul class="simple">
+<li><p>The adaptive background model is choosing a local estimator bandwidth, not claiming that the physical sky background truly has a different intrinsic smoothing scale at every pixel. Pixels near carved source holes, detector edges, or low-exposure regions have less valid support and therefore need broader smoothing to obtain a stable source-free background estimate. Clean interior pixels can often use a smaller smoothing scale.</p></li>
+</ul>
+</li>
+<li><p>How is the current background map prevented from becoming too cheese-like?</p>
+<ul class="simple">
+<li><p>The current implementation no longer lets every provisional wavelet candidate carve the background map. By default, a candidate is used for both background carving and later PSF-aware fitting only if it satisfies:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">len(support_scales)</span> <span class="pre">&gt;=</span> <span class="pre">2</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">counts</span> <span class="pre">&gt;=</span> <span class="pre">4</span></code></p></li>
+</ul>
+</li>
+<li><p>In addition, weak-support pixels no longer default to zero background. They now fall back to the broadest adaptive smoothing model, and only globally invalid pixels outside the allowed analysis region are forced to zero.</p></li>
+</ul>
+</li>
+<li><p>What does the user mask actually do?</p>
+<ul class="simple">
+<li><p>The optional <code class="docutils literal notranslate"><span class="pre">--mask</span></code> input is a global analysis-validity mask. It is combined with the exposure map and applied consistently to:</p>
+<ul>
+<li><p>wavelet detection</p></li>
+<li><p>iterative background estimation</p></li>
+<li><p>final background-map construction</p></li>
+<li><p>PSF-aware fitting</p></li>
+<li><p>final <code class="docutils literal notranslate"><span class="pre">maskfrac</span></code> diagnostics</p></li>
+</ul>
+</li>
+<li><p>It does not replace the internal source masks or neighbor-exclusion masks used for deblending and local fitting.</p></li>
+</ul>
+</li>
+</ol>
 </section>
 <section id="suggested-future-additions">
 <h2>Suggested Future Additions<a class="headerlink" href="#suggested-future-additions" title="Link to this heading">#</a></h2>
@@ -1550,6 +1633,7 @@ cleansing likely source pixels before forming the final merged source list.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#public-catalog-region">Public Catalog Region</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trouble-shooting-and-faq">Trouble shooting, and FAQ</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#suggested-future-additions">Suggested Future Additions</a></li>
 </ul>
   </nav></div>

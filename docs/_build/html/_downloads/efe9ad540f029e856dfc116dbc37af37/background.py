@@ -6,6 +6,8 @@ import numpy as np
 
 from fxtpsf_helpers import MissionPSFContext, eef_radius, infer_optical_axis, load_local_eef, sample_radius_map
 from fxtsrcdet.config import (
+    BACKGROUND_CARVE_MIN_COUNTS,
+    BACKGROUND_CARVE_MIN_SUPPORT_SCALES,
     BACKGROUND_CARVE_MIN_RADIUS_PIX,
     BACKGROUND_CARVE_R90_FACTOR,
     BACKGROUND_CARVE_SCALE_FACTOR,
@@ -13,9 +15,7 @@ from fxtsrcdet.config import (
     BACKGROUND_RATE_CAP_FACTOR,
     BACKGROUND_RATE_CAP_PERCENTILE,
     BACKGROUND_SIGMA_FLOOR_PIX,
-    BACKGROUND_SIGMA_GRID_PIX,
     BACKGROUND_TARGET_COUNTS,
-    DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX,
     EPS,
 )
 from fxtsrcdet.utils.imageops import smooth_image
@@ -28,10 +28,10 @@ def create_background_map(
     psf_context: MissionPSFContext,
     pixel_scale_arcsec: float,
     exposure_map: np.ndarray | None = None,
-    expthresh: float = 0.0,
+    analysis_mask: np.ndarray | None = None,
     optaxis_x: float | None = None,
     optaxis_y: float | None = None,
-    smooth_sigma: float = DEFAULT_BACKGROUND_SMOOTH_SIGMA_PIX,
+    sigma_grid: tuple[float, ...] | list[float] | np.ndarray = (4.0, 8.0, 16.0, 32.0, 64.0),
     eef_radius_maps: dict | None = None,
 ) -> np.ndarray:
     """Build an exposure-aware, source-masked smoothed background map.
@@ -48,14 +48,16 @@ def create_background_map(
         Image pixel scale in arcsec/pixel.
     exposure_map : np.ndarray | None
         Optional exposure map matched to ``image``.
-    expthresh : float
-        Unused placeholder kept for API stability.
+    analysis_mask : np.ndarray | None
+        Optional boolean mask selecting globally valid pixels for background
+        estimation.
     optaxis_x : float | None
         Optional optical-axis x coordinate in 1-based pixels.
     optaxis_y : float | None
         Optional optical-axis y coordinate in 1-based pixels.
-    smooth_sigma : float
-        Preferred smoothing scale in pixels.
+    sigma_grid : tuple[float, ...] | list[float] | np.ndarray
+        Gaussian smoothing scales in pixels available to the adaptive
+        background model.
     eef_radius_maps : dict | None
         Optional precomputed EEF-radius maps from ``fxteefmap``.
 
@@ -81,13 +83,12 @@ def create_background_map(
     6. For each pixel, choose the smallest smoothing scale that reaches the
        target support level, with interpolation between neighboring scales to
        avoid sharp boundaries.
-    7. Zero the result in invalid or unsupported pixels.
+    7. Zero the result only in globally invalid pixels.
 
     This produces a background map that preserves more structure where local
     support is strong, while automatically switching to broader smoothing where
     the source-free background is sparse.
     """
-    del expthresh
     opt_x, opt_y = infer_optical_axis(image.shape, optaxis_x, optaxis_y)
 
     #--- valid region for bkg estimation: must have non-zero exposure
@@ -95,10 +96,16 @@ def create_background_map(
         valid_mask = exposure_map > 0.0
     else:
         valid_mask = np.ones_like(image, dtype=bool)
+    if analysis_mask is not None:
+        valid_mask &= np.asarray(analysis_mask, dtype=bool)
 
     #--- valid region for bkg estimation: must carve detected sources out
     source_free_mask = valid_mask.copy()
     for row in rows:
+        if len(getattr(row, "support_scales", [])) < BACKGROUND_CARVE_MIN_SUPPORT_SCALES:
+            continue
+        if float(getattr(row, "counts", 0.0)) < BACKGROUND_CARVE_MIN_COUNTS:
+            continue
         x_ima = float(row.x)
         y_ima = float(row.y)
         local_psf_r90_pix = sample_radius_map(eef_radius_maps, "R90", x_ima, y_ima)
@@ -142,8 +149,11 @@ def create_background_map(
     #--- try different smoothing scales to find the one with highest spatial resolution, and at the same time enough effective counts support for stable estimation
     # small smoothing scales preserve detail but may have too few counts, so the background gets noisy/spiky
     # large smoothing scales are stable but blur structure too much
+    sigma_grid = np.asarray(sigma_grid, dtype=np.float64)
+    if sigma_grid.size == 0:
+        raise ValueError("sigma_grid must contain at least one smoothing scale.")
     sigma_grid = np.array(
-        sorted({max(float(smooth_sigma), BACKGROUND_SIGMA_FLOOR_PIX), *BACKGROUND_SIGMA_GRID_PIX}),
+        sorted({max(float(sigma), BACKGROUND_SIGMA_FLOOR_PIX) for sigma in sigma_grid}),
         dtype=np.float64,
     )
     target_counts = BACKGROUND_TARGET_COUNTS
@@ -198,10 +208,8 @@ def create_background_map(
     alpha = np.clip((target_counts - lower_support) / denom, 0.0, 1.0)
     background = (1.0 - alpha) * lower_model + alpha * upper_model
     background = np.where(hit, background, model_cube[-1])  # if target is never reached, use the broadest model
-    ##--- reject pixels with effectively no support
-    support_ref = smooth_image(masked_weight, float(sigma_grid[-1]))
-    background[support_ref <= min_support_weight] = 0.0
-    ##--- reject invalid detector pixels
+    ##--- reject invalid detector pixels only; low-support pixels fall back to
+    ## the broadest-scale model rather than being forced to zero.
     background[~valid_mask] = 0.0
     
     return np.clip(background, 0.0, None)

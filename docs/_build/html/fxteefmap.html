@@ -47,8 +47,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'fxteefmap';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="fxtregions" href="fxtregions.html" />
-    <link rel="prev" title="fxtsrcdet" href="fxtsrcdet.html" />
+    <link rel="prev" title="fxtregions" href="fxtregions.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="" />
@@ -140,10 +139,10 @@
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxtcombine.html"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
 </ul>
 
     </div>
@@ -383,16 +382,138 @@
 <section id="inputs">
 <h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>image FITS, used for shape and WCS</p></li>
-<li><p>optional exposure map for zeroing outside-FOV pixels</p></li>
-<li><p>mission / instrument / filter / energy configuration</p></li>
+<li><p>required:</p>
+<ul>
+<li><p>input image FITS</p>
+<ul>
+<li><p>positional argument: <code class="docutils literal notranslate"><span class="pre">image</span></code></p></li>
+<li><p>used for image shape, WCS, and the target output footprint</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>required output target:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--out</span></code></p>
+<ul>
+<li><p>output EEF-radius FITS product</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>optional calibration / context inputs:</p>
+<ul>
+<li><p>exposure map FITS: <code class="docutils literal notranslate"><span class="pre">--expmap</span></code></p>
+<ul>
+<li><p>if supplied, pixels with <code class="docutils literal notranslate"><span class="pre">exp</span> <span class="pre">&lt;=</span> <span class="pre">0</span></code> are forced to zero in the output
+radius maps</p></li>
+</ul>
+</li>
+<li><p>mission / instrument / filter / energy metadata:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--mission</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--instrument</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--filter</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--emin</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--emax</span></code></p></li>
+<li><p>used to resolve the PSF / EEF calibration line</p></li>
+</ul>
+</li>
+<li><p>optional optical-axis override:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--optaxis-x</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--optaxis-y</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>EEF-output controls:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--eeffrac</span></code></p>
+<ul>
+<li><p>request a single EEF-radius map</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--fractions</span></code></p>
+<ul>
+<li><p>request a multi-extension bundle of several EEF fractions</p></li>
+<li><p>defaults to <code class="docutils literal notranslate"><span class="pre">0.50</span> <span class="pre">0.75</span> <span class="pre">0.80</span> <span class="pre">0.90</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>logging controls:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--log-level</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--log-file</span></code></p></li>
+</ul>
+</li>
 </ul>
 </section>
 <section id="outputs">
 <h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
+<p>For a standard multi-extension run such as:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxteefmap<span class="w"> </span>img.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--expmap<span class="w"> </span>expmap.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--mission<span class="w"> </span>ep-fxt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--instrument<span class="w"> </span>fxta<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emin<span class="w"> </span><span class="m">0</span>.3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--emax<span class="w"> </span><span class="m">10</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>eef_maps.fits
+</pre></div>
+</div>
+<p>the output tree is conceptually:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;working-directory&gt;/
+|-- img.fits
+|-- expmap.fits
+|-- eef_maps.fits
+|-- eef_maps.log
+</pre></div>
+</div>
+<p>For single-fraction mode:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fxteefmap<span class="w"> </span>img.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--eeffrac<span class="w"> </span><span class="m">0</span>.75<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>r75_map.fits
+</pre></div>
+</div>
+<p>the tree is:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;working-directory&gt;/
+|-- img.fits
+|-- r75_map.fits
+|-- r75_map.log
+</pre></div>
+</div>
+<p>The products mean:</p>
 <ul class="simple">
-<li><p>multi-extension FITS with one radius map per encircled-energy fraction</p></li>
-<li><p>or a single image if <code class="docutils literal notranslate"><span class="pre">--eeffrac</span></code> is explicitly requested</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eef_maps.fits</span></code></p>
+<ul>
+<li><p>multi-extension FITS bundle</p></li>
+<li><p>primary HDU stores metadata such as mission, instrument, selected PSF line,
+optical axis, and inferred pixel scale</p></li>
+<li><p>image extensions such as <code class="docutils literal notranslate"><span class="pre">R50</span></code>, <code class="docutils literal notranslate"><span class="pre">R75</span></code>, <code class="docutils literal notranslate"><span class="pre">R80</span></code>, and <code class="docutils literal notranslate"><span class="pre">R90</span></code> store per-pixel EEF
+radii in image pixels</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">r75_map.fits</span></code></p>
+<ul>
+<li><p>single-image FITS output when <code class="docutils literal notranslate"><span class="pre">--eeffrac</span></code> is used</p></li>
+<li><p>stores one requested encircled-energy-fraction radius map</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;out&gt;.log</span></code></p>
+<ul>
+<li><p>CLI log file</p></li>
+<li><p>by default this is written beside the requested output file</p></li>
+</ul>
+</li>
+</ul>
+<p>Each output image extension carries or inherits:</p>
+<ul class="simple">
+<li><p>the input image WCS where available</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BUNIT</span> <span class="pre">=</span> <span class="pre">pixel</span></code></p></li>
+<li><p>the requested <code class="docutils literal notranslate"><span class="pre">EEF_FRAC</span></code> in single-map mode or per extension in
+multi-extension mode</p></li>
+<li><p>PSF calibration metadata such as mission, instrument, filter, and optical axis</p></li>
 </ul>
 </section>
 <section id="visualization">
@@ -502,22 +623,13 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="fxtsrcdet.html"
+       href="fxtregions.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p>
-      </div>
-    </a>
-    <a class="right-next"
-       href="fxtregions.html"
-       title="next page">
-      <div class="prev-next-info">
-        <p class="prev-next-subtitle">next</p>
         <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></p>
       </div>
-      <i class="fa-solid fa-angle-right"></i>
     </a>
 </div>
                 </footer>

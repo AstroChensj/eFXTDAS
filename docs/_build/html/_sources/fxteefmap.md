@@ -61,14 +61,100 @@ maps, meta = build_eef_radius_maps(
 
 ### Inputs
 
-- image FITS, used for shape and WCS
-- optional exposure map for zeroing outside-FOV pixels
-- mission / instrument / filter / energy configuration
+- required:
+  - input image FITS
+    - positional argument: `image`
+    - used for image shape, WCS, and the target output footprint
+- required output target:
+  - `--out`
+    - output EEF-radius FITS product
+- optional calibration / context inputs:
+  - exposure map FITS: `--expmap`
+    - if supplied, pixels with `exp <= 0` are forced to zero in the output
+      radius maps
+  - mission / instrument / filter / energy metadata:
+    - `--mission`
+    - `--instrument`
+    - `--filter`
+    - `--emin`
+    - `--emax`
+    - used to resolve the PSF / EEF calibration line
+  - optional optical-axis override:
+    - `--optaxis-x`
+    - `--optaxis-y`
+- EEF-output controls:
+  - `--eeffrac`
+    - request a single EEF-radius map
+  - `--fractions`
+    - request a multi-extension bundle of several EEF fractions
+    - defaults to `0.50 0.75 0.80 0.90`
+- logging controls:
+  - `--log-level`
+  - `--log-file`
 
 ### Outputs
 
-- multi-extension FITS with one radius map per encircled-energy fraction
-- or a single image if `--eeffrac` is explicitly requested
+For a standard multi-extension run such as:
+
+```bash
+fxteefmap img.fits \
+  --expmap expmap.fits \
+  --mission ep-fxt \
+  --instrument fxta \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out eef_maps.fits
+```
+
+the output tree is conceptually:
+
+```text
+<working-directory>/
+|-- img.fits
+|-- expmap.fits
+|-- eef_maps.fits
+|-- eef_maps.log
+```
+
+For single-fraction mode:
+
+```bash
+fxteefmap img.fits \
+  --eeffrac 0.75 \
+  --out r75_map.fits
+```
+
+the tree is:
+
+```text
+<working-directory>/
+|-- img.fits
+|-- r75_map.fits
+|-- r75_map.log
+```
+
+The products mean:
+
+- `eef_maps.fits`
+  - multi-extension FITS bundle
+  - primary HDU stores metadata such as mission, instrument, selected PSF line,
+    optical axis, and inferred pixel scale
+  - image extensions such as `R50`, `R75`, `R80`, and `R90` store per-pixel EEF
+    radii in image pixels
+- `r75_map.fits`
+  - single-image FITS output when `--eeffrac` is used
+  - stores one requested encircled-energy-fraction radius map
+- `<out>.log`
+  - CLI log file
+  - by default this is written beside the requested output file
+
+Each output image extension carries or inherits:
+
+- the input image WCS where available
+- `BUNIT = pixel`
+- the requested `EEF_FRAC` in single-map mode or per extension in
+  multi-extension mode
+- PSF calibration metadata such as mission, instrument, filter, and optical axis
 
 ### Visualization
 

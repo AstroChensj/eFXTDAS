@@ -38,6 +38,7 @@ class ScaleResult:
 def detect_sources(
     image: np.ndarray,
     exposure: np.ndarray | None = None,
+    analysis_mask: np.ndarray | None = None,
     scales: Iterable[float] = (1.0, 2.0, 4.0, 8.0, 16.0),
     sigthresh: float = 1e-6,
     bkgsigthresh: float = 1e-3,
@@ -59,6 +60,9 @@ def detect_sources(
         Input counts image.
     exposure : np.ndarray | None
         Optional exposure map matched to ``image``.
+    analysis_mask : np.ndarray | None
+        Optional boolean mask selecting globally valid pixels for detection and
+        background estimation.
     scales : Iterable[float]
         Wavelet scales in pixels.
     sigthresh : float
@@ -146,6 +150,14 @@ def detect_sources(
         exp = exposure.astype(np.float64, copy=False)
         if exp.shape != data.shape:
             raise ValueError("Exposure map shape must match image shape.")
+    if analysis_mask is not None:
+        valid_analysis = np.asarray(analysis_mask, dtype=bool)
+        if valid_analysis.shape != data.shape:
+            raise ValueError("Analysis mask shape must match image shape.")
+    else:
+        valid_analysis = np.ones_like(data, dtype=bool)
+    data = np.where(valid_analysis, data, 0.0)
+    exp = np.where(valid_analysis, exp, 0.0)
 
     if not (0 < sigthresh < 1):
         raise ValueError("sigthresh must be in (0,1).")
@@ -168,6 +180,7 @@ def detect_sources(
         bkg = iterative_background(
             image=data,
             exposure=exp,
+            analysis_mask=valid_analysis,
             kernel=kernel,
             bkgsigthresh=bkgsigthresh,
             maxiter=maxiter,
@@ -186,7 +199,7 @@ def detect_sources(
 
         ###--- reject false detections on invalid pixels with low exposure
         rel_exp = exp / max(float(exp.max()), EPS)
-        src = (z >= z_thresh) & (rel_exp >= expthresh)  # NOTE: a physically-single source can be split into multiple source pixels with discontinuity, e.g., "1 0 1" case can appear
+        src = (z >= z_thresh) & (rel_exp >= expthresh) & valid_analysis  # NOTE: a physically-single source can be split into multiple source pixels with discontinuity, e.g., "1 0 1" case can appear
 
         per_scale.append(
             ScaleResult(
@@ -241,6 +254,7 @@ def mexican_hat_kernel(scale: float, truncate: float = MEXICAN_HAT_TRUNCATE) -> 
 def estimate_background(
     image: np.ndarray,
     exposure: np.ndarray,
+    analysis_mask: np.ndarray | None,
     kernel: np.ndarray,
     expthresh: float,
 ) -> np.ndarray:
@@ -252,6 +266,8 @@ def estimate_background(
         Input counts image.
     exposure : np.ndarray
         Exposure map matched to ``image``.
+    analysis_mask : np.ndarray | None
+        Optional boolean mask selecting globally valid pixels.
     kernel : np.ndarray
         Wavelet kernel for the current detection scale.
     expthresh : float
@@ -291,18 +307,26 @@ def estimate_background(
     nw = np.where(kernel < 0.0, -kernel, 0.0)   # keeping only the negative annulus ring (now positive)
     if not np.any(nw > 0):
         return np.clip(image, 0.0, None)
-    num = fft_convolve2d(image, nw)     # each pixel now is the averaged value of the annulus around it
-    den = fft_convolve2d(exposure, nw)  # and do the same to the expmap
+    if analysis_mask is not None:
+        valid_analysis = np.asarray(analysis_mask, dtype=bool)
+    else:
+        valid_analysis = np.ones_like(image, dtype=bool)
+    masked_image = np.where(valid_analysis, image, 0.0)
+    masked_exposure = np.where(valid_analysis, exposure, 0.0)
+    num = fft_convolve2d(masked_image, nw)     # each pixel now is the averaged value of the annulus around it
+    den = fft_convolve2d(masked_exposure, nw)  # and do the same to the expmap
     norm_background = num / np.maximum(den, EPS)
-    bkg = exposure * norm_background
-    rel = exposure / max(float(exposure.max()), EPS)
+    bkg = masked_exposure * norm_background
+    rel = masked_exposure / max(float(masked_exposure.max()), EPS)
     bkg[rel < expthresh] = 0.0  # bkg at invalid pixels will be flagged 0 
+    bkg[~valid_analysis] = 0.0
     return np.clip(bkg, 0.0, None)
 
 
 def iterative_background(
     image: np.ndarray,
     exposure: np.ndarray,
+    analysis_mask: np.ndarray | None,
     kernel: np.ndarray,
     bkgsigthresh: float,
     maxiter: int,
@@ -317,6 +341,8 @@ def iterative_background(
         Input counts image.
     exposure : np.ndarray
         Exposure map matched to ``image``.
+    analysis_mask : np.ndarray | None
+        Optional boolean mask selecting globally valid pixels.
     kernel : np.ndarray
         Wavelet kernel for the current detection scale.
     bkgsigthresh : float
@@ -349,13 +375,17 @@ def iterative_background(
 
     The final background is then recomputed once more from the cleaned image.
     """
-    cleaned = image.astype(np.float64, copy=True)
+    if analysis_mask is not None:
+        valid_analysis = np.asarray(analysis_mask, dtype=bool)
+    else:
+        valid_analysis = np.ones_like(image, dtype=bool)
+    cleaned = np.where(valid_analysis, image.astype(np.float64, copy=True), 0.0)
     n_pixels = image.size
     z_bkg = inverse_normal_survival(bkgsigthresh)
 
     for _ in range(maxiter):
         #--- estimate bkg with negative annulus on current image
-        bkg = estimate_background(cleaned, exposure, kernel, expthresh)
+        bkg = estimate_background(cleaned, exposure, valid_analysis, kernel, expthresh)
         mean_c = fft_convolve2d(bkg, kernel) # to keep consistent treatment with cleaned image, we convolve bkg with the same filter
         var_c = fft_convolve2d(bkg, kernel * kernel)
         sigma_c = np.sqrt(np.maximum(var_c, EPS))
@@ -368,6 +398,7 @@ def iterative_background(
         #--- keep only reliable sources with valid exposure
         rel = exposure / max(float(exposure.max()), EPS)
         src &= rel >= expthresh
+        src &= valid_analysis
 
         #--- replace those source-like pixels with bkg
         # np.count_nonzero measures how many pixels are being newly cleaned in this iteration
@@ -377,7 +408,7 @@ def iterative_background(
         if frac < iterstop:
             break
 
-    return estimate_background(cleaned, exposure, kernel, expthresh)
+    return estimate_background(cleaned, exposure, valid_analysis, kernel, expthresh)
 
 
 def local_maxima(mask: np.ndarray, values: np.ndarray) -> np.ndarray:
