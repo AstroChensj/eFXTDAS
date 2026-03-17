@@ -180,7 +180,7 @@ def fxtchain_obsid(
                 run_cmd(fxtgtigen_cmd,logger=obsid_logger,logname=fxtgtigen_log)
 
             #--- run xselect for cleaned events and datatype-specific products
-            xsl_fname = os.path.join(sub_log_dir,f"img.xsl")
+            xsl_fname = os.path.join(sub_log_dir, f"{datatype}_stage1.xsl")
             evt_cl_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_cl.fits")
             obsid_prod_dict[datatype][evt_fname_prefix] = {"clevt": evt_cl_fname}
 
@@ -204,7 +204,7 @@ def fxtchain_obsid(
                 if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
                     emit(obsid_logger, "info", f"{evt_cl_fname} and all requested image/light-curve products already exist.")
                 else:
-                    remove_xselect_tmp_files()
+                    remove_xselect_tmp_files(sub_log_dir)
                     with open(xsl_fname,"w") as f:
                         f.writelines([f"EP\n"])
                         f.writelines([f"set datadir {obsid_out_dir}\n"])
@@ -246,8 +246,8 @@ def fxtchain_obsid(
                         f.writelines([f"no\n"])
                     xsl_cmd = f"xselect @{xsl_fname}"
                     emit(obsid_logger, "info", "Running xselect ...")
-                    xselect_log = os.path.join(sub_log_dir,f"xselect.log")
-                    run_cmd(xsl_cmd,logger=obsid_logger,logname=xselect_log)
+                    xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage1.log")
+                    run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
 
                 exp_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.expo")
                 if os.path.exists(exp_fname) and skip_existing:
@@ -307,15 +307,15 @@ def fxtchain_obsid(
             
             ##--- for fsaevt
             else:
-                fsa_spec_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.pha")
+                fsa_spec_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.pi")
                 fsa_lc_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.lc")
                 fsa_img_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.img")
-                instbkg_pi_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_instbkg.pha")
+                instbkg_pi_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_instbkg.pi")
                 expected_stage1_products = [evt_cl_fname, fsa_spec_fname, fsa_lc_fname, fsa_img_fname]
                 if all(os.path.exists(path) for path in expected_stage1_products) and skip_existing:
                     emit(obsid_logger, "info", f"{evt_cl_fname} and default FSA products already exist.")
                 else:
-                    remove_xselect_tmp_files()
+                    remove_xselect_tmp_files(sub_log_dir)
                     with open(xsl_fname,"w") as f:
                         f.writelines([f"EP\n"])
                         f.writelines([f"set datadir {obsid_out_dir}\n"])
@@ -344,8 +344,8 @@ def fxtchain_obsid(
                         f.writelines([f"no\n"])
                     xsl_cmd = f"xselect @{xsl_fname}"
                     emit(obsid_logger, "info", "Running xselect for fsaevt ...")
-                    xselect_log = os.path.join(sub_log_dir,f"xselect.log")
-                    run_cmd(xsl_cmd,logger=obsid_logger,logname=xselect_log)
+                    xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage1.log")
+                    run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
 
                 if os.path.exists(instbkg_pi_fname) and skip_existing:
                     emit(obsid_logger, "info", f"{instbkg_pi_fname} already exists.")
@@ -426,7 +426,7 @@ def fxt_extract_spec(
             os.makedirs(sub_log_dir,exist_ok=True)
 
             #--- run xselect to extract src & bkg spectra
-            xsl_fname = os.path.join(sub_log_dir,f"spec.xsl")
+            xsl_fname = os.path.join(sub_log_dir, f"{datatype}_stage4_spec.xsl")
             evt_cl_fname = obsid_prod_dict[datatype][evt_fname_prefix]["clevt"]
             shutil.copy(src_reg_fname,obsid_out_dir)
             shutil.copy(bkg_reg_fname,obsid_out_dir)
@@ -440,10 +440,11 @@ def fxt_extract_spec(
                 key for key, path in obsid_prod_dict[datatype][evt_fname_prefix]["images"].items() if path == default_image_key
             )
             lc_chan_lo, lc_chan_hi = obsid_prod_dict[datatype][evt_fname_prefix]["image_band_channels"][default_band_key]
-            if os.path.exists(srcevt_fname) and os.path.exists(srcpi_fname) and os.path.exists(bkgpi_fname) and os.path.exists(srclc_fname) and os.path.exists(bkglc_fname) and skip_existing:
-                emit(obsid_logger, "info", f"{srcevt_fname} and {srcpi_fname} and {bkgpi_fname} and {srclc_fname} and {bkglc_fname} already exists.")
+            expected_spec_products = [srcevt_fname, srcpi_fname, bkgpi_fname, srclc_fname, bkglc_fname]
+            if all(os.path.exists(path) for path in expected_spec_products) and skip_existing:
+                emit(obsid_logger, "info", "Source/background spectral-extraction products already exist.")
             else:
-                remove_xselect_tmp_files()
+                remove_xselect_tmp_files(sub_log_dir)
                 with open(xsl_fname,"w") as f:
                     f.writelines([f"EP\n"])
                     f.writelines([f"set datadir {obsid_out_dir}\n"])
@@ -488,8 +489,8 @@ def fxt_extract_spec(
                     f.writelines([f"no\n"])
                 xsl_cmd = f"xselect @{xsl_fname}"
                 emit(obsid_logger, "info", "Running xselect ...")
-                xselect_log = os.path.join(sub_log_dir,f"xselect.log")
-                run_cmd(xsl_cmd,logger=obsid_logger,logname=xselect_log)
+                xselect_log = os.path.join(sub_log_dir, f"xselect_{datatype}_stage4_spec.log")
+                run_cmd(xsl_cmd, logger=obsid_logger, logname=xselect_log, cwd=sub_log_dir)
 
             #--- run arfgen
             arf_fname = os.path.join(obsid_out_dir,f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_src.arf")

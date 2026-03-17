@@ -49,7 +49,7 @@ def _emit_command_output(
 
 def run_cmd(
 		cmd_str,
-		logger=None,logname="./run.log"
+		logger=None,logname="./run.log",cwd=None
 	):
 	"""Run one shell command and raise on failure.
 
@@ -61,6 +61,8 @@ def run_cmd(
 		Optional logger used for command and error messages.
 	logname : str, optional
 		Path of the file used to store combined stdout and stderr.
+	cwd : str | None, optional
+		Working directory used for the subprocess.
 
 	Returns
 	-------
@@ -79,6 +81,7 @@ def run_cmd(
 		text=True,
 		stdout=subprocess.PIPE,
 		stderr=subprocess.STDOUT,
+		cwd=cwd,
 	)
 	if logger is not None:
 		with open(logname, "w") as log_file:
@@ -94,8 +97,13 @@ def run_cmd(
 	return result
 
 
-def remove_xselect_tmp_files():
-	"""Remove temporary xselect working files from the current directory.
+def remove_xselect_tmp_files(workdir="."):
+	"""Remove temporary xselect working files from one working directory.
+
+	Parameters
+	----------
+	workdir : str, optional
+		Directory whose xselect temporary files should be removed.
 
 	Returns
 	-------
@@ -105,5 +113,6 @@ def remove_xselect_tmp_files():
 		"EP_ascii_out.xsl","EP_display.def","EP_files.tmp","EP_hist.xsl","EP_obscat.tmp","EP_obslist.def","EP_read_cat.xsl","EP_region.xsl","EP_xsel.run"
 	]
 	for tmp_fname in tmp_fname_lst:
-		if os.path.exists(tmp_fname):
-			os.remove(tmp_fname)
+		tmp_path = os.path.join(workdir, tmp_fname)
+		if os.path.exists(tmp_path):
+			os.remove(tmp_path)
