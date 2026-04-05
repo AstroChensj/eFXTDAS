@@ -1,1 +1,0 @@
-"""eFXTDAS region-generation package."""
