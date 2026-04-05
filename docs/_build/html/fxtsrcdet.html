@@ -730,8 +730,14 @@ window.runMermaid = runMermaid;</script>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-overrides-for-internal-constants">Environment Overrides for Internal Constants</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#source-catalog-columns">Source Catalog Columns</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#standard-science-columns">Standard Science Columns</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#optional-debug-columns">Optional Debug Columns</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">
@@ -1017,6 +1023,24 @@ celestial WCS</p></li>
 </li>
 </ul>
 </section>
+<section id="environment-overrides-for-internal-constants">
+<h3>Environment Overrides for Internal Constants<a class="headerlink" href="#environment-overrides-for-internal-constants" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> also supports package-scoped environment variables for overriding
+internal constants defined in <code class="docutils literal notranslate"><span class="pre">fxtsrcdet/config.py</span></code>.</p>
+<p>Examples:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">FXTSRCDET_BACKGROUND_CARVE_R90_FACTOR</span><span class="o">=</span><span class="m">1</span>.0
+<span class="nb">export</span><span class="w"> </span><span class="nv">FXTSRCDET_BACKGROUND_CARVE_MIN_COUNTS</span><span class="o">=</span><span class="m">6</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">FXTSRCDET_EXT_RC_GRID_BASE_PIX</span><span class="o">=</span><span class="m">0</span>.5,2.0,4.0,8.0
+</pre></div>
+</div>
+<p>Notes:</p>
+<ul class="simple">
+<li><p>this applies only to internal tuning constants, not normal CLI arguments</p></li>
+<li><p>explicit CLI or Python parameters still remain the main user-facing controls</p></li>
+<li><p>tuple-valued constants use comma-separated syntax</p></li>
+<li><p>invalid override values raise an error during import rather than being ignored</p></li>
+</ul>
+</section>
 <section id="outputs">
 <h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
 <p>For a run such as:</p>
@@ -1189,6 +1213,140 @@ provided</p></li>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
 </div>
+</section>
+</section>
+<section id="source-catalog-columns">
+<h2>Source Catalog Columns<a class="headerlink" href="#source-catalog-columns" title="Link to this heading">#</a></h2>
+<p>The final FITS catalog written by <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> follows the column schema defined
+in <code class="docutils literal notranslate"><span class="pre">fxtsrcdet/utils/io.py</span></code>.</p>
+<section id="standard-science-columns">
+<h3>Standard Science Columns<a class="headerlink" href="#standard-science-columns" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Columns</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ID_SRC</span></code></p></td>
+<td><p>source identifier in the final retained catalog</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ID_BAND</span></code></p></td>
+<td><p>band identifier; currently <code class="docutils literal notranslate"><span class="pre">0</span></code> means the total-band result</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ID_CLUSTER</span></code></p></td>
+<td><p>local grouped-fit identifier</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SOURCE_TYPE</span></code></p></td>
+<td><p>final source class: typically <code class="docutils literal notranslate"><span class="pre">background</span></code>, <code class="docutils literal notranslate"><span class="pre">point</span></code>, or <code class="docutils literal notranslate"><span class="pre">extended</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">RA</span></code>, <code class="docutils literal notranslate"><span class="pre">DEC</span></code></p></td>
+<td><p>best-fit sky position in degrees</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RA_LOWERR</span></code>, <code class="docutils literal notranslate"><span class="pre">RA_UPERR</span></code>, <code class="docutils literal notranslate"><span class="pre">DEC_LOWERR</span></code>, <code class="docutils literal notranslate"><span class="pre">DEC_UPERR</span></code></p></td>
+<td><p>1-sigma positional uncertainties in arcsec along RA and Dec</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">RADEC_ERR</span></code></p></td>
+<td><p>combined scalar position uncertainty in arcsec</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LII</span></code>, <code class="docutils literal notranslate"><span class="pre">BII</span></code></p></td>
+<td><p>Galactic longitude and latitude in degrees</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DIST_NN</span></code></p></td>
+<td><p>distance to the nearest catalog neighbor in arcsec</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">X_IMA</span></code>, <code class="docutils literal notranslate"><span class="pre">Y_IMA</span></code></p></td>
+<td><p>best-fit image coordinates in pixels</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">X_IMA_ERR</span></code>, <code class="docutils literal notranslate"><span class="pre">X_IMA_LOWERR</span></code>, <code class="docutils literal notranslate"><span class="pre">X_IMA_UPERR</span></code></p></td>
+<td><p>1-sigma x-position uncertainty in pixels</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Y_IMA_ERR</span></code>, <code class="docutils literal notranslate"><span class="pre">Y_IMA_LOWERR</span></code>, <code class="docutils literal notranslate"><span class="pre">Y_IMA_UPERR</span></code></p></td>
+<td><p>1-sigma y-position uncertainty in pixels</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">EXT</span></code></p></td>
+<td><p>best-fit source extent in arcsec</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">EXT_ERR</span></code>, <code class="docutils literal notranslate"><span class="pre">EXT_LOWERR</span></code>, <code class="docutils literal notranslate"><span class="pre">EXT_UPERR</span></code></p></td>
+<td><p>1-sigma uncertainty on <code class="docutils literal notranslate"><span class="pre">EXT</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">EXT_LIKE</span></code></p></td>
+<td><p>extent likelihood used to decide whether a source is extended</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ML_RADIUS</span></code></p></td>
+<td><p>radius of the single-source fit stamp in arcsec</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MASKFRAC</span></code></p></td>
+<td><p>fraction of the fit area inside the valid exposure / analysis mask</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ML_CTS_0</span></code></p></td>
+<td><p>best-fit source counts in the total band</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ML_CTS_ERR_0</span></code>, <code class="docutils literal notranslate"><span class="pre">ML_CTS_LOWERR_0</span></code>, <code class="docutils literal notranslate"><span class="pre">ML_CTS_UPERR_0</span></code></p></td>
+<td><p>1-sigma uncertainty on <code class="docutils literal notranslate"><span class="pre">ML_CTS_0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ML_RATE_0</span></code></p></td>
+<td><p>vignetting-corrected source count rate in count/s</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ML_RATE_ERR_0</span></code>, <code class="docutils literal notranslate"><span class="pre">ML_RATE_LOWERR_0</span></code>, <code class="docutils literal notranslate"><span class="pre">ML_RATE_UPERR_0</span></code></p></td>
+<td><p>1-sigma uncertainty on <code class="docutils literal notranslate"><span class="pre">ML_RATE_0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ML_FLUX_0</span></code></p></td>
+<td><p>source flux derived from <code class="docutils literal notranslate"><span class="pre">ML_RATE_0</span></code> and the supplied <code class="docutils literal notranslate"><span class="pre">ECF</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ML_FLUX_ERR_0</span></code>, <code class="docutils literal notranslate"><span class="pre">ML_FLUX_LOWERR_0</span></code>, <code class="docutils literal notranslate"><span class="pre">ML_FLUX_UPERR_0</span></code></p></td>
+<td><p>1-sigma uncertainty on <code class="docutils literal notranslate"><span class="pre">ML_FLUX_0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DET_LIKE_0</span></code></p></td>
+<td><p>detection likelihood in the total band</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ML_BKG_0</span></code></p></td>
+<td><p>local fitted background surface brightness in count/arcmin²</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ML_EXP_0</span></code></p></td>
+<td><p>vignetting-corrected exposure at the source position in seconds</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ML_EFF_0</span></code></p></td>
+<td><p>fraction of the PSF enclosed by the single-source fitting stamp</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>If <code class="docutils literal notranslate"><span class="pre">--debug-columns</span></code> is enabled, <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code> appends many internal diagnostic
+columns as well:</p>
+</section>
+<section id="optional-debug-columns">
+<h3>Optional Debug Columns<a class="headerlink" href="#optional-debug-columns" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Group</p></th>
+<th class="head"><p>Columns</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Wavelet detection summary</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scale</span></code>, <code class="docutils literal notranslate"><span class="pre">support_scales</span></code>, <code class="docutils literal notranslate"><span class="pre">wavelet_peak_score</span></code>, <code class="docutils literal notranslate"><span class="pre">min_significance</span></code>, <code class="docutils literal notranslate"><span class="pre">npix</span></code>, <code class="docutils literal notranslate"><span class="pre">counts</span></code>, <code class="docutils literal notranslate"><span class="pre">net_counts</span></code>, <code class="docutils literal notranslate"><span class="pre">bkg_counts</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Grouped-fit bookkeeping</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">group_id</span></code>, <code class="docutils literal notranslate"><span class="pre">group_size</span></code>, <code class="docutils literal notranslate"><span class="pre">group_stamp_radius_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">theta_arcmin</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Local PSF context</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">psf_r50_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_r75_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_r80_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_r90_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_instrument</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_filter</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_line</span></code>, <code class="docutils literal notranslate"><span class="pre">psf_energy_keV</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Morphology and extent diagnostics</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ml_radius_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">extent_ratio</span></code>, <code class="docutils literal notranslate"><span class="pre">fitted_extent_sigma_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">meas_r50_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">meas_r80_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">meas_r90_pix</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Final catalog-region geometry</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">catalog_shape</span></code>, <code class="docutils literal notranslate"><span class="pre">catalog_radius_pix</span></code>, <code class="docutils literal notranslate"><span class="pre">catalog_radius_arcsec</span></code>, <code class="docutils literal notranslate"><span class="pre">major_arcsec</span></code>, <code class="docutils literal notranslate"><span class="pre">minor_arcsec</span></code>, <code class="docutils literal notranslate"><span class="pre">radius_arcsec</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Energy-band bookkeeping</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">emin_keV</span></code>, <code class="docutils literal notranslate"><span class="pre">emax_keV</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The FITS table itself also stores per-column units and descriptions, so DS9,
+TOPCAT, or Astropy can inspect the catalog metadata directly.</p>
 </section>
 </section>
 <section id="detailed-algorithm-and-how-it-works">
@@ -1599,8 +1757,14 @@ cleansing likely source pixels before forming the final merged source list.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-overrides-for-internal-constants">Environment Overrides for Internal Constants</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#source-catalog-columns">Source Catalog Columns</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#standard-science-columns">Standard Science Columns</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#optional-debug-columns">Optional Debug Columns</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a><ul class="nav section-nav flex-column">

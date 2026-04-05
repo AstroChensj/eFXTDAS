@@ -93,11 +93,11 @@ def build_file_logger(name: str, logfile: str | Path, level: str | int = logging
     log_path = Path(logfile).expanduser().resolve()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(name)
-    for handler in logger.handlers:
+    for handler in list(logger.handlers):
         if isinstance(handler, logging.FileHandler) and Path(handler.baseFilename) == log_path:
-            logger.setLevel(resolved_level)
-            return logger
-    return _ensure_handler(logger, logging.FileHandler(log_path, mode="a"), level=resolved_level)
+            logger.removeHandler(handler)
+            handler.close()
+    return _ensure_handler(logger, logging.FileHandler(log_path, mode="w"), level=resolved_level)
 
 
 def build_cli_logger(name: str, level: str | None, logfile: str | Path | None = None) -> logging.Logger:

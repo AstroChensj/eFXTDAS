@@ -153,6 +153,25 @@ print(info["background_inner_arcsec"], info["background_outer_arcsec"])
   - `--log-level`
   - `--log-file`
 
+### Environment Overrides for Internal Constants
+
+`fxtregions` supports package-scoped environment variables for overriding
+internal constants defined in `fxtregions/config.py`.
+
+Examples:
+
+```bash
+export FXTREGIONS_DEFAULT_SOURCE_RADIUS_DEG=0.012
+export FXTREGIONS_MAX_CONF_TO_BACK_RATIO=0.15
+export FXTREGIONS_MAX_BACK_ANNULUS_WIDTH_ARCSEC=150
+```
+
+Notes:
+
+- this mechanism is intended for global internal-default tuning
+- explicit CLI radius and matching arguments still take precedence when supplied
+- invalid override values raise an error during import rather than being ignored
+
 ### Outputs
 
 For a run such as:

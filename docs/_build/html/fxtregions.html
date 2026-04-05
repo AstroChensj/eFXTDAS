@@ -730,6 +730,7 @@ window.runMermaid = runMermaid;</script>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-overrides-for-internal-constants">Environment Overrides for Internal Constants</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
 </ul>
@@ -959,6 +960,23 @@ considered detected</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--log-file</span></code></p></li>
 </ul>
 </li>
+</ul>
+</section>
+<section id="environment-overrides-for-internal-constants">
+<h3>Environment Overrides for Internal Constants<a class="headerlink" href="#environment-overrides-for-internal-constants" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code> supports package-scoped environment variables for overriding
+internal constants defined in <code class="docutils literal notranslate"><span class="pre">fxtregions/config.py</span></code>.</p>
+<p>Examples:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">FXTREGIONS_DEFAULT_SOURCE_RADIUS_DEG</span><span class="o">=</span><span class="m">0</span>.012
+<span class="nb">export</span><span class="w"> </span><span class="nv">FXTREGIONS_MAX_CONF_TO_BACK_RATIO</span><span class="o">=</span><span class="m">0</span>.15
+<span class="nb">export</span><span class="w"> </span><span class="nv">FXTREGIONS_MAX_BACK_ANNULUS_WIDTH_ARCSEC</span><span class="o">=</span><span class="m">150</span>
+</pre></div>
+</div>
+<p>Notes:</p>
+<ul class="simple">
+<li><p>this mechanism is intended for global internal-default tuning</p></li>
+<li><p>explicit CLI radius and matching arguments still take precedence when supplied</p></li>
+<li><p>invalid override values raise an error during import rather than being ignored</p></li>
 </ul>
 </section>
 <section id="outputs">
@@ -1413,6 +1431,7 @@ intentionally kept simple for ARF compatibility</p></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#command-line-usage">Command-Line Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-overrides-for-internal-constants">Environment Overrides for Internal Constants</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
 </ul>

@@ -92,6 +92,20 @@ maps, meta = build_eef_radius_maps(
   - `--log-level`
   - `--log-file`
 
+### Environment Overrides for Internal Constants
+
+`fxteefmap` supports package-scoped environment variables for overriding
+internal constants defined in `fxteefmap/config.py`.
+
+Current example:
+
+```bash
+export FXTEEFMAP_DEFAULT_PIXEL_SCALE_ARCSEC=9.6
+```
+
+This is used only for the internal fallback path when the input image WCS does
+not provide a usable pixel scale.
+
 ### Outputs
 
 For a standard multi-extension run such as:

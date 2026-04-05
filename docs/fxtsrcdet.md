@@ -144,6 +144,26 @@ per_scale = result["per_scale"]
   - `--log-file`
   - `--no-progress`
 
+### Environment Overrides for Internal Constants
+
+`fxtsrcdet` also supports package-scoped environment variables for overriding
+internal constants defined in `fxtsrcdet/config.py`.
+
+Examples:
+
+```bash
+export FXTSRCDET_BACKGROUND_CARVE_R90_FACTOR=1.0
+export FXTSRCDET_BACKGROUND_CARVE_MIN_COUNTS=6
+export FXTSRCDET_EXT_RC_GRID_BASE_PIX=0.5,2.0,4.0,8.0
+```
+
+Notes:
+
+- this applies only to internal tuning constants, not normal CLI arguments
+- explicit CLI or Python parameters still remain the main user-facing controls
+- tuple-valued constants use comma-separated syntax
+- invalid override values raise an error during import rather than being ignored
+
 ### Outputs
 
 For a run such as:
@@ -279,6 +299,60 @@ for axis in ax:
     axis.set_yticks([])
 plt.show()
 ```
+
+## Source Catalog Columns
+
+The final FITS catalog written by `fxtsrcdet` follows the column schema defined
+in `fxtsrcdet/utils/io.py`.
+
+### Standard Science Columns
+
+| Columns | Meaning |
+| --- | --- |
+| `ID_SRC` | source identifier in the final retained catalog |
+| `ID_BAND` | band identifier; currently `0` means the total-band result |
+| `ID_CLUSTER` | local grouped-fit identifier |
+| `SOURCE_TYPE` | final source class: typically `background`, `point`, or `extended` |
+| `RA`, `DEC` | best-fit sky position in degrees |
+| `RA_LOWERR`, `RA_UPERR`, `DEC_LOWERR`, `DEC_UPERR` | 1-sigma positional uncertainties in arcsec along RA and Dec |
+| `RADEC_ERR` | combined scalar position uncertainty in arcsec |
+| `LII`, `BII` | Galactic longitude and latitude in degrees |
+| `DIST_NN` | distance to the nearest catalog neighbor in arcsec |
+| `X_IMA`, `Y_IMA` | best-fit image coordinates in pixels |
+| `X_IMA_ERR`, `X_IMA_LOWERR`, `X_IMA_UPERR` | 1-sigma x-position uncertainty in pixels |
+| `Y_IMA_ERR`, `Y_IMA_LOWERR`, `Y_IMA_UPERR` | 1-sigma y-position uncertainty in pixels |
+| `EXT` | best-fit source extent in arcsec |
+| `EXT_ERR`, `EXT_LOWERR`, `EXT_UPERR` | 1-sigma uncertainty on `EXT` |
+| `EXT_LIKE` | extent likelihood used to decide whether a source is extended |
+| `ML_RADIUS` | radius of the single-source fit stamp in arcsec |
+| `MASKFRAC` | fraction of the fit area inside the valid exposure / analysis mask |
+| `ML_CTS_0` | best-fit source counts in the total band |
+| `ML_CTS_ERR_0`, `ML_CTS_LOWERR_0`, `ML_CTS_UPERR_0` | 1-sigma uncertainty on `ML_CTS_0` |
+| `ML_RATE_0` | vignetting-corrected source count rate in count/s |
+| `ML_RATE_ERR_0`, `ML_RATE_LOWERR_0`, `ML_RATE_UPERR_0` | 1-sigma uncertainty on `ML_RATE_0` |
+| `ML_FLUX_0` | source flux derived from `ML_RATE_0` and the supplied `ECF` |
+| `ML_FLUX_ERR_0`, `ML_FLUX_LOWERR_0`, `ML_FLUX_UPERR_0` | 1-sigma uncertainty on `ML_FLUX_0` |
+| `DET_LIKE_0` | detection likelihood in the total band |
+| `ML_BKG_0` | local fitted background surface brightness in count/arcmin² |
+| `ML_EXP_0` | vignetting-corrected exposure at the source position in seconds |
+| `ML_EFF_0` | fraction of the PSF enclosed by the single-source fitting stamp |
+
+If `--debug-columns` is enabled, `fxtsrcdet` appends many internal diagnostic
+columns as well:
+
+### Optional Debug Columns
+
+| Group | Columns |
+| --- | --- |
+| Wavelet detection summary | `scale`, `support_scales`, `wavelet_peak_score`, `min_significance`, `npix`, `counts`, `net_counts`, `bkg_counts` |
+| Grouped-fit bookkeeping | `group_id`, `group_size`, `group_stamp_radius_pix`, `theta_arcmin` |
+| Local PSF context | `psf_r50_pix`, `psf_r75_pix`, `psf_r80_pix`, `psf_r90_pix`, `psf_instrument`, `psf_filter`, `psf_line`, `psf_energy_keV` |
+| Morphology and extent diagnostics | `ml_radius_pix`, `extent_ratio`, `fitted_extent_sigma_pix`, `meas_r50_pix`, `meas_r80_pix`, `meas_r90_pix` |
+| Final catalog-region geometry | `catalog_shape`, `catalog_radius_pix`, `catalog_radius_arcsec`, `major_arcsec`, `minor_arcsec`, `radius_arcsec` |
+| Energy-band bookkeeping | `emin_keV`, `emax_keV` |
+
+The FITS table itself also stores per-column units and descriptions, so DS9,
+TOPCAT, or Astropy can inspect the catalog metadata directly.
 
 ## Detailed Algorithm and How It Works
 
@@ -604,6 +678,3 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
      - final `maskfrac` diagnostics
    - It does not replace the internal source masks or neighbor-exclusion masks used for deblending and local fitting.
 
-## Suggested Future Additions
-
-- a dedicated page on catalog column definitions

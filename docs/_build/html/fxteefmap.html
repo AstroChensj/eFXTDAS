@@ -294,6 +294,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#single-fraction-output">Single-Fraction Output</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-overrides-for-internal-constants">Environment Overrides for Internal Constants</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
 </ul>
@@ -449,6 +450,17 @@ radius maps</p></li>
 </ul>
 </li>
 </ul>
+</section>
+<section id="environment-overrides-for-internal-constants">
+<h3>Environment Overrides for Internal Constants<a class="headerlink" href="#environment-overrides-for-internal-constants" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code> supports package-scoped environment variables for overriding
+internal constants defined in <code class="docutils literal notranslate"><span class="pre">fxteefmap/config.py</span></code>.</p>
+<p>Current example:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">FXTEEFMAP_DEFAULT_PIXEL_SCALE_ARCSEC</span><span class="o">=</span><span class="m">9</span>.6
+</pre></div>
+</div>
+<p>This is used only for the internal fallback path when the input image WCS does
+not provide a usable pixel scale.</p>
 </section>
 <section id="outputs">
 <h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">#</a></h3>
@@ -655,6 +667,7 @@ multi-extension mode</p></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#single-fraction-output">Single-Fraction Output</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-usage">Python Usage</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inputs">Inputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-overrides-for-internal-constants">Environment Overrides for Internal Constants</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#outputs">Outputs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a></li>
 </ul>

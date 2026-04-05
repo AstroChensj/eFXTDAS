@@ -1,183 +1,250 @@
 # eFXTDAS
 
-Analysis tools extending official FXTDAS.
+`eFXTDAS` is a small analysis toolkit that extends the official [FXTDAS](https://epfxt.ihep.ac.cn/analysis) workflow for Einstein Probe FXT data.
 
-This repository contains a set of analysis utilities for Einstein Probe FXT data products, centered on a pure-Python `wavdetect`-style source detection workflow with mission-aware PSF fitting for catalog construction.
+The official FXTDAS tasks handle the basic event calibration chain. `eFXTDAS` adds the analysis steps that are usually still missing for science work:
 
-## What it does
+- stacked multi-OBSID imaging and spectral combination
+- wavelet-style source detection as seeding, followed by PSF fitting + extended source testing
+- automated source/background extraction/exclusion-region generation (inspired from [`eSASS` `srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html) `AUTO` mode) that optimizes SNR and avoid nearby neighbor contamination
+- image-sized EEF-radius map generation for PSF-aware workflows
 
-- Multi-scale Mexican-hat (Marr) wavelet correlation
-- Iterative source cleansing for background estimation
-- Significance thresholding (Gaussian approximation to correlation statistics)
-- Cross-scale peak clustering to suppress single-scale noise detections
-- Erbackmap-like carved-and-smoothed background map creation
-- Ermldet-like catalog scoring with EP/FXT PSF and Cash-statistic `det_like` / `ext_like`
-- Source table output (`.csv`) and DS9 region output (`.reg`)
-- Standard catalog CSV by default, with optional internal/debug columns
+The repository currently provides four user-facing tasks:
 
-The implementation follows the algorithmic outline in the Chandra Detect Reference Manual (`2006cxc_ciaoDetect_DOC.pdf`), but is not a bitwise reimplementation of CIAO `wavdetect`.
+- `fxtcombine`: top-level multi-epoch stacking and spectral combination that calls `fxtsrcdet` `fxtregions` `fxteefmap`
+- `fxtsrcdet`: source detection and source catalog construction on one image
+- `fxtregions`: source/background region generation from a source catalog
+- `fxteefmap`: EEF-radius map generation on one image footprint
 
-## Package Layout
+![eFXTDAS summary figure](docs/figs/readme_summary_2x3.png)
 
-- `fxtpsf_helpers/`: mission-aware PSF and EEF utilities
-  - `mission.py`: public mission-agnostic PSF interface
-  - `ep_fxt.py`: EP/FXT-specific EEF selection and interpolation
-  - `models.py`: shared PSF data models
-- `fxteefmap/`: EEF-radius map generator
-  - `pipeline.py`: map-generation logic
-- `fxtsrcdet/`: source-detection and catalog pipeline
-  - `pipeline.py`: top-level orchestration and public Python API
-  - `detect.py`: wavelet detection stage
-  - `background.py`: exposure-aware background-map creation
-  - `fit.py`: Cash-statistic fitting utilities
-  - `catalog.py`: grouping, PSF-aware classification, pruning, and catalog derivation
-  - `models.py`: detector/catalog data models
-  - `utils/`: FITS/WCS, logging, image, and other support helpers
-- `fxtregions/`: source/background region construction
-  - `pipeline.py`: region-building logic
-  - `models.py`: region data models
-- `archive/`: fallback copies of older implementations
+Example stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked analysis mask, stacked exposure map, and stacked EEF-radius map.
+- The stacked counts image is labeled with detected sources (out to 75\% EEF radius). 
+  - By default the catalog generated with `fxtsrcdet` keeps only sources with detection likelihood over 5 (as per eROSITA simulation, this roughly corresponds to a false detection rate of 25.4\%).
+  - Note that we have grayed out the masked region with insufficient exposure near the image edge; sources in those regions are dropped. This is a conservative approach, and is because the EP-FXT vignetting correction is not perfect, so the rate near the edge will be erroneously high and thus leading to many false positives.
+- The stacked background map is created after carving out wavelet-detected sources from the image. Per-pixel smoothing is adopted.
+- The target zoom-in shows the target region (cyan), background region (crimson), and nearby contamination sources (white) to be carved out. This is created similar to eSASS `srctool`.
+- The mask map is defined so that invalid pixels are those with stacked exposure smaller than 30\% of maximum exposure. 
+- The EEF map (enclosed energy fraction) actually shows the number of pixels that correspond to 90\% enclosed area of local PSF. Since PSF is poorer off-axis, the value is smallest on-axis, and largest off-axis.
 
-## Requirements
 
-- Python 3.10+
-- `numpy`
-- `scipy`
-- `astropy` for FITS I/O and sky-coordinate output when the input FITS image contains celestial WCS
+## Installation and Prerequisites
 
-## Quick start
+`eFXTDAS` is not a replacement for official FXTDAS. It is a Python-layer extension around that environment.
 
-Run on FITS image (with optional exposure map):
+You should assume:
+
+- official FXTDAS / HEASoft command-line tools are already installed and runnable
+- `eFXTDAS` is installed into the same environment
+- `CALDB` is available for workflows that need mission calibration
+
+Typical install:
 
 ```bash
-fxtsrcdet img.fits --expmap expmap.fits --scales "1 2 4 8 16"
+git clone https://github.com/AstroChensj/eFXTDAS.git
+cd eFXTDAS
+python -m pip install -e .
 ```
 
-Add debug/internal columns to the FITS catalog only when needed:
+This installs the Python packages and CLI entry points:
+
+- `fxtcombine`
+- `fxtsrcdet`
+- `fxtregions`
+- `fxteefmap`
+
+## Which Task Should I Use?
+
+| If you want to... | Start with | Main inputs | Main outputs |
+| --- | --- | --- | --- |
+| combine multiple OBSIDs of the same target | `fxtcombine` | FXT archive tree, target RA/Dec, OBSID list | stacked images, mask, background map, regions, stacked spectrum |
+| detect sources on one counts image | `fxtsrcdet` | counts image, optional exposure/mask/eefmap | source catalog, DS9 regions, background map |
+| build extraction regions for one target | `fxtregions` | counts image, source catalog, target RA/Dec | `source.reg`, `background.reg` |
+| build a per-pixel EEF-radius map | `fxteefmap` | counts image, optional exposure map | EEF FITS bundle such as `R50/R75/R80/R90` |
+
+Recommended rule:
+
+- use `fxtcombine` first for the normal multi-OBSID science workflow
+- use `fxtsrcdet` and `fxtregions` directly when tuning detection or extraction on a single stacked image
+- use `fxteefmap` directly when you need standalone PSF/EEF support products
+
+## Typical Workflow
+
+For most science use cases, the intended sequence is:
+
+1. Run `fxtcombine` on all OBSIDs of the same target field.
+2. Inspect the stacked diagnostics:
+   - `stack_cts.fits`
+   - `stack_bkgmap.fits`
+   - `stack_mask.fits`
+   - `stack_src.fits` / `stack_src.reg`
+   - `target_src.reg` / `target_bkg.reg`
+3. If the stacked source detection or extraction regions need tuning, rerun:
+   - `fxtsrcdet` directly on the stacked counts image
+   - then `fxtregions` on that updated source catalog
+4. Use the final stacked spectra, regions, and response products for downstream spectroscopy.
+
+Important current behavior:
+
+- `fxtcombine` uses energy ranges in keV, not direct PI/channel ranges, for Stage-1 image and light-curve generation.
+- `fxtcombine` can optionally process `fsaevt` to generate instrumental-background spectra.
+- `fxtcombine` generates `stack_mask.fits` and passes it to `fxtsrcdet`.
+- `fxtregions` currently does **not** carve exclusion regions into the source region because complex source-region geometry can confuse `fxtarfgen`.
+
+## Quick Start
+
+### 1. `fxtcombine`
+
+Use this for the full multi-OBSID workflow.
 
 ```bash
-fxtsrcdet img.fits --debug-columns
+fxtcombine /data/epfxt \
+  --obsid-lst obsids.txt \
+  --ra 9.25937 \
+  --dec 9.16681 \
+  --datatype evt,fsaevt \
+  --image-energy-ranges "0.3:10.0,10.0:12.0" \
+  --lightcurve-energy-ranges "0.1:12.0,10.0:12.0" \
+  --jobs 4 \
+  --out-dir combine_out \
+  --stack-dir combine_stack
 ```
 
-Run the same full workflow from Python:
+Key parameters:
 
-```python
-from pathlib import Path
-import fxtsrcdet as wd
+- `--obsid-lst`: comma-separated OBSIDs or a file with one OBSID per line
+- `--datatype`: usually `evt`, optionally `evt,fsaevt`
+- `--image-energy-ranges`: stacked detection defaults to the first image band
+- `--lightcurve-energy-ranges`: whole-field diagnostic light curves
+- `--jobs`: Stage-1 OBSID parallelism
+- `--stack-dir`: where stacked science products go
 
-result = wd.fxtsrcdet_pipeline(
-    image=Path("img.fits"),
-    exposure=Path("expmap.fits"),
-    mission="ep-fxt",
-    instrument="fxta",
-    filter_name="open",
-    emin_keV=0.3,
-    emax_keV=10.0,
-)
+See: [docs/fxtcombine.md](docs/fxtcombine.md)
 
-rows = result["rows"]
-bkg_map = result["background_map"]
-```
+### 2. `fxtsrcdet`
 
-You can also pass a configuration object to the same API:
-
-```python
-result = wd.fxtsrcdet_pipeline(
-    image=Path("img.fits"),
-    exposure=Path("expmap.fits"),
-    config=wd.PipelineConfig(mission="ep-fxt"),
-)
-
-rows = result["rows"]
-best_sig = result["best_sig"]
-```
-
-Main outputs:
-
-- `sources.fits`: source catalog
-- `sources.reg`: DS9 image regions
-
-If the input is a FITS image with WCS and `astropy` is installed, the catalog also includes sky-coordinate and angular-size columns such as:
-
-- `RA`, `DEC`
-- `major_arcsec`, `minor_arcsec`
-- `radius_arcsec`
-
-The final catalog starts with an eSASS-like column block, including:
-
-- `ID_SRC`, `ID_BAND`, `ID_CLUSTER`, `SOURCE_TYPE`
-- `ML_CTS_0`, `ML_CTS_ERR_0`, `ML_CTS_LOWERR_0`, `ML_CTS_UPERR_0` in counts
-- `X_IMA`, `Y_IMA` and their error columns in pixels
-- `EXT` and its error columns in arcsec
-- `DET_LIKE_0`, `EXT_LIKE`
-- `ML_BKG_0` in counts / arcmin^2
-- `ML_EXP_0` in seconds
-- `ML_RATE_0` and its error columns in counts / sec
-- `ML_FLUX_0` and its error columns in `erg cm^-2 s^-1`, using user-supplied `--ecf`
-- `RA`, `DEC` in degrees with error columns in arcsec
-- `LII`, `BII` in degrees
-- `ML_RADIUS` in arcsec
-- `MASKFRAC`, `ML_EFF_0`, `DIST_NN`
-
-When `--debug-columns` is used, the catalog also includes internal diagnostics such as:
-
-- `extent_ratio`
-- `wavelet_peak_score`
-- `theta_arcmin`
-- `psf_r50_pix`, `psf_r75_pix`, `psf_r80_pix`, `psf_r90_pix`
-- `psf_instrument`, `psf_filter`, `psf_line`, `psf_energy_keV`
-- `meas_r50_pix`, `meas_r80_pix`, `meas_r90_pix`
-- `group_id`, `group_size`, `group_stamp_radius_pix`
-
-Optional DS9 sky regions:
+Use this for source detection and background-map generation on one image.
 
 ```bash
-fxtsrcdet img.fits --sky-regfile sources_fk5.reg
+fxtsrcdet stack_cts.fits \
+  --expmap stack_exp.fits \
+  --mask stack_mask.fits \
+  --eefmap stack_eef.fits \
+  --mission ep-fxt \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out sources.fits \
+  --regfile sources.reg \
+  --save-bkgmap bkgmap.fits
 ```
 
-Optional maps:
+Key parameters:
+
+- `image`: counts image
+- `--expmap`: exposure map
+- `--mask`: global analysis-validity mask
+- `--eefmap`: precomputed EEF map bundle, usually from `fxteefmap`
+- `--scales`: wavelet scales
+- `--background-sigma-grid`: adaptive background smoothing grid
+- `--save-bkgmap`: most useful intermediate diagnostic
+
+Python API is available through `fxtsrcdet_pipeline`.
+
+See: [docs/fxtsrcdet.md](docs/fxtsrcdet.md)
+
+### 3. `fxtregions`
+
+Use this after `fxtsrcdet` to build source and background extraction regions for one target.
 
 ```bash
-fxtsrcdet img.fits --save-mask srcmask.fits --save-significance bestsig.fits --save-bkgmap bkgmap.fits
+fxtregions \
+  stack_cts.fits \
+  sources.fits \
+  --bkgmap bkgmap.fits \
+  --ra 9.25937 \
+  --dec 9.16681 \
+  --mission ep-fxt \
+  --emin 0.3 \
+  --emax 10.0 \
+  --mode auto \
+  --src-regfile source.reg \
+  --bkg-regfile background.reg
 ```
 
-## Key parameters
+Key parameters:
 
-- `--scales`: wavelet scales in pixels (e.g. `"1 2 4 8 16"`)
-- `--sigthresh`: source detection threshold
-- `--bkgsigthresh`: threshold used when cleansing pixels for background estimation
-- `--maxiter`: maximum cleansing iterations
-- `--iterstop`: stop when newly cleansed pixel fraction drops below this
-- `--expthresh`: minimum relative exposure for analysis
-- `--ellsigma`: output ellipse scale multiplier
-- `--mission`: mission PSF model for catalog scoring, currently `ep-fxt`
-- `--instrument`: mission instrument or detector arm, e.g. `fxta` or `fxtb`
-- `--filter`: mission filter state, e.g. `open`, `medium`, `thin`, `hole`
-- `--emin`, `--emax`: optional image energy bounds in keV
-- `--ecf`: optional energy conversion factor for converting `counts/sec` to flux
-- `--optaxis-x`, `--optaxis-y`: optical-axis position in 1-based image pixels; defaults to image center
-- `--min-det-like`: minimum detection likelihood for non-background classification
-- `--min-ext-like`: minimum extent likelihood threshold for `source_type=extended`
-- `--sky-regfile`: DS9 `fk5` region output using FITS WCS and `astropy`
-- `--save-bkgmap`: write the carved-and-smoothed background map used by the catalog stage
+- `image` and `catalog`: stacked image plus `fxtsrcdet` catalog
+- `--ra`, `--dec`: target sky position
+- `--bkgmap`: recommended for better local background sampling
+- `--mode`: `auto` or `manual`
+- `--src-radius`, `--bkg-inner`, `--bkg-outer`: used in manual mode
 
-## Notes
+Python users can call `fxtregions.pipeline.build_regions(...)`.
 
-- Input image values are expected to be counts (not count-rate).
-- This implementation uses a Gaussian approximation for detection significance in correlation space; CIAO `wavdetect` uses more detailed threshold estimation.
-- Final source candidates are selected from clustered wavelet peaks across scales, which is a pragmatic approximation to CIAO's cross-scale reconstruction rather than an exact reimplementation.
-- The background map is created by replacing source regions with local background estimates and smoothing the carved image, in the spirit of `erbackmap`.
-- FITS outputs for derived maps reuse the input FITS header, so saved background maps retain the original WCS.
-- `det_like` and `ext_like` are now based on local Cash-statistic fits of background-only, point-source, and extended-source models. This is much closer to eSASS than the previous aperture heuristic, but it is still an approximation rather than a faithful reimplementation of `ermldet`.
-- Mission-specific PSF code lives in `fxtpsf_helpers/`. The current implementation supports `ep-fxt` and can be extended for future missions there without changing the detector core.
-- The EP/FXT PSF/EEF selector uses calibration curves matched by instrument, filter, and nearest calibration-line energy. If instrument/filter are not specified, it uses the mean of all available curves.
-- EP EEF FITS tables contain multiple off-axis extensions named like `0.00arcmin`, `5.66arcmin`, etc. The code computes each source's `theta_arcmin` and selects the nearest extension for that source.
-- The EEF FITS radius column is `radius_pixel`, so EP PSF radii are used directly in pixels rather than converted from arcsec.
-- `wavelet_peak_score` is only an internal wavelet-ranking quantity. `det_like` is the catalog-stage detection statistic that should be used for filtering and ranking final sources.
-- Sky ellipse sizes are locally approximated from WCS pixel scales, so they are most reliable when distortion across a source region is small.
-- Use this code as a transparent research baseline and extend/tune as needed for mission-specific calibration.
+See: [docs/fxtregions.md](docs/fxtregions.md)
 
-## Naming
+### 4. `fxteefmap`
 
-The toolkit is named `eFXTDAS`, short for "analysis tools extending official FXTDAS".
-The local directory may still be named `srcdet` in an existing checkout, but the intended project name is `eFXTDAS`.
+Use this when you need a spatial PSF/EEF support product on one image.
+
+```bash
+fxteefmap stack_cts.fits \
+  --expmap stack_exp.fits \
+  --mission ep-fxt \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out stack_eef.fits
+```
+
+Key parameters:
+
+- `image`: image footprint and WCS source
+- `--expmap`: zeroes invalid pixels in the output
+- `--eeffrac`: request a single map
+- `--fractions`: request a multi-extension bundle
+- `--optaxis-x`, `--optaxis-y`: optional optical-axis override
+
+Python API is available through `build_eef_radius_map` and `build_eef_radius_maps`.
+
+See: [docs/fxteefmap.md](docs/fxteefmap.md)
+
+## Repo Layout
+
+The most relevant top-level directories are:
+
+| Path | Meaning |
+| --- | --- |
+| `fxtcombine/` | multi-OBSID stacking workflow |
+| `fxtsrcdet/` | source detection and catalog construction |
+| `fxtregions/` | source/background region construction |
+| `fxteefmap/` | EEF-radius map generation |
+| `fxtpsf_helpers/` | mission PSF / EEF support code shared by the tasks |
+| `fxtdas-bin/` | local copies of official FXTDAS task scripts for inspection/reference |
+| `fxtdas-py/` | local Python support code from the FXTDAS environment |
+| `docs/` | detailed package documentation |
+| `test*` | sample products, experiments, and debugging outputs |
+
+## Notes for AI Assistants
+
+If a user asks for help with this repo:
+
+- start from `fxtcombine` when the request is about multi-OBSID science products
+- start from `fxtsrcdet` when the request is about source counts maps, background maps, or source catalogs
+- start from `fxtregions` when the request is about extraction-region geometry
+- start from `fxteefmap` when the request is about EEF/PSF radius products
+
+Most useful diagnostics to inspect first:
+
+- `stack_cts.fits`
+- `stack_bkgmap.fits`
+- `stack_mask.fits`
+- `stack_src.fits` / `stack_src.reg`
+- `target_src.reg` / `target_bkg.reg`
+- `stack_pi.fits`, `stack_bkgpi.fits`, `stack_arf.fits`, `stack_rmf.fits`
+
+Detailed package references:
+
+- [docs/fxtcombine.md](docs/fxtcombine.md)
+- [docs/fxtsrcdet.md](docs/fxtsrcdet.md)
+- [docs/fxtregions.md](docs/fxtregions.md)
+- [docs/fxteefmap.md](docs/fxteefmap.md)

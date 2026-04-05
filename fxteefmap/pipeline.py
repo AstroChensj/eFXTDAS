@@ -22,6 +22,7 @@ from fxtpsf_helpers import (
     infer_optical_axis,
     load_local_eef,
 )
+from fxteefmap.config import DEFAULT_PIXEL_SCALE_ARCSEC
 from fxteefmap.utils.logger import build_cli_logger, emit
 
 
@@ -305,7 +306,7 @@ def main() -> None:
     exposure = _load_img(args.expmap) if args.expmap is not None else None
     header = _load_header(args.image)
     wcs = _load_wcs(args.image)
-    pixel_scale_arcsec = _infer_pixel_scale_arcsec(wcs, 9.6)
+    pixel_scale_arcsec = _infer_pixel_scale_arcsec(wcs, DEFAULT_PIXEL_SCALE_ARCSEC)
     emit(logger, "info", f"Using pixel scale = {pixel_scale_arcsec:.4f} arcsec/pixel")
     if args.eeffrac is not None:
         emit(logger, "info", f"Building single EEF-radius map for fraction {float(np.clip(args.eeffrac, 0.0, 1.0)):.3f}")

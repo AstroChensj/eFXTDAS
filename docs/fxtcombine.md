@@ -144,6 +144,26 @@ fxtcombine_pipeline(
   - `--log-level`
   - `--log-file`
 
+### Environment Overrides for Internal Constants
+
+`fxtcombine` supports package-scoped environment variables for overriding
+internal constants defined in `fxtcombine/config.py`.
+
+Examples:
+
+```bash
+export FXTCOMBINE_SRC_EXTRACT_RADIUS=75
+export FXTCOMBINE_BKG_EXTRACT_OUTER_RADIUS=360
+export FXTCOMBINE_INSTBKG_BACKSCAL_RELSTD_WARN=0.2
+```
+
+Notes:
+
+- these overrides affect internal defaults used when `fxtcombine` calls other
+  package tasks or evaluates stacked instrumental-background consistency
+- explicit CLI and Python arguments still remain the main user-facing controls
+- invalid override values raise an error during import rather than being ignored
+
 ### Outputs
 
 `fxtcombine` writes a directory tree under `out_dir` that contains:

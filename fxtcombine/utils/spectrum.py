@@ -5,9 +5,8 @@ from __future__ import annotations
 import numpy as np
 from astropy.io import fits
 
+from fxtcombine.config import INSTBKG_BACKSCAL_RELSTD_WARN
 from fxtcombine.utils.logger import emit
-
-INSTBKG_BACKSCAL_RELSTD_WARN = 0.1
 
 
 def stack_instbkg_spectra(instbkg_paths, outfile, logger=None):
