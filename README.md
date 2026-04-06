@@ -4,9 +4,9 @@
 
 The official FXTDAS tasks handle the basic event calibration chain. `eFXTDAS` adds the analysis steps that are usually still missing for science work:
 
-- stacked multi-OBSID imaging and spectral combination
-- wavelet-style source detection as seeding, followed by PSF fitting + extended source testing
-- automated source/background extraction/exclusion-region generation (inspired from [`eSASS` `srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html) `AUTO` mode) that optimizes SNR and avoid nearby neighbor contamination
+- stacked multi-OBSID imaging and spectral combination (improved version of `FXTDAS`-`fxtpipeline`)
+- wavelet-style source detection as seeding (inspired from `CIAO`-`wavdetect`, tailored now to FXT), followed by PSF fitting + extended source testing (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html))
+- automated source/background extraction/exclusion-region generation (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html) `AUTO` mode) that optimizes SNR and avoid nearby neighbor contamination
 - image-sized EEF-radius map generation for PSF-aware workflows
 
 The repository currently provides four user-facing tasks:
@@ -19,14 +19,15 @@ The repository currently provides four user-facing tasks:
 ![eFXTDAS summary figure](docs/figs/readme_summary_2x3.png)
 
 Example stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked analysis mask, stacked exposure map, and stacked EEF-radius map.
-- The stacked counts image is labeled with detected sources (out to 75\% EEF radius). 
-  - By default the catalog generated with `fxtsrcdet` keeps only sources with detection likelihood over 5 (as per eROSITA simulation, this roughly corresponds to a false detection rate of 25.4\%).
-  - Note that we have grayed out the masked region with insufficient exposure near the image edge; sources in those regions are dropped. This is a conservative approach, and is because the EP-FXT vignetting correction is not perfect, so the rate near the edge will be erroneously high and thus leading to many false positives.
+- The stacked counts image is labeled with detected sources (out to `75%` EEF radius). 
+  - By default the catalog generated with `fxtsrcdet` keeps only sources with detection likelihood over `6` (as per [eROSITA simulation](https://ui.adsabs.harvard.edu/abs/2022A%26A...665A..78S/abstract), this roughly corresponds to a false detection rate of 14\%).
+  - Note that we have grayed out the masked region with insufficient exposure near the image edge; sources in those regions are dropped. This is a conservative approach, and is because the EP-FXT *vignetting correction is not perfect*, so the rate near the edge will be erroneously high and thus leading to many false positives.
 - The stacked background map is created after carving out wavelet-detected sources from the image. Per-pixel smoothing is adopted.
-- The target zoom-in shows the target region (cyan), background region (crimson), and nearby contamination sources (white) to be carved out. This is created similar to eSASS `srctool`.
-- The mask map is defined so that invalid pixels are those with stacked exposure smaller than 30\% of maximum exposure. 
-- The EEF map (enclosed energy fraction) actually shows the number of pixels that correspond to 90\% enclosed area of local PSF. Since PSF is poorer off-axis, the value is smallest on-axis, and largest off-axis.
+- The target zoom-in shows the target region (cyan), background region (crimson), and nearby contamination sources (white) to be carved out. This is inspired from `eSASS`-`srctool`.
+- The mask map is defined so that invalid pixels are those with stacked exposure smaller than `30%` of maximum exposure. 
+- The EEF map (enclosed energy fraction) actually shows the number of pixels that correspond to `90%` enclosed area of local PSF. Since PSF is poorer off-axis, the value is smallest on-axis, and largest off-axis.
 
+For full information on the packages, please check the [docs](https://efxtdas.readthedocs.io/en/latest/).
 
 ## Installation and Prerequisites
 
@@ -35,12 +36,13 @@ Example stacked products from `fxtcombine`: smoothed stacked counts, stacked bac
 You should assume:
 
 - official FXTDAS / HEASoft command-line tools are already installed and runnable
-- `eFXTDAS` is installed into the same environment
+- `eFXTDAS` is installed into the **same environment**
 - `CALDB` is available for workflows that need mission calibration
 
 Typical install:
 
 ```bash
+cd ~  # or any other your favorite path
 git clone https://github.com/AstroChensj/eFXTDAS.git
 cd eFXTDAS
 python -m pip install -e .
@@ -52,6 +54,15 @@ This installs the Python packages and CLI entry points:
 - `fxtsrcdet`
 - `fxtregions`
 - `fxteefmap`
+
+Because `fxtcombine` will stack spectra and responses from multiple observations, [Xstack](https://github.com/AstroChensj/Xstack) software is also needed:
+
+```bash
+cd ~
+git clone git@github.com:AstroChensj/Xstack.git
+cd Xstack
+python -m pip install -e .
+```
 
 ## Which Task Should I Use?
 
@@ -90,6 +101,23 @@ Important current behavior:
 - `fxtcombine` can optionally process `fsaevt` to generate instrumental-background spectra.
 - `fxtcombine` generates `stack_mask.fits` and passes it to `fxtsrcdet`.
 - `fxtregions` currently does **not** carve exclusion regions into the source region because complex source-region geometry can confuse `fxtarfgen`.
+
+> [!IMPORTANT]
+> The input parameters in `eFXTDAS` fall into two classes:
+> - user-facing parameters that you set through the CLI or Python API
+> - internal heuristic defaults that are not exposed directly
+>
+> Examples of the second class include the source-carving radius used in background-map creation, PSF-fitting radius, and some internal smoothing or threshold constants. These defaults were chosen heuristically and are intended to be reasonable starting points, but users should still try different values when tuning a workflow is needed.
+>
+> Internal defaults can be overridden globally through environment variables. For example:
+> `export FXTSRCDET_BACKGROUND_CARVE_R90_FACTOR=1.5`
+>
+> Package-specific internal parameters are documented in:
+> [docs/fxtcombine.md](docs/fxtcombine.md),
+> [docs/fxtsrcdet.md](docs/fxtsrcdet.md),
+> [docs/fxtregions.md](docs/fxtregions.md),
+> [docs/fxteefmap.md](docs/fxteefmap.md).
+
 
 ## Quick Start
 
