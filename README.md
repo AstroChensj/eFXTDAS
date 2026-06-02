@@ -9,9 +9,10 @@ The official FXTDAS tasks handle the basic event calibration chain. `eFXTDAS` ad
 - automated source/background extraction/exclusion-region generation (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html) `AUTO` mode) that optimizes SNR and avoid nearby neighbor contamination
 - image-sized EEF-radius map generation for PSF-aware workflows
 
-The repository currently provides four user-facing tasks:
+The repository currently provides five user-facing tasks:
 
 - `fxtcombine`: top-level multi-epoch stacking and spectral combination that calls `fxtsrcdet` `fxtregions` `fxteefmap`
+- `fxtbkgoptrate`: optimum-threshold flare/background screening on one light curve
 - `fxtsrcdet`: source detection and source catalog construction on one image
 - `fxtregions`: source/background region generation from a source catalog
 - `fxteefmap`: EEF-radius map generation on one image footprint
@@ -51,6 +52,7 @@ python -m pip install -e .
 This installs the Python packages and CLI entry points:
 
 - `fxtcombine`
+- `fxtbkgoptrate`
 - `fxtsrcdet`
 - `fxtregions`
 - `fxteefmap`
@@ -69,6 +71,7 @@ python -m pip install -e .
 | If you want to... | Start with | Main inputs | Main outputs |
 | --- | --- | --- | --- |
 | combine multiple OBSIDs of the same target | `fxtcombine` | FXT archive tree, target RA/Dec, OBSID list | stacked images, mask, background map, regions, stacked spectrum |
+| optimize a flare/background threshold on one LC | `fxtbkgoptrate` | FITS light curve, optional base GTI | optimum rate cut, diagnostic FITS, flare/screened GTIs |
 | detect sources on one counts image | `fxtsrcdet` | counts image, optional exposure/mask/eefmap | source catalog, DS9 regions, background map |
 | build extraction regions for one target | `fxtregions` | counts image, source catalog, target RA/Dec | `source.reg`, `background.reg` |
 | build a per-pixel EEF-radius map | `fxteefmap` | counts image, optional exposure map | EEF FITS bundle such as `R50/R75/R80/R90` |
@@ -76,6 +79,7 @@ python -m pip install -e .
 Recommended rule:
 
 - use `fxtcombine` first for the normal multi-OBSID science workflow
+- use `fxtbkgoptrate` directly when you want to inspect or tune a flare-screening threshold outside `fxtcombine`
 - use `fxtsrcdet` and `fxtregions` directly when tuning detection or extraction on a single stacked image
 - use `fxteefmap` directly when you need standalone PSF/EEF support products
 
@@ -98,7 +102,8 @@ For most science use cases, the intended sequence is:
 Important current behavior:
 
 - `fxtcombine` uses energy ranges in keV, not direct PI/channel ranges, for Stage-1 image and light-curve generation.
-- `fxtcombine` can optionally process `fsaevt` to generate instrumental-background spectra.
+- In `FF` mode, `fxtcombine` automatically uses matching `fsaevt` when available to derive a flare-screened GTI, then reuses that screened GTI for both `fsaevt` and `evt`.
+- `fxtcombine` uses `fxtbkgoptrate` internally to optimize the `FF`-mode flare/background threshold from the FSA light curve.
 - `fxtcombine` generates `stack_mask.fits` and passes it to `fxtsrcdet`.
 - `fxtregions` currently does **not** carve exclusion regions into the source region because complex source-region geometry can confuse `fxtarfgen`.
 
@@ -130,7 +135,6 @@ fxtcombine /data/epfxt \
   --obsid-lst obsids.txt \
   --ra 9.25937 \
   --dec 9.16681 \
-  --datatype evt,fsaevt \
   --image-energy-ranges "0.3:10.0,10.0:12.0" \
   --lightcurve-energy-ranges "0.1:12.0,10.0:12.0" \
   --jobs 4 \
@@ -141,15 +145,36 @@ fxtcombine /data/epfxt \
 Key parameters:
 
 - `--obsid-lst`: comma-separated OBSIDs or a file with one OBSID per line
-- `--datatype`: usually `evt`, optionally `evt,fsaevt`
 - `--image-energy-ranges`: stacked detection defaults to the first image band
 - `--lightcurve-energy-ranges`: whole-field diagnostic light curves
+- `--disable-flare-screen`: disable the default `FF`-mode FSA-based flare screening
 - `--jobs`: Stage-1 OBSID parallelism
 - `--stack-dir`: where stacked science products go
 
 See: [docs/fxtcombine.md](docs/fxtcombine.md)
 
-### 2. `fxtsrcdet`
+### 2. `fxtbkgoptrate`
+
+Use this when you want to optimize a flare/background threshold on one FITS light curve directly.
+
+```bash
+fxtbkgoptrate flare.lc \
+  --diag-out flare_diag.fits \
+  --flare-gti-out flare.gti \
+  --base-gti base.gti \
+  --screened-gti-out screened.gti
+```
+
+Key parameters:
+
+- `infile`: FITS light curve, usually with `RATE` or `COUNT`
+- `--diag-out`: writes the threshold-trial table and chosen threshold metadata
+- `--flare-gti-out`: writes the GTI built from accepted low-background bins
+- `--base-gti` and `--screened-gti-out`: intersect the flare GTI with an existing GTI
+
+Python API is available through `run_bkgoptrate`.
+
+### 3. `fxtsrcdet`
 
 Use this for source detection and background-map generation on one image.
 
@@ -180,7 +205,7 @@ Python API is available through `fxtsrcdet_pipeline`.
 
 See: [docs/fxtsrcdet.md](docs/fxtsrcdet.md)
 
-### 3. `fxtregions`
+### 4. `fxtregions`
 
 Use this after `fxtsrcdet` to build source and background extraction regions for one target.
 
@@ -211,7 +236,7 @@ Python users can call `fxtregions.pipeline.build_regions(...)`.
 
 See: [docs/fxtregions.md](docs/fxtregions.md)
 
-### 4. `fxteefmap`
+### 5. `fxteefmap`
 
 Use this when you need a spatial PSF/EEF support product on one image.
 

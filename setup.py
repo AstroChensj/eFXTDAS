@@ -26,6 +26,8 @@ setup(
             "fxteefmap.*",
             "fxtcombine",
             "fxtcombine.*",
+            "fxtbkgoptrate",
+            "fxtbkgoptrate.*",
             "fxtpsf_helpers",
             "fxtpsf_helpers.*",
         ]
@@ -44,6 +46,7 @@ setup(
             "fxtregions=fxtregions.pipeline:main",
             "fxteefmap=fxteefmap.pipeline:main",
             "fxtcombine=fxtcombine.pipeline:main",
+            "fxtbkgoptrate=fxtbkgoptrate.pipeline:main",
         ]
     },
 )

@@ -2,12 +2,12 @@
 
 ## What It Does
 
-`fxtcombine` combines multiple EP-FXT observations of the same target into stacked imaging products, a stacked source spectrum, and optionally a stacked instrumental-background spectrum derived from `fsaevt`.
+`fxtcombine` combines multiple EP-FXT observations of the same target into stacked imaging products, a stacked source spectrum, and, in `FF` mode, a stacked instrumental-background spectrum derived from `fsaevt` when available.
 
 The current workflow:
 
-- scans multiple OBSID directories and selects matching event products
-- runs a simplified per-OBSID preprocessing chain
+- scans multiple OBSID directories and builds one coupled per-stream workflow from each `evt`
+- for `FF` mode with matching `fsaevt`, processes `fsaevt` first, derives a flare-screened GTI with `fxtbkgoptrate`, then reuses that GTI for both `fsaevt` and `evt`
 - for `evt`, creates clean events, multi-band images/light curves, exposure maps, and EEF bundles
 - for `fsaevt`, creates the cleaned FSA products needed by `fxtbkggen` and predicts one instrumental-background spectrum per OBSID
 - reprojects and stacks `evt` images, exposure maps, and EEF bundles onto a common reference frame
@@ -62,7 +62,6 @@ fxtcombine_pipeline(
     stack_dir="combine_stack",
     module="a,b",
     datamode="ff",
-    datatype="evt,fsaevt",
     image_energy_ranges="0.3:10.0,10.0:12.0",
     lightcurve_energy_ranges="0.1:12.0,10.0:12.0",
     jobs=4,
@@ -93,10 +92,6 @@ fxtcombine_pipeline(
 - optional event-selection inputs:
   - `--module`
   - `--datamode`
-  - `--datatype`
-    - comma-separated datatype selection such as `evt` or `evt,fsaevt`
-    - `evt` is required for stacked imaging, `fxtsrcdet`, `fxtregions`, and stacked source spectra
-    - `fsaevt` is optional and is used only for the instrumental-background workflow
   - `--grade`
   - `--expr`
 - Stage-1 image and light-curve controls:
@@ -121,6 +116,14 @@ fxtcombine_pipeline(
       exposure map contains `NaN` or `Inf`
     - the generated `stack_mask.fits` is passed directly to `fxtsrcdet`
 - workflow controls:
+  - `--disable-flare-screen`
+    - disable the default `FF`-mode FSA-based flare screening
+  - `--flare-energy-range`
+    - energy range in keV used to build the FSA flare-screening light curve
+  - `--flare-binsize`
+    - flare-screening light-curve bin size in seconds
+  - `--flare-min-time-ratio`
+    - minimum retained exposure fraction accepted by `fxtbkgoptrate`
   - `--jobs`
     - number of parallel OBSID workers used in Stage 1
     - each worker owns one OBSID and writes only inside that OBSID's own
@@ -224,6 +227,7 @@ then the layout is conceptually:
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.badpix
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.grade
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.gti
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_screened.gti
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_cl.fits
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>.expo
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_e00300_10000.eef
@@ -247,6 +251,9 @@ then the layout is conceptually:
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.badpix
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.grade
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.gti
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>_flare.lc
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_flare_diag.fits
+|   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_evt_<ver>_flare.gti
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>_cl.fits
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.pi
 |   |   |-- fxt_<module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>.lc
@@ -271,6 +278,7 @@ then the layout is conceptually:
 |   |   |   |   |-- fxtarfgen.log
 |   |   |   |   |-- fxtrmfgen.log
 |   |   |   |-- <module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>/
+|   |   |   |   |-- fsaevt_flare.xsl
 |   |   |   |   |-- fsaevt_stage1.xsl
 |   |   |   |   |-- fxtcoord_fsaevt.log
 |   |   |   |   |-- fxtpical_fsaevt.log
@@ -278,6 +286,7 @@ then the layout is conceptually:
 |   |   |   |   |-- fxtbadpix_fsaevt.log
 |   |   |   |   |-- fxtgrade_fsaevt.log
 |   |   |   |   |-- fxtgtigen_fsaevt.log
+|   |   |   |   |-- xselect_fsaevt_flare.log
 |   |   |   |   |-- xselect_fsaevt_stage1.log
 |   |   |   |   |-- fxtbkggen_fsaevt.log
 |-- 11900465408/
@@ -321,8 +330,9 @@ then the layout is conceptually:
   - all per-OBSID intermediate and extracted products
   - this includes the per-band `.img`, `.lc`, and `.eef` products plus
     per-OBSID step logs under `products/log/`
-  - when `fsaevt` is requested, this also includes the cleaned FSA products and
-    one predicted instrumental-background spectrum from `fxtbkggen`
+  - in `FF` mode with matching `fsaevt`, this also includes the flare-screening
+    light curve, flare GTIs, cleaned FSA products, and one predicted
+    instrumental-background spectrum from `fxtbkggen`
   - when Stage 4 runs, the copied extraction regions
     `target_src.reg` and `target_bkg.reg` are also placed here for the
     per-OBSID spectral extraction
@@ -342,8 +352,8 @@ The most useful logs for debugging are:
   - top-level orchestration log for the whole run
 - `out_dir/<obsid>/products/log/fxtchain.log`
   - high-level per-OBSID log showing which Stage-1 or Stage-4 substep failed
-- `out_dir/<obsid>/products/log/<module>_<obsid>_<mode>_<filter>_<pp>_<datatype>_<ver>/`
-  - detailed task logs for one event file
+- `out_dir/<obsid>/products/log/<module>_<obsid>_<mode>_<filter>_<pp>_<filetype>_<ver>/`
+  - detailed task logs for one event stream
   - this is the first place to inspect if an individual FXTDAS task failed
 - `stack_dir/srcdet.log`
   - stacked `fxtsrcdet` output
@@ -356,7 +366,7 @@ Recommended debugging order:
 
 1. start with `out_dir/log/fxtcombine.log` to identify the failing OBSID or stacked step
 2. if the failure is per-OBSID, check `products/log/fxtchain.log`
-3. then open the corresponding detailed task log in the datatype-specific subdirectory
+3. then open the corresponding detailed task log in the `evt` or `fsaevt` subdirectory
 4. if the failure is in stacked detection or stacking, inspect the relevant log under `stack_dir`
 
 ### Multi-Band Image and Light-Curve Products
@@ -391,46 +401,31 @@ For stacking:
 
 ### The Summary JSON Structure
 
-By default, `all_obsid.json` stores the same information as a nested dictionary
-under `stack_dir`:
+By default, `all_obsid.json` stores one flat per-stream record under each OBSID:
 
 ```text
 all_obsid.json
 |-- <obsid>
-|   |-- <datatype>
-|   |   |-- <evt_fname_prefix>
-|   |   |   |-- clevt
-|   |   |   |-- image
-|   |   |   |-- images
-|   |   |   |   |-- e00300_10000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- image_band_channels
-|   |   |   |   |-- e00300_10000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- vexpmap
-|   |   |   |-- eefmap
-|   |   |   |-- eefmaps
-|   |   |   |   |-- e00300_10000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- exp
-|   |   |   |-- alllc
-|   |   |   |-- lightcurves
-|   |   |   |   |-- e00100_12000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- lightcurve_band_channels
-|   |   |   |   |-- e00100_12000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- srcclevt
-|   |   |   |-- srcpi
-|   |   |   |-- bkgpi
-|   |   |   |-- srclc
-|   |   |   |-- bkglc
-|   |   |   |-- arf
-|   |   |   |-- rmf
-|   |   |   |-- fsa_spec
-|   |   |   |-- fsa_lc
-|   |   |   |-- fsa_img
-|   |   |   |-- instbkgpi
+|   |-- <stream_key>
+|   |   |-- evt_clevt
+|   |   |-- image
+|   |   |-- images
+|   |   |-- vexpmap
+|   |   |-- eefmaps
+|   |   |-- exp
+|   |   |-- lightcurves
+|   |   |-- screened_gti
+|   |   |-- flare_lc
+|   |   |-- flare_diag
+|   |   |-- srcclevt
+|   |   |-- srcpi
+|   |   |-- bkgpi
+|   |   |-- arf
+|   |   |-- rmf
+|   |   |-- fsa_spec
+|   |   |-- fsa_lc
+|   |   |-- fsa_img
+|   |   |-- instbkgpi
 ```
 
 Important conventions:
@@ -442,7 +437,8 @@ Important conventions:
 - `lightcurves` stores all requested light-curve bands
 - `lightcurve_band_channels` stores the per-module PI/channel ranges derived from the requested light-curve energy bands
 - `srcclevt`, `srcpi`, `bkgpi`, `srclc`, `bkglc`, `arf`, and `rmf` appear only after Stage 4
-- `fsa_spec`, `fsa_lc`, `fsa_img`, and `instbkgpi` appear only for `fsaevt`
+- `flare_lc`, `flare_diag`, `flare_gti`, and `screened_gti` appear when `FF` flare screening runs
+- `fsa_spec`, `fsa_lc`, `fsa_img`, and `instbkgpi` appear only when matching `fsaevt` was available
 
 Example: collect all light-curve filenames from `all_obsid.json`:
 
@@ -458,18 +454,16 @@ with summary_path.open() as f:
 all_lc = []
 
 for obsid, obsid_products in data.items():
-    for datatype, datatype_products in obsid_products.items():
-        for evt_prefix, prod in datatype_products.items():
-            for band_key, lc_path in prod.get("lightcurves", {}).items():
-                all_lc.append(
-                    {
-                        "obsid": obsid,
-                        "datatype": datatype,
-                        "evt_prefix": evt_prefix,
-                        "band": band_key,
-                        "path": lc_path,
-                    }
-                )
+    for stream_key, prod in obsid_products.items():
+        for band_key, lc_path in prod.get("lightcurves", {}).items():
+            all_lc.append(
+                {
+                    "obsid": obsid,
+                    "stream_key": stream_key,
+                    "band": band_key,
+                    "path": lc_path,
+                }
+            )
 
 for row in all_lc:
     print(row["obsid"], row["band"], row["path"])
@@ -486,10 +480,9 @@ with open("combine_stack/all_obsid.json") as f:
 default_lc = []
 
 for obsid, obsid_products in data.items():
-    for datatype, datatype_products in obsid_products.items():
-        for evt_prefix, prod in datatype_products.items():
-            if "alllc" in prod:
-                default_lc.append(prod["alllc"])
+    for stream_key, prod in obsid_products.items():
+        if "alllc" in prod:
+            default_lc.append(prod["alllc"])
 
 print(default_lc)
 ```
@@ -498,26 +491,17 @@ print(default_lc)
 
 ### 1. Per-OBSID Preprocessing
 
-For each selected OBSID and each selected event file:
+For each selected OBSID and each coupled event stream:
 
-1. run `fxtcoord`
-2. run `fxtpical`
-3. run `fxtparticleidentify`
-4. run `fxtbadpix`
-5. run `fxtgrade`
-6. run `fxtgtigen`
-7. run `xselect`
-   - for `evt`:
-     - clean events
-     - one image per requested image energy band
-     - one whole-field light curve per requested light-curve energy band
-   - for `fsaevt`:
-     - cleaned FSA events
-     - the default cleaned FSA spectrum
-     - the default cleaned FSA light curve
-     - the default cleaned FSA image
-8. for `evt`, run `fxtexpogen` to produce a vignetted exposure map
-9. for `evt`, run `fxteefmap` on each requested image energy band to produce one per-OBSID EEF bundle per band
+1. if `FF` with matching `fsaevt`, run the FSA chain first through `fxtgtigen`
+2. build an FSA flare-screening light curve and run `fxtbkgoptrate`
+3. intersect the flare GTI with the base GTI to create a screened GTI
+4. apply the screened GTI to `fsaevt` and generate cleaned FSA products plus `instbkg`
+5. run the `evt` chain through `fxtgtigen`
+6. apply the screened GTI, or the base GTI when flare screening is skipped
+7. run `xselect` for cleaned `evt`, one image per requested image band, and one whole-field light curve per requested light-curve band
+8. run `fxtexpogen` to produce a vignetted exposure map
+9. run `fxteefmap` on each requested image energy band to produce one per-OBSID EEF bundle per band
 10. for `fsaevt`, run `fxtbkggen` on the cleaned FSA spectrum to predict one instrumental-background spectrum for the image area
 
 This stage creates the per-OBSID products that are later stacked.
@@ -613,9 +597,12 @@ The main user-facing pipeline controls are:
 
 - `--module`
 - `--datamode`
-- `--datatype`
 - `--grade`
 - `--expr`
+- `--disable-flare-screen`
+- `--flare-energy-range`
+- `--flare-binsize`
+- `--flare-min-time-ratio`
 - `--jobs`
 - `--srcdet-scales`
 - `--srcdet-background-sigma-grid`
@@ -652,7 +639,7 @@ The main user-facing pipeline controls are:
 
 7. What does `fsaevt` do inside `fxtcombine`?
 
-   - `fsaevt` is not used for stacked imaging, source detection, or source/background region generation. Instead, it is used only to generate one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkgpi.fits`.
+   - In `FF` mode, matching `fsaevt` is used first to build the flare-screening light curve and derive a screened GTI through `fxtbkgoptrate`. That same screened GTI is then reused for both the final cleaned `fsaevt` and the final cleaned `evt`. `fsaevt` also provides one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkgpi.fits`.
 
 8. Why does the `fsaevt` path use `DETX=3:382 DETY=3:382`?
 

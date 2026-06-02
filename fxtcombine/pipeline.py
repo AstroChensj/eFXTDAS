@@ -9,7 +9,6 @@ import logging
 import numpy as np
 import os
 from pathlib import Path
-import sys
 import warnings
 
 from astropy.io import fits
@@ -40,12 +39,14 @@ def _run_stage1_obsid(
 	out_dir,
 	datamode,
 	module,
-	datatype,
-	datatype_lst,
 	expr,
 	grade,
 	image_energy_ranges,
 	lightcurve_energy_ranges,
+	flare_screen,
+	flare_energy_range,
+	flare_binsize,
+	flare_min_time_ratio,
 	skip_existing,
 ):
 	"""Run Stage-1 preprocessing for one OBSID in an isolated worker."""
@@ -59,26 +60,30 @@ def _run_stage1_obsid(
 	emit(obsid_logger, "info", f"**** Stage 1 Worker: {obsid} ****")
 	emit(obsid_logger, "info", f"Input OBSID directory: {obsid_dir}")
 	emit(obsid_logger, "info", f"Output OBSID products directory: {obsid_out_dir}")
-	obsid_file_dict = get_input_files(obsid_dir, datamode, module, datatype)
+	obsid_file_dict = get_input_files(obsid_dir, datamode, module, "evt,fsaevt")
 	obsid_prod_dict = fxtchain_obsid(
 		obsid_file_dict=obsid_file_dict,
-		datatype_lst=datatype_lst,
 		obsid_out_dir=obsid_out_dir,
 		obsid_log_dir=obsid_log_dir,
 		expr=expr,
 		grade=grade,
 		image_energy_ranges=image_energy_ranges,
 		lightcurve_energy_ranges=lightcurve_energy_ranges,
+		flare_screen=flare_screen,
+		flare_energy_range=flare_energy_range,
+		flare_binsize=flare_binsize,
+		flare_min_time_ratio=flare_min_time_ratio,
 		skip_existing=skip_existing,
 		obsid_logger=obsid_logger,
 	)
-	return obsid, obsid_file_dict, obsid_prod_dict
+	return obsid, obsid_prod_dict
 
 
 def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
-		out_dir="./",stack_dir=None,module="a,b",datamode="ff",datatype="evt",grade="0-12",expr="DEFAULT",
+		out_dir="./",stack_dir=None,module="a,b",datamode="ff",grade="0-12",expr="DEFAULT",
 		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
+		flare_screen=True,flare_energy_range="0.5:10.0",flare_binsize=20.0,flare_min_time_ratio=0.05,
 		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",
 		summary_json=None,srcpi_filelist=None,skip_existing=False,
 		logger: logging.Logger | None = None,
@@ -105,9 +110,6 @@ def fxtcombine_pipeline(
 		Comma-separated module selection, for example ``"a,b"``.
 	datamode : str, optional
 		Comma-separated datamode selection.
-	datatype : str, optional
-		Comma-separated datatype selection, for example ``"evt"`` or
-		``"evt,fsaevt"``.
 	grade : str, optional
 		Grade filter passed to the xselect stage.
 	expr : str, optional
@@ -119,6 +121,15 @@ def fxtcombine_pipeline(
 	lightcurve_energy_ranges : str | list[tuple[float, float]], optional
 		Comma-separated energy ranges in keV used to generate light curves during
 		Stage 1.
+	flare_screen : bool, optional
+		Whether to run automatic FF-mode flare screening from FSAEVT data.
+	flare_energy_range : str | tuple[float, float], optional
+		Energy range in keV used for the flare-screening light curve.
+	flare_binsize : float, optional
+		Bin size in seconds used for flare screening.
+	flare_min_time_ratio : float, optional
+		Minimum retained exposure fraction accepted by the flare-screening
+		threshold optimizer.
 	mask_expfrac : float, optional
 		Minimum stacked exposure, expressed as a fraction of the maximum stacked
 		exposure, required for a pixel to remain valid in the stacked mask passed
@@ -156,9 +167,6 @@ def fxtcombine_pipeline(
 	stack_dir = os.path.abspath(stack_dir) if stack_dir is not None else os.path.join(out_dir, "stack")
 	summary_json = os.path.abspath(summary_json) if summary_json is not None else os.path.join(stack_dir, "all_obsid.json")
 	srcpi_filelist = os.path.abspath(srcpi_filelist) if srcpi_filelist is not None else os.path.join(stack_dir, "all_obsid.filelist")
-	module_lst = module.split(",")
-	datamode_lst = datamode.split(",")
-	datatype_lst = datatype.split(",")
 	if isinstance(image_energy_ranges, str):
 		image_energy_ranges = parse_energy_ranges(image_energy_ranges, default=[(0.3, 10.0)])
 	else:
@@ -167,6 +175,10 @@ def fxtcombine_pipeline(
 		lightcurve_energy_ranges = parse_energy_ranges(lightcurve_energy_ranges, default=[(0.1, 12.0)])
 	else:
 		lightcurve_energy_ranges = list(lightcurve_energy_ranges)
+	if isinstance(flare_energy_range, str):
+		flare_energy_range = parse_energy_ranges(flare_energy_range, default=[(0.5, 10.0)])[0]
+	else:
+		flare_energy_range = tuple(flare_energy_range)
 
 	#--- define logger
 	os.makedirs(out_dir,exist_ok=True)
@@ -185,6 +197,10 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Source coordinate is: ICRS({ra}, {dec})")
 	emit(main_logger, "info", f"Image energy ranges are: {image_energy_ranges}")
 	emit(main_logger, "info", f"Light-curve energy ranges are: {lightcurve_energy_ranges}")
+	emit(main_logger, "info", f"Flare screening enabled: {flare_screen}")
+	emit(main_logger, "info", f"Flare screening energy range is: {flare_energy_range}")
+	emit(main_logger, "info", f"Flare screening bin size is: {flare_binsize}")
+	emit(main_logger, "info", f"Flare screening min time ratio is: {flare_min_time_ratio}")
 	emit(main_logger, "info", f"Stacked-mask minimum exposure fraction is: {mask_expfrac}")
 	emit(main_logger, "info", f"Stage 1 parallel workers are: {jobs}")
 	emit(main_logger, "info", f"fxtsrcdet wavelet scales are: {srcdet_scales}")
@@ -211,15 +227,12 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Valid OBSIDs for processing: {obsid_lst}")
 	if not obsid_lst:
 		raise ValueError("No valid OBSIDs were found for processing.")
-	has_evt = "evt" in datatype_lst
-	has_fsaevt = "fsaevt" in datatype_lst
 
 
 	#==============================================================================
 	#--- initial iterate: to get clean events & image & exposure map for each obsid
 	#==============================================================================
 	emit(main_logger, "info", f"**** Stage 1: initial iterate to get clean events & exposure map for each OBSID ****")
-	all_file_dict = {}
 	all_prod_dict = {}
 	jobs = max(int(jobs), 1)
 	##--- normal mode: serialized running, one by one
@@ -232,16 +245,17 @@ def fxtcombine_pipeline(
 				out_dir=out_dir,
 				datamode=datamode,
 				module=module,
-				datatype=datatype,
-				datatype_lst=datatype_lst,
 				expr=expr,
 				grade=grade,
 				image_energy_ranges=image_energy_ranges,
 				lightcurve_energy_ranges=lightcurve_energy_ranges,
+				flare_screen=flare_screen,
+				flare_energy_range=flare_energy_range,
+				flare_binsize=flare_binsize,
+				flare_min_time_ratio=flare_min_time_ratio,
 				skip_existing=skip_existing,
 			)
-			obsid, obsid_file_dict, obsid_prod_dict = obsid_result
-			all_file_dict[obsid] = obsid_file_dict
+			obsid, obsid_prod_dict = obsid_result
 			all_prod_dict[obsid] = obsid_prod_dict
 	##--- parallel mode: multiple OBSIDs processed simultaneously to speed up this stage
 	else:
@@ -256,12 +270,14 @@ def fxtcombine_pipeline(
 					out_dir,
 					datamode,
 					module,
-					datatype,
-					datatype_lst,
 					expr,
 					grade,
 					image_energy_ranges,
 					lightcurve_energy_ranges,
+					flare_screen,
+					flare_energy_range,
+					flare_binsize,
+					flare_min_time_ratio,
 					skip_existing,
 				): obsid
 				for obsid in obsid_lst
@@ -269,8 +285,7 @@ def fxtcombine_pipeline(
 			for future in tqdm(as_completed(future_map), total=len(future_map), desc="Stage 1 OBSIDs"):
 				obsid = future_map[future]
 				emit(main_logger, "info", f"Collecting Stage 1 results for {obsid} ...")
-				obsid_name, obsid_file_dict, obsid_prod_dict = future.result()
-				all_file_dict[obsid_name] = obsid_file_dict
+				obsid_name, obsid_prod_dict = future.result()
 				all_prod_dict[obsid_name] = obsid_prod_dict
 				emit(main_logger, "info", f"Finished Stage 1 for {obsid_name}.")
 
@@ -282,358 +297,348 @@ def fxtcombine_pipeline(
 	os.makedirs(stack_dir,exist_ok=True)
 	detection_image_suffix = energy_range_suffix(image_energy_ranges[0])
 	detect_emin, detect_emax = image_energy_ranges[0]
-	if not has_evt:
-		emit(main_logger, "warning", "No evt datatype was requested; skipping Stages 2-4 for stacked imaging, detection, and source extraction.")
-	else:
-		emit(main_logger, "info", "For evt ...")
-		clevt_fname_lst = []
-		exp_fname_lst = []
-		exp_lst = []
-		img_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
-		eef_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
-		image_band_channels_map = {}
+	emit(main_logger, "info", "Stacking EVT products across all streams ...")
+	clevt_fname_lst = []
+	exp_fname_lst = []
+	exp_lst = []
+	img_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
+	eef_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
+	image_band_channels_map = {}
 
-		for obsid,obsid_prod_dict in all_prod_dict.items():
-			for evt_fname_prefix,evt_prod_dict in obsid_prod_dict["evt"].items():
-				clevt_fname_lst.append(evt_prod_dict["clevt"])
-				for image_key in img_fname_map:
-					img_fname_map[image_key].append(evt_prod_dict["images"][image_key])
-					eef_fname_map[image_key].append(evt_prod_dict["eefmaps"][image_key])
-				if not image_band_channels_map:
-					image_band_channels_map = dict(evt_prod_dict["image_band_channels"])
-				exp_fname_lst.append(evt_prod_dict["vexpmap"])
-				exp_lst.append(evt_prod_dict["exp"])
-		clevt_fname_lst = np.array(clevt_fname_lst)
-		exp_fname_lst = np.array(exp_fname_lst)
-		exp_lst = np.array(exp_lst)
-		if len(clevt_fname_lst) == 0:
-			raise ValueError("No products found for datatype=evt. Check your OBSID selection and datatype filters.")
+	for obsid, obsid_prod_dict in all_prod_dict.items():
+		for stream_key, prod in obsid_prod_dict.items():
+			clevt_fname_lst.append(prod["evt_clevt"])
+			for image_key in img_fname_map:
+				img_fname_map[image_key].append(prod["images"][image_key])
+				eef_fname_map[image_key].append(prod["eefmaps"][image_key])
+			if not image_band_channels_map:
+				image_band_channels_map = dict(prod["image_band_channels"])
+			exp_fname_lst.append(prod["vexpmap"])
+			exp_lst.append(prod["exp"])
 
-		##--- sort according to expo
-		idx_sort = np.argsort(exp_lst)[::-1]
-		clevt_fname_lst = clevt_fname_lst[idx_sort]
-		exp_fname_lst = exp_fname_lst[idx_sort]
-		exp_lst = exp_lst[idx_sort]
-		for image_key, img_list in img_fname_map.items():
-			img_fname_map[image_key] = np.array(img_list)[idx_sort]
-		for image_key, eef_list in eef_fname_map.items():
-			eef_fname_map[image_key] = np.array(eef_list)[idx_sort]
-		exp_tot = np.sum(exp_lst)
+	clevt_fname_lst = np.array(clevt_fname_lst)
+	exp_fname_lst = np.array(exp_fname_lst)
+	exp_lst = np.array(exp_lst)
+	if len(clevt_fname_lst) == 0:
+		raise ValueError("No EVT products were produced during Stage 1. Check your OBSID selection and inputs.")
 
-		##--- logging all files
-		emit(main_logger, "info", f"You have the following clean events files: {clevt_fname_lst}")
-		for image_key, img_fname_lst in img_fname_map.items():
-			emit(main_logger, "info", f"You have the following images for {image_key}: {img_fname_lst}")
-		emit(main_logger, "info", f"You have the following vign-exposure maps: {exp_fname_lst}")
-		emit(main_logger, "info", f"Their corresponding exposures are: {exp_lst}")
+	##--- sort according to expo
+	idx_sort = np.argsort(exp_lst)[::-1]
+	clevt_fname_lst = clevt_fname_lst[idx_sort]
+	exp_fname_lst = exp_fname_lst[idx_sort]
+	exp_lst = exp_lst[idx_sort]
+	for image_key, img_list in img_fname_map.items():
+		img_fname_map[image_key] = np.array(img_list)[idx_sort]
+	for image_key, eef_list in eef_fname_map.items():
+		eef_fname_map[image_key] = np.array(eef_list)[idx_sort]
+	exp_tot = np.sum(exp_lst)
 
-		##--- choose a common reference frame from the first requested image band
-		refimg_fname_lst = img_fname_map[detection_image_suffix]
-		with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
+	##--- logging all files
+	emit(main_logger, "info", f"You have the following clean events files: {clevt_fname_lst}")
+	for image_key, img_fname_lst in img_fname_map.items():
+		emit(main_logger, "info", f"You have the following images for {image_key}: {img_fname_lst}")
+	emit(main_logger, "info", f"You have the following vign-exposure maps: {exp_fname_lst}")
+	emit(main_logger, "info", f"Their corresponding exposures are: {exp_lst}")
+
+	##--- choose a common reference frame from the first requested image band
+	refimg_fname_lst = img_fname_map[detection_image_suffix]
+	with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
+		warnings.simplefilter("ignore", VerifyWarning)
+		warnings.simplefilter("ignore", FITSFixedWarning)
+		with fits.open(refimg_fname_lst[0]) as hdu:
+			refimg = hdu[0]
+			refimg_wcs = WCS(refimg.header)
+			refimg_shape = refimg.data.shape
+	emit(main_logger, "info", f"The reference frame is {refimg_fname_lst[0]}.")
+	emit(main_logger, "info", f"Reference WCS is {refimg_wcs}.")
+
+	with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
+		warnings.simplefilter("ignore", VerifyWarning)
+		warnings.simplefilter("ignore", FITSFixedWarning)
+		with fits.open(exp_fname_lst[0]) as hdu:
+			refexp = hdu[0]
+			refexp_wcs = WCS(refexp.header)
+			refexp_shape = refexp.data.shape
+			exp_sum = np.zeros(refexp_shape)
+	assert refimg_shape == refexp_shape, f"The image and exposure should have same shape, but now gets {refimg_shape} and {refexp_shape}!"
+
+	##--- reproject and stack images for each requested image band
+	cts_sum_map = {}
+	for energy_range in image_energy_ranges:
+		image_key = energy_range_suffix(energy_range)
+		chan_lo, chan_hi = image_band_channels_map[image_key]
+		cts_sum = np.zeros(refimg_shape)
+		emit(main_logger, "info", f"Reprojecting and stacking images for {image_key} ...")
+		for i in range(len(clevt_fname_lst)):
+			clevt_fname = clevt_fname_lst[i]
+			img_fname = img_fname_map[image_key][i]
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore", VerifyWarning)
+				with fits.open(clevt_fname) as hdu:
+					clevt_data = hdu[1].data
+			mask_channel = (clevt_data["CHANNEL"] >= chan_lo) & (clevt_data["CHANNEL"] <= chan_hi)
+			clevt_x = clevt_data["X"][mask_channel]
+			clevt_y = clevt_data["Y"][mask_channel]
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore", VerifyWarning)
+				warnings.simplefilter("ignore", FITSFixedWarning)
+				with fits.open(img_fname) as hdu:
+					img_wcs = WCS(hdu[0].header)
+					img = reproject_events_xy_to_refwcs(
+						clevt_x,clevt_y,
+						img_wcs,refimg_wcs,
+						shape_ref=refimg_shape,	# (ny, nx)
+						weight=None,
+						method="nearest",  		# "nearest" or "floor"
+						event_origin=1.0,
+					)
+			cts_sum += img
+		cts_sum_fname = os.path.join(stack_dir,f"{image_key}_stack_cts.fits")
+		fits.writeto(cts_sum_fname,cts_sum,refimg.header,overwrite=True)
+		emit(main_logger, "info", f"Stacked count image written to {cts_sum_fname}")
+		cts_sum_map[image_key] = cts_sum.copy()
+		if image_key == detection_image_suffix:	# the first channel range is used for source detection and later spectral extraction; save a copy as default
+			default_cts_sum_fname = cts_sum_fname
+			legacy_cts_sum_fname = os.path.join(stack_dir,"stack_cts.fits")
+			fits.writeto(legacy_cts_sum_fname,cts_sum,refimg.header,overwrite=True)
+			emit(main_logger, "info", f"Default stacked count image also written to {legacy_cts_sum_fname}")
+
+	##--- reproject and stack expmap
+	emit(main_logger, "info", f"Reprojecting and stacking exposure maps ...")
+	for exp_fname_i in exp_fname_lst:
+		with warnings.catch_warnings():
 			warnings.simplefilter("ignore", VerifyWarning)
 			warnings.simplefilter("ignore", FITSFixedWarning)
-			with fits.open(refimg_fname_lst[0]) as hdu:
-				refimg = hdu[0]
-				refimg_wcs = WCS(refimg.header)
-				refimg_shape = refimg.data.shape
-		emit(main_logger, "info", f"The reference frame is {refimg_fname_lst[0]}.")
-		emit(main_logger, "info", f"Reference WCS is {refimg_wcs}.")
-
-		with warnings.catch_warnings():	# to suppress common warnings, so output log is cleaner and readable
+			with fits.open(exp_fname_i) as hdu:
+				exp_i = hdu[0]
+				data_i = exp_i.data
+				wcs_i  = WCS(exp_i.header)
+		###--- flux/count-conserving reprojection
+		data_i_reproj,footprint_i = reproject_interp((data_i,wcs_i),refexp_wcs,shape_out=refexp_shape)
+		###--- footprint is 0..1 overlap fraction; use it to ignore empty pixels
+		m = np.isfinite(data_i_reproj) & (footprint_i > 0)
+		exp_sum[m] += data_i_reproj[m]
+	exp_sum_fname = os.path.join(stack_dir,"stack_exp.fits")
+	fits.writeto(exp_sum_fname,exp_sum,refexp.header,overwrite=True)
+	emit(main_logger, "info", f"Stacked exposure map written to {exp_sum_fname}")
+	
+	##--- reproject and stack eefmap for each requested energy range
+	stack_eefmap_map = {}
+	for energy_range in image_energy_ranges:
+		image_key = energy_range_suffix(energy_range)
+		eef_fname_lst = eef_fname_map[image_key]
+		emit(main_logger, "info", f"Reprojecting and stacking EEF maps for {image_key} ...")
+		with warnings.catch_warnings():
 			warnings.simplefilter("ignore", VerifyWarning)
 			warnings.simplefilter("ignore", FITSFixedWarning)
-			with fits.open(exp_fname_lst[0]) as hdu:
-				refexp = hdu[0]
-				refexp_wcs = WCS(refexp.header)
-				refexp_shape = refexp.data.shape
-				exp_sum = np.zeros(refexp_shape)
-		assert refimg_shape == refexp_shape, f"The image and exposure should have same shape, but now gets {refimg_shape} and {refexp_shape}!"
-
-		##--- reproject and stack images for each requested image band
-		cts_sum_map = {}
-		for energy_range in image_energy_ranges:
-			image_key = energy_range_suffix(energy_range)
-			chan_lo, chan_hi = image_band_channels_map[image_key]
-			cts_sum = np.zeros(refimg_shape)
-			emit(main_logger, "info", f"Reprojecting and stacking images for {image_key} ...")
-			for i in range(len(clevt_fname_lst)):
-				clevt_fname = clevt_fname_lst[i]
-				img_fname = img_fname_map[image_key][i]
-				with warnings.catch_warnings():
-					warnings.simplefilter("ignore", VerifyWarning)
-					with fits.open(clevt_fname) as hdu:
-						clevt_data = hdu[1].data
-				mask_channel = (clevt_data["CHANNEL"] >= chan_lo) & (clevt_data["CHANNEL"] <= chan_hi)
-				clevt_x = clevt_data["X"][mask_channel]
-				clevt_y = clevt_data["Y"][mask_channel]
-				with warnings.catch_warnings():
-					warnings.simplefilter("ignore", VerifyWarning)
-					warnings.simplefilter("ignore", FITSFixedWarning)
-					with fits.open(img_fname) as hdu:
-						img_wcs = WCS(hdu[0].header)
-						img = reproject_events_xy_to_refwcs(
-							clevt_x,clevt_y,
-							img_wcs,refimg_wcs,
-							shape_ref=refimg_shape,	# (ny, nx)
-							weight=None,
-							method="nearest",  		# "nearest" or "floor"
-							event_origin=1.0,
-						)
-				cts_sum += img
-			cts_sum_fname = os.path.join(stack_dir,f"{image_key}_stack_cts.fits")
-			fits.writeto(cts_sum_fname,cts_sum,refimg.header,overwrite=True)
-			emit(main_logger, "info", f"Stacked count image written to {cts_sum_fname}")
-			cts_sum_map[image_key] = cts_sum.copy()
-			if image_key == detection_image_suffix:	# the first channel range is used for source detection and later spectral extraction; save a copy as default
-				default_cts_sum_fname = cts_sum_fname
-				legacy_cts_sum_fname = os.path.join(stack_dir,"stack_cts.fits")
-				fits.writeto(legacy_cts_sum_fname,cts_sum,refimg.header,overwrite=True)
-				emit(main_logger, "info", f"Default stacked count image also written to {legacy_cts_sum_fname}")
-
-		##--- reproject and stack expmap
-		emit(main_logger, "info", f"Reprojecting and stacking exposure maps ...")
-		for exp_fname_i in exp_fname_lst:
+			with fits.open(eef_fname_lst[0]) as hdul:
+				eef_primary_header = hdul[0].header.copy()
+				eef_extnames = [hdu.name for hdu in hdul[1:]]
+		eef_numerators = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
+		for eef_fname_i, exp_fname_i in zip(eef_fname_lst, exp_fname_lst):
 			with warnings.catch_warnings():
 				warnings.simplefilter("ignore", VerifyWarning)
 				warnings.simplefilter("ignore", FITSFixedWarning)
 				with fits.open(exp_fname_i) as hdu:
 					exp_i = hdu[0]
-					data_i = exp_i.data
-					wcs_i  = WCS(exp_i.header)
-			###--- flux/count-conserving reprojection
-			data_i_reproj,footprint_i = reproject_interp((data_i,wcs_i),refexp_wcs,shape_out=refexp_shape)
-			###--- footprint is 0..1 overlap fraction; use it to ignore empty pixels
-			m = np.isfinite(data_i_reproj) & (footprint_i > 0)
-			exp_sum[m] += data_i_reproj[m]
-		exp_sum_fname = os.path.join(stack_dir,"stack_exp.fits")
-		fits.writeto(exp_sum_fname,exp_sum,refexp.header,overwrite=True)
-		emit(main_logger, "info", f"Stacked exposure map written to {exp_sum_fname}")
-		
-		##--- reproject and stack eefmap for each requested energy range
-		stack_eefmap_map = {}
-		for energy_range in image_energy_ranges:
-			image_key = energy_range_suffix(energy_range)
-			eef_fname_lst = eef_fname_map[image_key]
-			emit(main_logger, "info", f"Reprojecting and stacking EEF maps for {image_key} ...")
+					exp_data_i = exp_i.data
+					exp_wcs_i = WCS(exp_i.header)
+			exp_reproj_i, exp_footprint_i = reproject_interp((exp_data_i, exp_wcs_i), refexp_wcs, shape_out=refexp_shape)
+			exp_weight_i = np.where(np.isfinite(exp_reproj_i) & (exp_footprint_i > 0), exp_reproj_i, 0.0)
 			with warnings.catch_warnings():
 				warnings.simplefilter("ignore", VerifyWarning)
 				warnings.simplefilter("ignore", FITSFixedWarning)
-				with fits.open(eef_fname_lst[0]) as hdul:
-					eef_primary_header = hdul[0].header.copy()
-					eef_extnames = [hdu.name for hdu in hdul[1:]]
-			eef_numerators = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
-			for eef_fname_i, exp_fname_i in zip(eef_fname_lst, exp_fname_lst):
-				with warnings.catch_warnings():
-					warnings.simplefilter("ignore", VerifyWarning)
-					warnings.simplefilter("ignore", FITSFixedWarning)
-					with fits.open(exp_fname_i) as hdu:
-						exp_i = hdu[0]
-						exp_data_i = exp_i.data
-						exp_wcs_i = WCS(exp_i.header)
-				exp_reproj_i, exp_footprint_i = reproject_interp((exp_data_i, exp_wcs_i), refexp_wcs, shape_out=refexp_shape)
-				exp_weight_i = np.where(np.isfinite(exp_reproj_i) & (exp_footprint_i > 0), exp_reproj_i, 0.0)
-				with warnings.catch_warnings():
-					warnings.simplefilter("ignore", VerifyWarning)
-					warnings.simplefilter("ignore", FITSFixedWarning)
-					with fits.open(eef_fname_i) as hdul:
-						eef_wcs_i = WCS(hdul[1].header)
-						for extname in eef_extnames:
-							eef_data_i = hdul[extname].data
-							eef_reproj_i, eef_footprint_i = reproject_interp((eef_data_i, eef_wcs_i), refimg_wcs, shape_out=refimg_shape)
-							valid_i = np.isfinite(eef_reproj_i) & (eef_footprint_i > 0) & (exp_weight_i > 0)
-							eef_numerators[extname][valid_i] += eef_reproj_i[valid_i] * exp_weight_i[valid_i]
-			eef_hdus = [fits.PrimaryHDU(header=eef_primary_header)]
-			for extname in eef_extnames:
-				eef_stack = np.zeros(refimg_shape, dtype=np.float32)
-				valid = exp_sum > 0
-				eef_stack[valid] = (eef_numerators[extname][valid] / exp_sum[valid]).astype(np.float32)
-				eef_hdus.append(fits.ImageHDU(data=eef_stack, header=refimg.header.copy(), name=extname))
-			stack_eefmap_fname = os.path.join(stack_dir, f"{image_key}_stack_eef.fits")
-			fits.HDUList(eef_hdus).writeto(stack_eefmap_fname, overwrite=True)
-			emit(main_logger, "info", f"Stacked EEF map bundle written to {stack_eefmap_fname}")
-			stack_eefmap_map[image_key] = stack_eefmap_fname
-			if image_key == detection_image_suffix:
-				stack_eefmap_default_fname = os.path.join(stack_dir, "stack_eef.fits")
-				fits.HDUList(eef_hdus).writeto(stack_eefmap_default_fname, overwrite=True)
-				emit(main_logger, "info", f"Default stacked EEF map bundle also written to {stack_eefmap_default_fname}")
-		
-		##--- obtain stacked rate image for each image band
-		finite_exp = exp_sum[np.isfinite(exp_sum)]
-		max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
-		exp_cut = float(mask_expfrac) * max_exp
-		valid_exp = np.isfinite(exp_sum) & (exp_sum >= exp_cut)
-		for image_key, cts_sum in cts_sum_map.items():
-			rate_sum = np.zeros_like(cts_sum, dtype=np.float64)
-			valid = valid_exp & np.isfinite(cts_sum) & (~np.isinf(cts_sum))
-			rate_sum[valid] = cts_sum[valid] / exp_sum[valid]
-			rate_sum_fname = os.path.join(stack_dir,f"{image_key}_stack_rate.fits")
-			fits.writeto(rate_sum_fname,rate_sum,refimg.header,overwrite=True)
-			emit(main_logger, "info", f"Stacked rate image written to {rate_sum_fname}")
-			if image_key == detection_image_suffix:
-				legacy_rate_sum_fname = os.path.join(stack_dir,"stack_rate.fits")
-				fits.writeto(legacy_rate_sum_fname,rate_sum,refimg.header,overwrite=True)
-				emit(main_logger, "info", f"Default stacked rate image also written to {legacy_rate_sum_fname}")
-		
-		stack_expmap_default_fname = exp_sum_fname
-		stack_image_default_fname = default_cts_sum_fname
-		stack_eefmap_default_fname = stack_eefmap_map[detection_image_suffix]
+				with fits.open(eef_fname_i) as hdul:
+					eef_wcs_i = WCS(hdul[1].header)
+					for extname in eef_extnames:
+						eef_data_i = hdul[extname].data
+						eef_reproj_i, eef_footprint_i = reproject_interp((eef_data_i, eef_wcs_i), refimg_wcs, shape_out=refimg_shape)
+						valid_i = np.isfinite(eef_reproj_i) & (eef_footprint_i > 0) & (exp_weight_i > 0)
+						eef_numerators[extname][valid_i] += eef_reproj_i[valid_i] * exp_weight_i[valid_i]
+		eef_hdus = [fits.PrimaryHDU(header=eef_primary_header)]
+		for extname in eef_extnames:
+			eef_stack = np.zeros(refimg_shape, dtype=np.float32)
+			valid = exp_sum > 0
+			eef_stack[valid] = (eef_numerators[extname][valid] / exp_sum[valid]).astype(np.float32)
+			eef_hdus.append(fits.ImageHDU(data=eef_stack, header=refimg.header.copy(), name=extname))
+		stack_eefmap_fname = os.path.join(stack_dir, f"{image_key}_stack_eef.fits")
+		fits.HDUList(eef_hdus).writeto(stack_eefmap_fname, overwrite=True)
+		emit(main_logger, "info", f"Stacked EEF map bundle written to {stack_eefmap_fname}")
+		stack_eefmap_map[image_key] = stack_eefmap_fname
+		if image_key == detection_image_suffix:
+			stack_eefmap_default_fname = os.path.join(stack_dir, "stack_eef.fits")
+			fits.HDUList(eef_hdus).writeto(stack_eefmap_default_fname, overwrite=True)
+			emit(main_logger, "info", f"Default stacked EEF map bundle also written to {stack_eefmap_default_fname}")
+	
+	##--- obtain stacked rate image for each image band
+	finite_exp = exp_sum[np.isfinite(exp_sum)]
+	max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
+	exp_cut = float(mask_expfrac) * max_exp
+	valid_exp = np.isfinite(exp_sum) & (exp_sum >= exp_cut)
+	for image_key, cts_sum in cts_sum_map.items():
+		rate_sum = np.zeros_like(cts_sum, dtype=np.float64)
+		valid = valid_exp & np.isfinite(cts_sum) & (~np.isinf(cts_sum))
+		rate_sum[valid] = cts_sum[valid] / exp_sum[valid]
+		rate_sum_fname = os.path.join(stack_dir,f"{image_key}_stack_rate.fits")
+		fits.writeto(rate_sum_fname,rate_sum,refimg.header,overwrite=True)
+		emit(main_logger, "info", f"Stacked rate image written to {rate_sum_fname}")
+		if image_key == detection_image_suffix:
+			legacy_rate_sum_fname = os.path.join(stack_dir,"stack_rate.fits")
+			fits.writeto(legacy_rate_sum_fname,rate_sum,refimg.header,overwrite=True)
+			emit(main_logger, "info", f"Default stacked rate image also written to {legacy_rate_sum_fname}")
+	
+	stack_expmap_default_fname = exp_sum_fname
+	stack_image_default_fname = default_cts_sum_fname
+	stack_eefmap_default_fname = stack_eefmap_map[detection_image_suffix]
 
-		##--- generate stacked analysis mask for the default detection band
-		stack_mask_fname = os.path.join(stack_dir, "stack_mask.fits")
-		with warnings.catch_warnings():
-			warnings.simplefilter("ignore", VerifyWarning)
-			warnings.simplefilter("ignore", FITSFixedWarning)
-			with fits.open(stack_image_default_fname) as hdu:
-				stack_image_data = np.asarray(hdu[0].data, dtype=np.float64)
-				stack_image_header = hdu[0].header.copy()
-		with warnings.catch_warnings():
-			warnings.simplefilter("ignore", VerifyWarning)
-			warnings.simplefilter("ignore", FITSFixedWarning)
-			with fits.open(stack_expmap_default_fname) as hdu:
-				stack_exp_data = np.asarray(hdu[0].data, dtype=np.float64)
-		finite_exp = stack_exp_data[np.isfinite(stack_exp_data)]
-		max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
-		exp_cut = float(mask_expfrac) * max_exp
-		stack_mask = (
-			np.isfinite(stack_image_data)
-			& np.isfinite(stack_exp_data)
-			& (stack_exp_data >= exp_cut)
-		)
-		fits.writeto(stack_mask_fname, stack_mask.astype(np.uint8), stack_image_header, overwrite=True)
-		emit(
-			main_logger,
-			"info",
-			f"Stacked analysis mask written to {stack_mask_fname} with threshold {exp_cut:.6g} ({mask_expfrac:.3f} of max exposure {max_exp:.6g})",
-		)
-		emit(main_logger, "info", f"Mask valid pixels: {int(np.count_nonzero(stack_mask))} / {int(stack_mask.size)}")
+	##--- generate stacked analysis mask for the default detection band
+	stack_mask_fname = os.path.join(stack_dir, "stack_mask.fits")
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore", VerifyWarning)
+		warnings.simplefilter("ignore", FITSFixedWarning)
+		with fits.open(stack_image_default_fname) as hdu:
+			stack_image_data = np.asarray(hdu[0].data, dtype=np.float64)
+			stack_image_header = hdu[0].header.copy()
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore", VerifyWarning)
+		warnings.simplefilter("ignore", FITSFixedWarning)
+		with fits.open(stack_expmap_default_fname) as hdu:
+			stack_exp_data = np.asarray(hdu[0].data, dtype=np.float64)
+	finite_exp = stack_exp_data[np.isfinite(stack_exp_data)]
+	max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
+	exp_cut = float(mask_expfrac) * max_exp
+	stack_mask = (
+		np.isfinite(stack_image_data)
+		& np.isfinite(stack_exp_data)
+		& (stack_exp_data >= exp_cut)
+	)
+	fits.writeto(stack_mask_fname, stack_mask.astype(np.uint8), stack_image_header, overwrite=True)
+	emit(
+		main_logger,
+		"info",
+		f"Stacked analysis mask written to {stack_mask_fname} with threshold {exp_cut:.6g} ({mask_expfrac:.3f} of max exposure {max_exp:.6g})",
+	)
+	emit(main_logger, "info", f"Mask valid pixels: {int(np.count_nonzero(stack_mask))} / {int(stack_mask.size)}")
 
 
 	#=============================================
 	#--- source detection and region file creation
 	#=============================================
-	if has_evt:
-		emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
-		stack_image_fname = stack_image_default_fname
-		stack_expmap_fname = stack_expmap_default_fname
-		stack_eefmap_fname = stack_eefmap_default_fname
-		srcdet_src_fname = os.path.join(stack_dir, "stack_src.fits")
-		srcdet_reg_fname = os.path.join(stack_dir, "stack_src.reg")
-		srcdet_bkg_fname = os.path.join(stack_dir, "stack_bkgmap.fits")
-		srcdet_log = os.path.join(stack_dir, "srcdet.log")
-		srcdet_cmd = " ".join([
-			"fxtsrcdet",
-			f'"{stack_image_fname}"',
-			"--expmap", f'"{stack_expmap_fname}"',
-			"--mask", f'"{stack_mask_fname}"',
-			"--eefmap", f'"{stack_eefmap_fname}"',
-			"--mission", "ep-fxt",
-			"--emin", f"{detect_emin}",
-			"--emax", f"{detect_emax}",
-			"--scales", f'"{srcdet_scales}"',
-			"--background-sigma-grid", f'"{srcdet_background_sigma_grid}"',
-			"--out", f'"{srcdet_src_fname}"',
-			"--regfile", f'"{srcdet_reg_fname}"',
-			"--save-bkgmap", f'"{srcdet_bkg_fname}"',
-			"--log-file", f'"{srcdet_log}"',
-		])
-		run_cmd(srcdet_cmd, logger=main_logger, logname=srcdet_log)
-		emit(main_logger, "info", f"Stacked source catalog written to {srcdet_src_fname}")
-		emit(main_logger, "info", f"Stacked source region file written to {srcdet_reg_fname}")
-		emit(main_logger, "info", f"Stacked background map written to {srcdet_bkg_fname}")
+	emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
+	stack_image_fname = stack_image_default_fname
+	stack_expmap_fname = stack_expmap_default_fname
+	stack_eefmap_fname = stack_eefmap_default_fname
+	srcdet_src_fname = os.path.join(stack_dir, "stack_src.fits")
+	srcdet_reg_fname = os.path.join(stack_dir, "stack_src.reg")
+	srcdet_bkg_fname = os.path.join(stack_dir, "stack_bkgmap.fits")
+	srcdet_log = os.path.join(stack_dir, "srcdet.log")
+	srcdet_cmd = " ".join([
+		"fxtsrcdet",
+		f'"{stack_image_fname}"',
+		"--expmap", f'"{stack_expmap_fname}"',
+		"--mask", f'"{stack_mask_fname}"',
+		"--eefmap", f'"{stack_eefmap_fname}"',
+		"--mission", "ep-fxt",
+		"--emin", f"{detect_emin}",
+		"--emax", f"{detect_emax}",
+		"--scales", f'"{srcdet_scales}"',
+		"--background-sigma-grid", f'"{srcdet_background_sigma_grid}"',
+		"--out", f'"{srcdet_src_fname}"',
+		"--regfile", f'"{srcdet_reg_fname}"',
+		"--save-bkgmap", f'"{srcdet_bkg_fname}"',
+		"--log-file", f'"{srcdet_log}"',
+	])
+	run_cmd(srcdet_cmd, logger=main_logger, logname=srcdet_log)
+	emit(main_logger, "info", f"Stacked source catalog written to {srcdet_src_fname}")
+	emit(main_logger, "info", f"Stacked source region file written to {srcdet_reg_fname}")
+	emit(main_logger, "info", f"Stacked background map written to {srcdet_bkg_fname}")
 
-		emit(main_logger, "info", "Generating src & bkg regions with fxtregions ...")
-		src_reg_fname = os.path.join(stack_dir, "target_src.reg")
-		bkg_reg_fname = os.path.join(stack_dir, "target_bkg.reg")
-		fxtregions_log = os.path.join(stack_dir, "fxtregions.log")
-		fxtregions_cmd = " ".join([
-			"fxtregions",
-			f'"{stack_image_fname}"',
-			f'"{srcdet_src_fname}"',
-			"--bkgmap", f'"{srcdet_bkg_fname}"',
-			"--ra", f"{float(ra)}",
-			"--dec", f"{float(dec)}",
-			"--mission", "ep-fxt",
-			"--emin", f"{detect_emin}",
-			"--emax", f"{detect_emax}",
-			"--mode", "manual",
-			"--src-radius", f"{SRC_EXTRACT_RADIUS}",
-			"--bkg-inner", f"{BKG_EXTRACT_INNER_RADIUS}",
-			"--bkg-outer", f"{BKG_EXTRACT_OUTER_RADIUS}",
-			"--match-threshold", f"{FXT_POSITION_ERR90_ARCSEC}",
-			"--src-regfile", f'"{src_reg_fname}"',
-			"--bkg-regfile", f'"{bkg_reg_fname}"',
-			"--log-file", f'"{fxtregions_log}"',
-		])
-		run_cmd(fxtregions_cmd, logger=main_logger, logname=fxtregions_log)
-		emit(main_logger, "info", f"Target source region file saved to {src_reg_fname}")
-		emit(main_logger, "info", f"Target source background region file saved to {bkg_reg_fname}")
+	emit(main_logger, "info", "Generating src & bkg regions with fxtregions ...")
+	src_reg_fname = os.path.join(stack_dir, "target_src.reg")
+	bkg_reg_fname = os.path.join(stack_dir, "target_bkg.reg")
+	fxtregions_log = os.path.join(stack_dir, "fxtregions.log")
+	fxtregions_cmd = " ".join([
+		"fxtregions",
+		f'"{stack_image_fname}"',
+		f'"{srcdet_src_fname}"',
+		"--bkgmap", f'"{srcdet_bkg_fname}"',
+		"--ra", f"{float(ra)}",
+		"--dec", f"{float(dec)}",
+		"--mission", "ep-fxt",
+		"--emin", f"{detect_emin}",
+		"--emax", f"{detect_emax}",
+		"--mode", "manual",
+		"--src-radius", f"{SRC_EXTRACT_RADIUS}",
+		"--bkg-inner", f"{BKG_EXTRACT_INNER_RADIUS}",
+		"--bkg-outer", f"{BKG_EXTRACT_OUTER_RADIUS}",
+		"--match-threshold", f"{FXT_POSITION_ERR90_ARCSEC}",
+		"--src-regfile", f'"{src_reg_fname}"',
+		"--bkg-regfile", f'"{bkg_reg_fname}"',
+		"--log-file", f'"{fxtregions_log}"',
+	])
+	run_cmd(fxtregions_cmd, logger=main_logger, logname=fxtregions_log)
+	emit(main_logger, "info", f"Target source region file saved to {src_reg_fname}")
+	emit(main_logger, "info", f"Target source background region file saved to {bkg_reg_fname}")
 
 
 	#============================================================================
 	#--- second iterate: spectral extraction, with contaminating sources excluded
 	#============================================================================
-	if has_evt:
-		emit(main_logger, "info", "**** Stage 4: Iterate again on each obsid to extract spectra ****")
-		for obsid in obsid_lst:
-			emit(main_logger, "info", f"Processing {obsid} ...")
-			obsid_out_dir = os.path.join(out_dir,obsid,"products")
-			obsid_log_dir = os.path.join(obsid_out_dir,"log")
-			obsid_logname = os.path.join(obsid_log_dir, "fxtchain.log")
-			obsid_logger = build_file_logger(f"eFXTDAS.fxtcombine.{obsid}.stage4", obsid_logname)
-			obsid_file_dict = all_file_dict[obsid]
-			obsid_prod_dict = all_prod_dict[obsid]
-			obsid_prod_dict = fxt_extract_spec(
-				obsid_file_dict,obsid_prod_dict,["evt"],
-				src_reg_fname,bkg_reg_fname,
-				obsid_out_dir,obsid_log_dir,
-				skip_existing=skip_existing,
-				obsid_logger=obsid_logger,
-			)
-			all_prod_dict[obsid] = obsid_prod_dict
+	emit(main_logger, "info", "**** Stage 4: Iterate again on each obsid to extract spectra ****")
+	for obsid in obsid_lst:
+		emit(main_logger, "info", f"Processing {obsid} ...")
+		obsid_out_dir = os.path.join(out_dir,obsid,"products")
+		obsid_log_dir = os.path.join(obsid_out_dir,"log")
+		obsid_logname = os.path.join(obsid_log_dir, "fxtchain.log")
+		obsid_logger = build_file_logger(f"eFXTDAS.fxtcombine.{obsid}.stage4", obsid_logname)
+		obsid_prod_dict = all_prod_dict[obsid]
+		obsid_prod_dict = fxt_extract_spec(
+			obsid_prod_dict,
+			src_reg_fname,bkg_reg_fname,
+			obsid_out_dir,obsid_log_dir,
+			skip_existing=skip_existing,
+			obsid_logger=obsid_logger,
+		)
+		all_prod_dict[obsid] = obsid_prod_dict
 	
 
 	#=====================
 	#--- spectral stacking
 	#=====================
 	emit(main_logger, "info", "**** Stage 5: spectral stacking ****")
-	if has_evt:
-		srcpi_paths = []
-		for obsid in obsid_lst:
-			obsid_prod_dict = all_prod_dict[obsid]
-			for evt_fname_prefix, evt_dict in obsid_prod_dict["evt"].items():
-				srcpi_paths.append(evt_dict["srcpi"])
-		if not srcpi_paths:
-			raise ValueError("No source spectra were extracted; cannot run runXstack.")
+	srcpi_paths = []
+	instbkg_paths = []
+	for obsid in obsid_lst:
+		obsid_prod_dict = all_prod_dict[obsid]
+		for stream_key, prod in obsid_prod_dict.items():
+			srcpi_paths.append(prod["srcpi"])
+			instbkgpi = prod.get("instbkgpi")
+			if instbkgpi:
+				instbkg_paths.append(instbkgpi)
+	if not srcpi_paths:
+		raise ValueError("No source spectra were extracted; cannot run runXstack.")
 
-		srcpi_fname_lst_file = srcpi_filelist
-		with open(srcpi_fname_lst_file,"w") as f:
-			for srcpi_path in srcpi_paths:
-				f.writelines(f"{srcpi_path}\n")
+	srcpi_fname_lst_file = srcpi_filelist
+	with open(srcpi_fname_lst_file,"w") as f:
+		for srcpi_path in srcpi_paths:
+			f.writelines(f"{srcpi_path}\n")
 
-		stackpi_prefix = os.path.join(stack_dir,f"stack_")
-		runXstack_cmd = " ".join([
-			"runXstack",
-			f"{srcpi_fname_lst_file}",
-			"--prefix",f"{stackpi_prefix}",
-			"--rsp_weight_method","FLX",
-			"--nthreads","20",
-			"--same_target",
-		])
-		run_cmd(runXstack_cmd,logger=main_logger)
+	stackpi_prefix = os.path.join(stack_dir,f"stack_")
+	runXstack_cmd = " ".join([
+		"runXstack",
+		f"{srcpi_fname_lst_file}",
+		"--prefix",f"{stackpi_prefix}",
+		"--rsp_weight_method","FLX",
+		"--nthreads","20",
+		"--same_target",
+	])
+	run_cmd(runXstack_cmd,logger=main_logger)
 
-	if has_fsaevt:
-		instbkg_paths = []
-		for obsid in obsid_lst:
-			obsid_prod_dict = all_prod_dict[obsid]
-			for evt_fname_prefix, evt_dict in obsid_prod_dict["fsaevt"].items():
-				instbkgpi = evt_dict.get("instbkgpi")
-				if instbkgpi:
-					instbkg_paths.append(instbkgpi)
-		if instbkg_paths:
-			stack_instbkg_fname = os.path.join(stack_dir, "stack_instbkgpi.fits")
-			stack_instbkg_spectra(instbkg_paths, stack_instbkg_fname, logger=main_logger)
-		else:
-			emit(main_logger, "warning", "No per-OBSID instrumental background spectra were found to stack.")
+	if instbkg_paths:
+		stack_instbkg_fname = os.path.join(stack_dir, "stack_instbkgpi.fits")
+		stack_instbkg_spectra(instbkg_paths, stack_instbkg_fname, logger=main_logger)
+	else:
+		emit(main_logger, "warning", "No per-OBSID instrumental background spectra were found to stack.")
 	
 
 	#--- dump output to json file
@@ -643,13 +648,12 @@ def fxtcombine_pipeline(
 
 
 	emit(main_logger, "info", f"**** FXTCOMBINE run successfully! ****")
-	if has_evt:
-		emit(main_logger, "info", f"Total exposure: {exp_tot} s")
-		emit(main_logger, "info", f"Stacked SRC PI: {os.path.join(stack_dir, 'stack_pi.fits')}")
-		emit(main_logger, "info", f"Stacked BKG PI: {os.path.join(stack_dir, 'stack_bkgpi.fits')}")
-		emit(main_logger, "info", f"Stacked RMF: {os.path.join(stack_dir, 'stack_rmf.fits')}")
-		emit(main_logger, "info", f"Stacked ARF: {os.path.join(stack_dir, 'stack_arf.fits')}")
-	if has_fsaevt:
+	emit(main_logger, "info", f"Total exposure: {exp_tot} s")
+	emit(main_logger, "info", f"Stacked SRC PI: {os.path.join(stack_dir, 'stack_pi.fits')}")
+	emit(main_logger, "info", f"Stacked BKG PI: {os.path.join(stack_dir, 'stack_bkgpi.fits')}")
+	emit(main_logger, "info", f"Stacked RMF: {os.path.join(stack_dir, 'stack_rmf.fits')}")
+	emit(main_logger, "info", f"Stacked ARF: {os.path.join(stack_dir, 'stack_arf.fits')}")
+	if instbkg_paths:
 		emit(main_logger, "info", f"Stacked instrumental background PI: {os.path.join(stack_dir, 'stack_instbkgpi.fits')}")
 	emit(main_logger, "info", f"Please check each OBSID product dir for grade plot, and light curve, for sanity check!")
 	emit(main_logger, "info", f"Summary of generated files (per OBSID) saved to {summary_fname}")
@@ -683,11 +687,6 @@ def build_parser() -> argparse.ArgumentParser:
 	parser.add_argument("--srcpi-filelist", default=None, help="Optional runXstack source-spectrum file list path. Default: <stack-dir>/all_obsid.filelist")
 	parser.add_argument("--module", default="a,b", help="Comma-separated module selection. Default: a,b")
 	parser.add_argument("--datamode", default="ff", help="Comma-separated datamode selection. Default: ff")
-	parser.add_argument(
-		"--datatype",
-		default="evt",
-		help="Comma-separated datatype selection, e.g. evt or evt,fsaevt. Default: evt",
-	)
 	parser.add_argument("--grade", default="0-12", help="Grade filter passed to xselect. Default: 0-12")
 	parser.add_argument("--expr", default="DEFAULT", help="GTI selection expression. Default: DEFAULT")
 	parser.add_argument(
@@ -699,6 +698,29 @@ def build_parser() -> argparse.ArgumentParser:
 		"--lightcurve-energy-ranges",
 		default="0.1:12.0",
 		help="Comma-separated energy ranges in keV used to generate Stage-1 light curves, e.g. 0.1:12.0,1.0:3.0.",
+	)
+	parser.add_argument(
+		"--disable-flare-screen",
+		action="store_true",
+		default=False,
+		help="Disable automatic FF-mode FSA-based flare screening during Stage 1.",
+	)
+	parser.add_argument(
+		"--flare-energy-range",
+		default="0.5:10.0",
+		help="Energy range in keV used for the flare-screening light curve. Default: 0.5:10.0",
+	)
+	parser.add_argument(
+		"--flare-binsize",
+		type=float,
+		default=20.0,
+		help="Flare-screening light-curve bin size in seconds. Default: 20",
+	)
+	parser.add_argument(
+		"--flare-min-time-ratio",
+		type=float,
+		default=0.05,
+		help="Minimum retained exposure fraction accepted by the flare-screening optimizer. Default: 0.05",
 	)
 	parser.add_argument(
 		"--mask-expfrac",
@@ -754,11 +776,14 @@ def main() -> None:
 		srcpi_filelist=args.srcpi_filelist,
 		module=args.module,
 		datamode=args.datamode,
-		datatype=args.datatype,
 		grade=args.grade,
 		expr=args.expr,
 		image_energy_ranges=args.image_energy_ranges,
 		lightcurve_energy_ranges=args.lightcurve_energy_ranges,
+		flare_screen=not args.disable_flare_screen,
+		flare_energy_range=args.flare_energy_range,
+		flare_binsize=args.flare_binsize,
+		flare_min_time_ratio=args.flare_min_time_ratio,
 		mask_expfrac=args.mask_expfrac,
 		jobs=args.jobs,
 		srcdet_scales=args.srcdet_scales,
