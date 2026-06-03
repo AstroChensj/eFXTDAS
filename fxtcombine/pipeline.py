@@ -301,6 +301,7 @@ def fxtcombine_pipeline(
 	clevt_fname_lst = []
 	exp_fname_lst = []
 	exp_lst = []
+	detect_mask_fname_lst = []
 	img_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
 	eef_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
 	image_band_channels_map = {}
@@ -315,10 +316,12 @@ def fxtcombine_pipeline(
 				image_band_channels_map = dict(prod["image_band_channels"])
 			exp_fname_lst.append(prod["vexpmap"])
 			exp_lst.append(prod["exp"])
+			detect_mask_fname_lst.append(prod["detection_mask"])
 
 	clevt_fname_lst = np.array(clevt_fname_lst)
 	exp_fname_lst = np.array(exp_fname_lst)
 	exp_lst = np.array(exp_lst)
+	detect_mask_fname_lst = np.array(detect_mask_fname_lst)
 	if len(clevt_fname_lst) == 0:
 		raise ValueError("No EVT products were produced during Stage 1. Check your OBSID selection and inputs.")
 
@@ -327,6 +330,7 @@ def fxtcombine_pipeline(
 	clevt_fname_lst = clevt_fname_lst[idx_sort]
 	exp_fname_lst = exp_fname_lst[idx_sort]
 	exp_lst = exp_lst[idx_sort]
+	detect_mask_fname_lst = detect_mask_fname_lst[idx_sort]
 	for image_key, img_list in img_fname_map.items():
 		img_fname_map[image_key] = np.array(img_list)[idx_sort]
 	for image_key, eef_list in eef_fname_map.items():
@@ -338,6 +342,7 @@ def fxtcombine_pipeline(
 	for image_key, img_fname_lst in img_fname_map.items():
 		emit(main_logger, "info", f"You have the following images for {image_key}: {img_fname_lst}")
 	emit(main_logger, "info", f"You have the following vign-exposure maps: {exp_fname_lst}")
+	emit(main_logger, "info", f"You have the following per-OBSID detection masks: {detect_mask_fname_lst}")
 	emit(main_logger, "info", f"Their corresponding exposures are: {exp_lst}")
 
 	##--- choose a common reference frame from the first requested image band
@@ -435,6 +440,7 @@ def fxtcombine_pipeline(
 				eef_primary_header = hdul[0].header.copy()
 				eef_extnames = [hdu.name for hdu in hdul[1:]]
 		eef_numerators = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
+		eef_weight_sums = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
 		for eef_fname_i, exp_fname_i in zip(eef_fname_lst, exp_fname_lst):
 			with warnings.catch_warnings():
 				warnings.simplefilter("ignore", VerifyWarning)
@@ -453,13 +459,14 @@ def fxtcombine_pipeline(
 					for extname in eef_extnames:
 						eef_data_i = hdul[extname].data
 						eef_reproj_i, eef_footprint_i = reproject_interp((eef_data_i, eef_wcs_i), refimg_wcs, shape_out=refimg_shape)
-						valid_i = np.isfinite(eef_reproj_i) & (eef_footprint_i > 0) & (exp_weight_i > 0)
+						valid_i = np.isfinite(eef_reproj_i) & (eef_footprint_i > 0) & (exp_weight_i > 0) & (eef_reproj_i > 0.0)
 						eef_numerators[extname][valid_i] += eef_reproj_i[valid_i] * exp_weight_i[valid_i]
+						eef_weight_sums[extname][valid_i] += exp_weight_i[valid_i]
 		eef_hdus = [fits.PrimaryHDU(header=eef_primary_header)]
 		for extname in eef_extnames:
 			eef_stack = np.zeros(refimg_shape, dtype=np.float32)
-			valid = exp_sum > 0
-			eef_stack[valid] = (eef_numerators[extname][valid] / exp_sum[valid]).astype(np.float32)
+			valid = eef_weight_sums[extname] > 0
+			eef_stack[valid] = (eef_numerators[extname][valid] / eef_weight_sums[extname][valid]).astype(np.float32)
 			eef_hdus.append(fits.ImageHDU(data=eef_stack, header=refimg.header.copy(), name=extname))
 		stack_eefmap_fname = os.path.join(stack_dir, f"{image_key}_stack_eef.fits")
 		fits.HDUList(eef_hdus).writeto(stack_eefmap_fname, overwrite=True)
@@ -504,6 +511,17 @@ def fxtcombine_pipeline(
 		warnings.simplefilter("ignore", FITSFixedWarning)
 		with fits.open(stack_expmap_default_fname) as hdu:
 			stack_exp_data = np.asarray(hdu[0].data, dtype=np.float64)
+	mask_support = np.zeros(refimg_shape, dtype=np.float64)
+	for detect_mask_fname_i in detect_mask_fname_lst:
+		with warnings.catch_warnings():
+			warnings.simplefilter("ignore", VerifyWarning)
+			warnings.simplefilter("ignore", FITSFixedWarning)
+			with fits.open(detect_mask_fname_i) as hdu:
+				mask_data_i = np.asarray(hdu[0].data, dtype=np.float64)
+				mask_wcs_i = WCS(hdu[0].header)
+		mask_reproj_i, mask_footprint_i = reproject_interp((mask_data_i, mask_wcs_i), refimg_wcs, shape_out=refimg_shape)
+		valid_i = np.isfinite(mask_reproj_i) & (mask_footprint_i > 0) & (mask_reproj_i > 0.0)
+		mask_support[valid_i] += mask_reproj_i[valid_i]
 	finite_exp = stack_exp_data[np.isfinite(stack_exp_data)]
 	max_exp = float(np.max(finite_exp)) if finite_exp.size else 0.0
 	exp_cut = float(mask_expfrac) * max_exp
@@ -511,6 +529,7 @@ def fxtcombine_pipeline(
 		np.isfinite(stack_image_data)
 		& np.isfinite(stack_exp_data)
 		& (stack_exp_data >= exp_cut)
+		& (mask_support > 0.0)
 	)
 	fits.writeto(stack_mask_fname, stack_mask.astype(np.uint8), stack_image_header, overwrite=True)
 	emit(
@@ -519,6 +538,7 @@ def fxtcombine_pipeline(
 		f"Stacked analysis mask written to {stack_mask_fname} with threshold {exp_cut:.6g} ({mask_expfrac:.3f} of max exposure {max_exp:.6g})",
 	)
 	emit(main_logger, "info", f"Mask valid pixels: {int(np.count_nonzero(stack_mask))} / {int(stack_mask.size)}")
+	emit(main_logger, "info", f"Stacked mask support pixels: {int(np.count_nonzero(mask_support > 0.0))} / {int(mask_support.size)}")
 
 
 	#=============================================

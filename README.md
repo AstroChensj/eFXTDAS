@@ -103,7 +103,8 @@ Important current behavior:
 
 - `fxtcombine` uses energy ranges in keV, not direct PI/channel ranges, for Stage-1 image and light-curve generation.
 - In `FF` mode, `fxtcombine` automatically uses matching `fsaevt` when available to derive a flare-screened GTI, then reuses that screened GTI for both `fsaevt` and `evt`.
-- `fxtcombine` uses `fxtbkgoptrate` internally to optimize the `FF`-mode flare/background threshold from the FSA light curve.
+- In that `FF`/`fsaevt` flare-screening path, `fxtcombine` calls the installed `fxtbkgoptrate` CLI task through its normal task wrapper rather than importing the optimizer directly in-process.
+- `fxtcombine` reads the persisted flare-screening summary from the `fxtbkgoptrate` diagnostic FITS headers, including `BGOPTCUT`, `FRACTLFT`, and `OPTSTAT`.
 - `fxtcombine` generates `stack_mask.fits` and passes it to `fxtsrcdet`.
 - `fxtregions` currently does **not** carve exclusion regions into the source region because complex source-region geometry can confuse `fxtarfgen`.
 
@@ -173,6 +174,8 @@ Key parameters:
 - `--base-gti` and `--screened-gti-out`: intersect the flare GTI with an existing GTI
 
 Python API is available through `run_bkgoptrate`.
+
+When `fxtcombine` uses `fxtbkgoptrate` internally, it invokes the same CLI entry point shown above and then reads the persisted summary from the diagnostic FITS rather than relying on an in-memory Python return value.
 
 ### 3. `fxtsrcdet`
 

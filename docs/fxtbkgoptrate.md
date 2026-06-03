@@ -14,7 +14,7 @@ It is modeled after the XMM SAS `bkgoptrate` idea:
   - a flare-only GTI
   - a screened GTI created by intersecting the flare GTI with an existing base GTI
 
-`fxtcombine` uses this task internally for `FF`-mode FSA flare screening.
+`fxtcombine` uses this task internally for `FF`-mode FSA flare screening by calling the installed `fxtbkgoptrate` CLI entry point and then reading the persisted summary metadata back from the diagnostic FITS.
 
 ## Basic Usage
 
@@ -60,6 +60,12 @@ Optional outputs:
 - `--base-gti` plus `--screened-gti-out`: intersect flare GTI with an existing GTI
 
 The CLI prints the chosen threshold to stdout. If no finite optimum is found, it prints `nan`.
+
+The diagnostic FITS header is also the persisted machine-readable summary used by downstream tasks such as `fxtcombine`. In particular:
+
+- `BGOPTCUT`: chosen threshold
+- `FRACTLFT`: retained exposure fraction
+- `OPTSTAT`: optimizer status such as `optimal` or `no_cut_needed`
 
 ## Notes
 

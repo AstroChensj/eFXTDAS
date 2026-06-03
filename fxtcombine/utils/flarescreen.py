@@ -3,14 +3,36 @@
 from __future__ import annotations
 
 import os
+import shlex
 
 import numpy as np
 from astropy.io import fits
 
-from fxtbkgoptrate import run_bkgoptrate
 from fxtcombine.utils.cmd import finalize_xselect_log, remove_xselect_tmp_files, run_cmd
 from fxtcombine.utils.energy import energy_range_to_channel_range
 from fxtcombine.utils.logger import emit
+
+
+def _load_flare_diag_metadata(diag_path: str) -> dict:
+    """Load persisted flare-screening summary metadata from one diagnostic FITS.
+
+    Parameters
+    ----------
+    diag_path : str
+        Path to the diagnostic FITS table written by ``fxtbkgoptrate``.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the persisted threshold, kept fraction, and status.
+    """
+    with fits.open(diag_path) as hdul:
+        hdr = hdul[1].header
+        return {
+            "flare_threshold": hdr.get("BGOPTCUT", np.nan),
+            "flare_kept_fraction": hdr.get("FRACTLFT", 1.0),
+            "flare_screen_status": hdr.get("OPTSTAT", "optimal"),
+        }
 
 
 def run_fsa_flare_screening(
@@ -90,38 +112,59 @@ def run_fsa_flare_screening(
         run_cmd(f"xselect @{xsl_path}", logger=obsid_logger, logname=flare_log, cwd=obsid_out_dir)
         finalize_xselect_log(obsid_out_dir, flare_log)
 
-    if all(os.path.exists(path) for path in [flare_diag_path, flare_gti_path, screened_gti_path]) and skip_existing:
-        with fits.open(flare_diag_path) as hdul:
-            hdr = hdul[1].header
-            return {
-                "base_gti": base_gti_path,
-                "screened_gti": screened_gti_path,
-                "flare_gti": flare_gti_path,
-                "flare_lc": flare_lc_path,
-                "flare_diag": flare_diag_path,
-                "flare_threshold": hdr.get("BGOPTCUT", np.nan),
-                "flare_kept_fraction": hdr.get("FRACTLFT", 1.0),
-                "flare_screen_applied": True,
-                "flare_screen_status": hdr.get("OPTSTAT", "optimal"),
-            }
+    if all(
+        os.path.exists(path)
+        for path in [flare_lc_path, flare_diag_path, flare_gti_path, screened_gti_path]
+    ) and skip_existing:
+        flare_meta = _load_flare_diag_metadata(flare_diag_path)
+        return {
+            "base_gti": base_gti_path,
+            "screened_gti": screened_gti_path,
+            "flare_gti": flare_gti_path,
+            "flare_lc": flare_lc_path,
+            "flare_diag": flare_diag_path,
+            "flare_screen_applied": True,
+            **flare_meta,
+        }
 
-    flare_result = run_bkgoptrate(
-        flare_lc_path,
-        min_time_ratio=flare_min_time_ratio,
-        diagnostic_outfile=flare_diag_path,
-        flare_gti_outfile=flare_gti_path,
-        base_gti_path=base_gti_path,
-        screened_gti_outfile=screened_gti_path,
-        logger=obsid_logger,
+    flare_cmd = " ".join(
+        [
+            "fxtbkgoptrate",
+            shlex.quote(flare_lc_path),
+            "--min-time-ratio",
+            shlex.quote(str(flare_min_time_ratio)),
+            "--diag-out",
+            shlex.quote(flare_diag_path),
+            "--flare-gti-out",
+            shlex.quote(flare_gti_path),
+            "--base-gti",
+            shlex.quote(base_gti_path),
+            "--screened-gti-out",
+            shlex.quote(screened_gti_path),
+        ]
     )
+    emit(obsid_logger, "info", "Running fxtbkgoptrate for FSA flare screening ...")
+    flare_opt_log = os.path.join(fsa_prep["sub_log_dir"], "fxtbkgoptrate_fsaevt.log")
+    run_cmd(flare_cmd, logger=obsid_logger, logname=flare_opt_log, cwd=obsid_out_dir)
+
+    missing_outputs = [
+        path
+        for path in [flare_diag_path, flare_gti_path, screened_gti_path]
+        if not os.path.exists(path)
+    ]
+    if missing_outputs:
+        raise FileNotFoundError(
+            "fxtbkgoptrate completed without writing expected outputs: "
+            + ", ".join(missing_outputs)
+        )
+
+    flare_meta = _load_flare_diag_metadata(flare_diag_path)
     return {
         "base_gti": base_gti_path,
-        "screened_gti": flare_result.get("screened_gti_outfile") or base_gti_path,
+        "screened_gti": screened_gti_path,
         "flare_gti": flare_gti_path,
         "flare_lc": flare_lc_path,
         "flare_diag": flare_diag_path,
-        "flare_threshold": flare_result["best_threshold"],
-        "flare_kept_fraction": flare_result["kept_fraction"],
         "flare_screen_applied": True,
-        "flare_screen_status": flare_result["status"],
+        **flare_meta,
     }

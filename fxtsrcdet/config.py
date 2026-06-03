@@ -77,6 +77,7 @@ CLUSTER_MIN_RADIUS_PIX = 8.0
 # When PSF information is available, the clustering link radius is at least
 # this fraction of the local PSF r90 size.
 CLUSTER_R90_FACTOR = 0.75
+CLUSTER_MAX_RADIUS_PIX = 20.0
 
 # Large connected source islands are trimmed to a neighborhood around the
 # dominant peak before ellipse measurement.

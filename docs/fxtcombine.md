@@ -8,6 +8,7 @@ The current workflow:
 
 - scans multiple OBSID directories and builds one coupled per-stream workflow from each `evt`
 - for `FF` mode with matching `fsaevt`, processes `fsaevt` first, derives a flare-screened GTI with `fxtbkgoptrate`, then reuses that GTI for both `fsaevt` and `evt`
+- in that flare-screening step, shells out to the installed `fxtbkgoptrate` task and records one dedicated command log under the per-OBSID log directory
 - for `evt`, creates clean events, multi-band images/light curves, exposure maps, and EEF bundles
 - for `fsaevt`, creates the cleaned FSA products needed by `fxtbkggen` and predicts one instrumental-background spectrum per OBSID
 - reprojects and stacks `evt` images, exposure maps, and EEF bundles onto a common reference frame
@@ -124,6 +125,9 @@ fxtcombine_pipeline(
     - flare-screening light-curve bin size in seconds
   - `--flare-min-time-ratio`
     - minimum retained exposure fraction accepted by `fxtbkgoptrate`
+  - `--skip-existing`
+    - reuses the FSA flare-screening products when the flare light curve, diagnostic FITS, flare GTI, and screened GTI already exist
+    - in that reuse path, the flare threshold, kept fraction, and screening status are reloaded from the diagnostic FITS header
   - `--jobs`
     - number of parallel OBSID workers used in Stage 1
     - each worker owns one OBSID and writes only inside that OBSID's own
@@ -495,6 +499,8 @@ For each selected OBSID and each coupled event stream:
 
 1. if `FF` with matching `fsaevt`, run the FSA chain first through `fxtgtigen`
 2. build an FSA flare-screening light curve and run `fxtbkgoptrate`
+   - `fxtcombine` invokes the installed CLI task through its normal shell-task wrapper rather than importing `run_bkgoptrate(...)` directly
+   - the diagnostic FITS written by `fxtbkgoptrate` is the persisted source of truth for `BGOPTCUT`, `FRACTLFT`, and `OPTSTAT`
 3. intersect the flare GTI with the base GTI to create a screened GTI
 4. apply the screened GTI to `fsaevt` and generate cleaned FSA products plus `instbkg`
 5. run the `evt` chain through `fxtgtigen`
@@ -579,6 +585,10 @@ Per-OBSID logs are written under:
 
 Command-specific logs such as `xselect.log`, `fxtarfgen.log`, and `fxtbkggen.log` are written beside the stage that generated them.
 
+For the `FF`/`fsaevt` flare-screening substep, the dedicated optimizer command log is:
+
+- `<out-dir>/<OBSID>/products/log/<module>_<obsid>_<datamode>_<filter>_<pp>_fsaevt_<ver>/fxtbkgoptrate_fsaevt.log`
+
 ## Tunable Parameters and Constants
 
 Important current constants are defined in [`fxtcombine/config.py`](../fxtcombine/config.py):
@@ -639,7 +649,7 @@ The main user-facing pipeline controls are:
 
 7. What does `fsaevt` do inside `fxtcombine`?
 
-   - In `FF` mode, matching `fsaevt` is used first to build the flare-screening light curve and derive a screened GTI through `fxtbkgoptrate`. That same screened GTI is then reused for both the final cleaned `fsaevt` and the final cleaned `evt`. `fsaevt` also provides one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkgpi.fits`.
+   - In `FF` mode, matching `fsaevt` is used first to build the flare-screening light curve and derive a screened GTI through `fxtbkgoptrate`. `fxtcombine` calls the installed `fxtbkgoptrate` CLI task, then reads `BGOPTCUT`, `FRACTLFT`, and `OPTSTAT` back from the diagnostic FITS. That same screened GTI is then reused for both the final cleaned `fsaevt` and the final cleaned `evt`. `fsaevt` also provides one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkgpi.fits`.
 
 8. Why does the `fsaevt` path use `DETX=3:382 DETY=3:382`?
 

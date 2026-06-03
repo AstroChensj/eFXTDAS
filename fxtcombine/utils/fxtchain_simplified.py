@@ -10,6 +10,7 @@ import time
 from astropy.io import fits
 
 from fxtcombine.utils.cmd import finalize_xselect_log, remove_xselect_tmp_files, run_cmd
+from fxtcombine.utils.eefmask import build_detection_mask, filter_code_to_name, infer_optaxis_from_image, module_to_instrument
 from fxtcombine.utils.energy import energy_range_suffix, energy_range_to_channel_range
 from fxtcombine.utils.flarescreen import run_fsa_flare_screening
 from fxtcombine.utils.logger import emit
@@ -384,11 +385,16 @@ def _extract_evt_stage1_products(
         )
         for energy_range in image_energy_ranges
     }
+    first_image_key = energy_range_suffix(image_energy_ranges[0])
+    first_lc_key = energy_range_suffix(lightcurve_energy_ranges[0])
+    instrument = module_to_instrument(module)
+    filter_name = filter_code_to_name(filt)
     for energy_range in image_energy_ranges:
         suffix = energy_range_suffix(energy_range)
         if os.path.exists(eefmap_paths[suffix]) and skip_existing:
             continue
         emin, emax = energy_range
+        optaxis_x, optaxis_y = infer_optaxis_from_image(image_paths[suffix])
         run_cmd(
             " ".join([
                 "fxteefmap",
@@ -396,16 +402,37 @@ def _extract_evt_stage1_products(
                 "--out", eefmap_paths[suffix],
                 "--expmap", exp_path,
                 "--mission", "ep-fxt",
+                "--instrument", instrument,
+                "--filter", filter_name,
                 "--emin", f"{emin}",
                 "--emax", f"{emax}",
+                "--optaxis-x", f"{optaxis_x}",
+                "--optaxis-y", f"{optaxis_y}",
             ]),
             logger=obsid_logger,
             logname=os.path.join(sub_log_dir, f"fxteefmap_evt_{suffix}.log"),
             cwd=sub_log_dir,
         )
 
-    first_image_key = energy_range_suffix(image_energy_ranges[0])
-    first_lc_key = energy_range_suffix(lightcurve_energy_ranges[0])
+    detection_mask_path = os.path.join(
+        obsid_out_dir,
+        f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{first_image_key}.detectmask.fits",
+    )
+    if not (os.path.exists(detection_mask_path) and skip_existing):
+        detection_mask_meta = build_detection_mask(
+            image_path=image_paths[first_image_key],
+            expmap_path=exp_path,
+            eefmap_path=eefmap_paths[first_image_key],
+            out_path=detection_mask_path,
+        )
+        if obsid_logger is not None:
+            emit(
+                obsid_logger,
+                "info",
+                f"Per-OBSID detection mask written to {detection_mask_path} "
+                f"(valid={detection_mask_meta['valid_pixels']}, theta_max={detection_mask_meta['theta_max_caldb']:.3f} arcmin)",
+            )
+
     return {
         "evt_clevt": clevt_path,
         "image": image_paths[first_image_key],
@@ -414,6 +441,7 @@ def _extract_evt_stage1_products(
         "vexpmap": exp_path,
         "eefmap": eefmap_paths[first_image_key],
         "eefmaps": eefmap_paths,
+        "detection_mask": detection_mask_path,
         "exp": fits.getval(exp_path, ext=0, keyword="EXPOSURE"),
         "alllc": lightcurve_paths[first_lc_key],
         "lightcurves": lightcurve_paths,

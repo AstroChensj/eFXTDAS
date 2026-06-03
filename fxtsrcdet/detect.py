@@ -9,6 +9,7 @@ from scipy import ndimage
 
 from fxtpsf_helpers import MissionPSFContext, eef_radius, load_local_eef, sample_radius_map
 from fxtsrcdet.config import (
+    CLUSTER_MAX_RADIUS_PIX,
     CLUSTER_MIN_RADIUS_PIX,
     CLUSTER_R90_FACTOR,
     EPS,
@@ -283,7 +284,8 @@ def estimate_background(
     -----
     The basic algorithm is:
 
-    1. Keep only the negative annulus of the Mexican-hat wavelet.
+    1. Keep only the negative annulus of the Mexican-hat wavelet (but turn it 
+       positive).
     2. Convolve the counts image with that annulus to measure weighted local
        annulus counts around each pixel.
     3. Convolve the exposure map with the same annulus to measure the local
@@ -541,7 +543,7 @@ def cluster_peak_candidates(
             theta_arcmin = math.hypot(float(cand.peak_x) - float(optaxis_x), float(cand.peak_y) - float(optaxis_y)) * float(pixel_scale_arcsec) / 60.0
             radius_pix, frac = load_local_eef(psf_context, theta_arcmin)
             local_r90 = float(eef_radius(radius_pix, frac, 0.90))
-        return max(CLUSTER_R90_FACTOR * float(local_r90), float(radius))
+        return min(max(CLUSTER_R90_FACTOR * float(local_r90), float(radius)), float(CLUSTER_MAX_RADIUS_PIX))
 
     #--- for each candidate ...
     for cand in sorted(candidates, key=lambda r: r.z_peak, reverse=True):   # highest-z first

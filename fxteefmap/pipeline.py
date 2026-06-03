@@ -133,11 +133,13 @@ def build_eef_radius_map(
     theta_map = np.hypot((xx + 1.0) - opt_x, (yy + 1.0) - opt_y) * float(pixel_scale_arcsec) / 60.0
 
     theta_grid = available_theta_arcmin(context)
+    theta_max_caldb = float(np.max(theta_grid))
     radius_grid = np.empty_like(theta_grid, dtype=np.float64)
     for idx, theta_arcmin in enumerate(theta_grid):
         radius_pix, frac = load_local_eef(context, float(theta_arcmin))
         radius_grid[idx] = float(eef_radius(radius_pix, frac, eeffrac))
     radius_map = np.interp(theta_map, theta_grid, radius_grid, left=float(radius_grid[0]), right=float(radius_grid[-1])).astype(np.float32)
+    radius_map = np.where(theta_map <= theta_max_caldb, radius_map, 0.0).astype(np.float32)
 
     if exposure_map is not None:
         radius_map = np.where(np.asarray(exposure_map, dtype=np.float64) > 0.0, radius_map, 0.0).astype(np.float32)
@@ -152,6 +154,7 @@ def build_eef_radius_map(
         "optaxis_x": float(opt_x),
         "optaxis_y": float(opt_y),
         "eeffrac": float(eeffrac),
+        "theta_max_caldb": theta_max_caldb,
     }
     return radius_map, metadata
 
@@ -218,6 +221,7 @@ def build_eef_radius_maps(
     theta_map = np.hypot((xx + 1.0) - opt_x, (yy + 1.0) - opt_y) * float(pixel_scale_arcsec) / 60.0
 
     theta_grid = available_theta_arcmin(context)
+    theta_max_caldb = float(np.max(theta_grid))
     radius_by_frac: dict[float, np.ndarray] = {}
     for frac_value in fractions:
         radius_grid = np.empty_like(theta_grid, dtype=np.float64)
@@ -231,6 +235,7 @@ def build_eef_radius_maps(
             left=float(radius_grid[0]),
             right=float(radius_grid[-1]),
         ).astype(np.float32)
+        radius_map = np.where(theta_map <= theta_max_caldb, radius_map, 0.0).astype(np.float32)
         if exposure_map is not None:
             radius_map = np.where(np.asarray(exposure_map, dtype=np.float64) > 0.0, radius_map, 0.0).astype(np.float32)
         radius_by_frac[frac_value] = radius_map
@@ -246,6 +251,7 @@ def build_eef_radius_maps(
         "optaxis_x": float(opt_x),
         "optaxis_y": float(opt_y),
         "eeffrac_values": tuple(fractions),
+        "theta_max_caldb": theta_max_caldb,
     }
     return maps, metadata
 
@@ -261,6 +267,7 @@ def _save_multi_extension_maps(path: Path, maps: dict[str, np.ndarray], header: 
     primary_header["PIXSCALE"] = (float(meta["pixel_scale_arcsec"]), "Image pixel scale [arcsec/pixel]")
     primary_header["OPTAXISX"] = (float(meta["optaxis_x"]), "Optical-axis X [1-based image pixel]")
     primary_header["OPTAXISY"] = (float(meta["optaxis_y"]), "Optical-axis Y [1-based image pixel]")
+    primary_header["THMAXCAL"] = (float(meta["theta_max_caldb"]), "Largest calibrated off-axis angle [arcmin]")
     primary_header["BUNIT"] = ("pixel", "EEF radius unit")
     hdus: list[fits.ImageHDU | fits.PrimaryHDU] = [fits.PrimaryHDU(header=primary_header)]
     for name, array in maps.items():
@@ -335,6 +342,7 @@ def main() -> None:
         out_header["PIXSCALE"] = (float(meta["pixel_scale_arcsec"]), "Image pixel scale [arcsec/pixel]")
         out_header["OPTAXISX"] = (float(meta["optaxis_x"]), "Optical-axis X [1-based image pixel]")
         out_header["OPTAXISY"] = (float(meta["optaxis_y"]), "Optical-axis Y [1-based image pixel]")
+        out_header["THMAXCAL"] = (float(meta["theta_max_caldb"]), "Largest calibrated off-axis angle [arcmin]")
         _save_img(args.out, radius_map, header=out_header)
         emit(logger, "info", f"Wrote EEF-radius map: {args.out}")
         return
