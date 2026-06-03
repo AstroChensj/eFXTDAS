@@ -104,7 +104,7 @@ Important current behavior:
 - `fxtcombine` uses energy ranges in keV, not direct PI/channel ranges, for Stage-1 image and light-curve generation.
 - In `FF` mode, `fxtcombine` automatically uses matching `fsaevt` when available to derive a flare-screened GTI, then reuses that screened GTI for both `fsaevt` and `evt`.
 - In that `FF`/`fsaevt` flare-screening path, `fxtcombine` calls the installed `fxtbkgoptrate` CLI task through its normal task wrapper rather than importing the optimizer directly in-process.
-- `fxtcombine` reads the persisted flare-screening summary from the `fxtbkgoptrate` diagnostic FITS headers, including `BGOPTCUT`, `FRACTLFT`, and `OPTSTAT`.
+- `fxtcombine` reads the persisted flare-screening summary from the `fxtbkgoptrate` diagnostic FITS headers, including `BGOPTCUT`, `FRACTLFT`, `OPTSTAT`, and `OPTMETH`.
 - `fxtcombine` generates `stack_mask.fits` and passes it to `fxtsrcdet`.
 - `fxtregions` currently does **not** carve exclusion regions into the source region because complex source-region geometry can confuse `fxtarfgen`.
 
@@ -149,6 +149,7 @@ Key parameters:
 - `--image-energy-ranges`: stacked detection defaults to the first image band
 - `--lightcurve-energy-ranges`: whole-field diagnostic light curves
 - `--disable-flare-screen`: disable the default `FF`-mode FSA-based flare screening
+- `--flare-threshold-method`: FSA flare-threshold method, default `robust_iqr`
 - `--jobs`: Stage-1 OBSID parallelism
 - `--stack-dir`: where stacked science products go
 
@@ -160,6 +161,7 @@ Use this when you want to optimize a flare/background threshold on one FITS ligh
 
 ```bash
 fxtbkgoptrate flare.lc \
+  --method snr \
   --diag-out flare_diag.fits \
   --flare-gti-out flare.gti \
   --base-gti base.gti \
@@ -169,13 +171,15 @@ fxtbkgoptrate flare.lc \
 Key parameters:
 
 - `infile`: FITS light curve, usually with `RATE` or `COUNT`
+- `--method`: threshold method, `snr` or `robust_iqr`; standalone default remains `snr`
 - `--diag-out`: writes the threshold-trial table and chosen threshold metadata
 - `--flare-gti-out`: writes the GTI built from accepted low-background bins
 - `--base-gti` and `--screened-gti-out`: intersect the flare GTI with an existing GTI
 
 Python API is available through `run_bkgoptrate`.
 
-When `fxtcombine` uses `fxtbkgoptrate` internally, it invokes the same CLI entry point shown above and then reads the persisted summary from the diagnostic FITS rather than relying on an in-memory Python return value.
+When `fxtcombine` uses `fxtbkgoptrate` internally, it invokes the same CLI entry point shown above with `--method robust_iqr` by default, then reads the persisted summary from the diagnostic FITS rather than relying on an in-memory Python return value.
+`robust_iqr` uses the valid-bin rate distribution and sets the threshold to `Q3 + 1.5 * IQR`, with the usual retained-exposure floor still enforced by `--min-time-ratio`.
 
 ### 3. `fxtsrcdet`
 

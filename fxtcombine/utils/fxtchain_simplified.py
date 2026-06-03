@@ -458,6 +458,7 @@ def fxtchain_obsid(
     image_energy_ranges=None,
     lightcurve_energy_ranges=None,
     flare_screen=True,
+    flare_threshold_method="robust_iqr",
     flare_energy_range=(0.5, 10.0),
     flare_binsize=20.0,
     flare_min_time_ratio=0.05,
@@ -484,6 +485,8 @@ def fxtchain_obsid(
         Energy ranges in keV used to generate light curves through xselect.
     flare_screen : bool, optional
         Whether to run FSA-based flare screening for FF-mode science data.
+    flare_threshold_method : str, optional
+        Threshold method passed to ``fxtbkgoptrate`` for FSA flare screening.
     flare_energy_range : tuple[float, float], optional
         Energy band in keV used for the flare-screening light curve.
     flare_binsize : float, optional
@@ -526,6 +529,7 @@ def fxtchain_obsid(
             "flare_gti": None,
             "flare_lc": None,
             "flare_diag": None,
+            "flare_threshold_method": flare_threshold_method,
             "flare_threshold": None,
             "flare_kept_fraction": 1.0,
             "flare_screen_applied": False,
@@ -552,6 +556,7 @@ def fxtchain_obsid(
                 fsa_prep,
                 base_gti_path=fsa_prep["gti"],
                 grade=grade,
+                flare_threshold_method=flare_threshold_method,
                 flare_energy_range=flare_energy_range,
                 flare_binsize=flare_binsize,
                 flare_min_time_ratio=flare_min_time_ratio,

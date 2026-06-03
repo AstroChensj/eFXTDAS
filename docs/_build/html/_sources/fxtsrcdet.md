@@ -678,6 +678,3 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
      - final `maskfrac` diagnostics
    - It does not replace the internal source masks or neighbor-exclusion masks used for deblending and local fitting.
 
-## Suggested Future Additions
-
-- a dedicated page on catalog column definitions

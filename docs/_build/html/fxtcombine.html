@@ -47,7 +47,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'fxtcombine';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="fxtsrcdet" href="fxtsrcdet.html" />
+    <link rel="next" title="fxtbkgoptrate" href="fxtbkgoptrate.html" />
     <link rel="prev" title="eFXTDAS Documentation" href="index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -141,6 +141,7 @@
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtbkgoptrate.html"><code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
@@ -334,11 +335,11 @@
 <h1><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code><a class="headerlink" href="#fxtcombine" title="Link to this heading">#</a></h1>
 <section id="what-it-does">
 <h2>What It Does<a class="headerlink" href="#what-it-does" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> combines multiple EP-FXT observations of the same target into stacked imaging products, a stacked source spectrum, and optionally a stacked instrumental-background spectrum derived from <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code> combines multiple EP-FXT observations of the same target into stacked imaging products, a stacked source spectrum, and, in <code class="docutils literal notranslate"><span class="pre">FF</span></code> mode, a stacked instrumental-background spectrum derived from <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> when available.</p>
 <p>The current workflow:</p>
 <ul class="simple">
-<li><p>scans multiple OBSID directories and selects matching event products</p></li>
-<li><p>runs a simplified per-OBSID preprocessing chain</p></li>
+<li><p>scans multiple OBSID directories and builds one coupled per-stream workflow from each <code class="docutils literal notranslate"><span class="pre">evt</span></code></p></li>
+<li><p>for <code class="docutils literal notranslate"><span class="pre">FF</span></code> mode with matching <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>, processes <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> first, derives a flare-screened GTI with <code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code>, then reuses that GTI for both <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> and <code class="docutils literal notranslate"><span class="pre">evt</span></code></p></li>
 <li><p>for <code class="docutils literal notranslate"><span class="pre">evt</span></code>, creates clean events, multi-band images/light curves, exposure maps, and EEF bundles</p></li>
 <li><p>for <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>, creates the cleaned FSA products needed by <code class="docutils literal notranslate"><span class="pre">fxtbkggen</span></code> and predicts one instrumental-background spectrum per OBSID</p></li>
 <li><p>reprojects and stacks <code class="docutils literal notranslate"><span class="pre">evt</span></code> images, exposure maps, and EEF bundles onto a common reference frame</p></li>
@@ -390,7 +391,6 @@
     <span class="n">stack_dir</span><span class="o">=</span><span class="s2">&quot;combine_stack&quot;</span><span class="p">,</span>
     <span class="n">module</span><span class="o">=</span><span class="s2">&quot;a,b&quot;</span><span class="p">,</span>
     <span class="n">datamode</span><span class="o">=</span><span class="s2">&quot;ff&quot;</span><span class="p">,</span>
-    <span class="n">datatype</span><span class="o">=</span><span class="s2">&quot;evt,fsaevt&quot;</span><span class="p">,</span>
     <span class="n">image_energy_ranges</span><span class="o">=</span><span class="s2">&quot;0.3:10.0,10.0:12.0&quot;</span><span class="p">,</span>
     <span class="n">lightcurve_energy_ranges</span><span class="o">=</span><span class="s2">&quot;0.1:12.0,10.0:12.0&quot;</span><span class="p">,</span>
     <span class="n">jobs</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
@@ -442,13 +442,6 @@ are processed</p></li>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">--module</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--datamode</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--datatype</span></code></p>
-<ul>
-<li><p>comma-separated datatype selection such as <code class="docutils literal notranslate"><span class="pre">evt</span></code> or <code class="docutils literal notranslate"><span class="pre">evt,fsaevt</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">evt</span></code> is required for stacked imaging, <code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code>, <code class="docutils literal notranslate"><span class="pre">fxtregions</span></code>, and stacked source spectra</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> is optional and is used only for the instrumental-background workflow</p></li>
-</ul>
-</li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--grade</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--expr</span></code></p></li>
 </ul>
@@ -488,6 +481,26 @@ exposure map contains <code class="docutils literal notranslate"><span class="pr
 </li>
 <li><p>workflow controls:</p>
 <ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">--disable-flare-screen</span></code></p>
+<ul>
+<li><p>disable the default <code class="docutils literal notranslate"><span class="pre">FF</span></code>-mode FSA-based flare screening</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--flare-energy-range</span></code></p>
+<ul>
+<li><p>energy range in keV used to build the FSA flare-screening light curve</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--flare-binsize</span></code></p>
+<ul>
+<li><p>flare-screening light-curve bin size in seconds</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--flare-min-time-ratio</span></code></p>
+<ul>
+<li><p>minimum retained exposure fraction accepted by <code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code></p></li>
+</ul>
+</li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--jobs</span></code></p>
 <ul>
 <li><p>number of parallel OBSID workers used in Stage 1</p></li>
@@ -605,6 +618,7 @@ linked to the four main path-like inputs:</p>
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;.badpix
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;.grade
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;.gti
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;_screened.gti
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;_cl.fits
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;.expo
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;_e00300_10000.eef
@@ -628,6 +642,9 @@ linked to the four main path-like inputs:</p>
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;.badpix
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;.grade
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;.gti
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;_flare.lc
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;_flare_diag.fits
+|   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_evt_&lt;ver&gt;_flare.gti
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;_cl.fits
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;.pi
 |   |   |-- fxt_&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;.lc
@@ -652,6 +669,7 @@ linked to the four main path-like inputs:</p>
 |   |   |   |   |-- fxtarfgen.log
 |   |   |   |   |-- fxtrmfgen.log
 |   |   |   |-- &lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_fsaevt_&lt;ver&gt;/
+|   |   |   |   |-- fsaevt_flare.xsl
 |   |   |   |   |-- fsaevt_stage1.xsl
 |   |   |   |   |-- fxtcoord_fsaevt.log
 |   |   |   |   |-- fxtpical_fsaevt.log
@@ -659,6 +677,7 @@ linked to the four main path-like inputs:</p>
 |   |   |   |   |-- fxtbadpix_fsaevt.log
 |   |   |   |   |-- fxtgrade_fsaevt.log
 |   |   |   |   |-- fxtgtigen_fsaevt.log
+|   |   |   |   |-- xselect_fsaevt_flare.log
 |   |   |   |   |-- xselect_fsaevt_stage1.log
 |   |   |   |   |-- fxtbkggen_fsaevt.log
 |-- 11900465408/
@@ -708,8 +727,9 @@ linked to the four main path-like inputs:</p>
 <li><p>all per-OBSID intermediate and extracted products</p></li>
 <li><p>this includes the per-band <code class="docutils literal notranslate"><span class="pre">.img</span></code>, <code class="docutils literal notranslate"><span class="pre">.lc</span></code>, and <code class="docutils literal notranslate"><span class="pre">.eef</span></code> products plus
 per-OBSID step logs under <code class="docutils literal notranslate"><span class="pre">products/log/</span></code></p></li>
-<li><p>when <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> is requested, this also includes the cleaned FSA products and
-one predicted instrumental-background spectrum from <code class="docutils literal notranslate"><span class="pre">fxtbkggen</span></code></p></li>
+<li><p>in <code class="docutils literal notranslate"><span class="pre">FF</span></code> mode with matching <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>, this also includes the flare-screening
+light curve, flare GTIs, cleaned FSA products, and one predicted
+instrumental-background spectrum from <code class="docutils literal notranslate"><span class="pre">fxtbkggen</span></code></p></li>
 <li><p>when Stage 4 runs, the copied extraction regions
 <code class="docutils literal notranslate"><span class="pre">target_src.reg</span></code> and <code class="docutils literal notranslate"><span class="pre">target_bkg.reg</span></code> are also placed here for the
 per-OBSID spectral extraction</p></li>
@@ -747,9 +767,9 @@ per-OBSID spectral extraction</p></li>
 <li><p>high-level per-OBSID log showing which Stage-1 or Stage-4 substep failed</p></li>
 </ul>
 </li>
-<li><p><code class="docutils literal notranslate"><span class="pre">out_dir/&lt;obsid&gt;/products/log/&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;datatype&gt;_&lt;ver&gt;/</span></code></p>
+<li><p><code class="docutils literal notranslate"><span class="pre">out_dir/&lt;obsid&gt;/products/log/&lt;module&gt;_&lt;obsid&gt;_&lt;mode&gt;_&lt;filter&gt;_&lt;pp&gt;_&lt;filetype&gt;_&lt;ver&gt;/</span></code></p>
 <ul>
-<li><p>detailed task logs for one event file</p></li>
+<li><p>detailed task logs for one event stream</p></li>
 <li><p>this is the first place to inspect if an individual FXTDAS task failed</p></li>
 </ul>
 </li>
@@ -773,7 +793,7 @@ per-OBSID spectral extraction</p></li>
 <ol class="arabic simple">
 <li><p>start with <code class="docutils literal notranslate"><span class="pre">out_dir/log/fxtcombine.log</span></code> to identify the failing OBSID or stacked step</p></li>
 <li><p>if the failure is per-OBSID, check <code class="docutils literal notranslate"><span class="pre">products/log/fxtchain.log</span></code></p></li>
-<li><p>then open the corresponding detailed task log in the datatype-specific subdirectory</p></li>
+<li><p>then open the corresponding detailed task log in the <code class="docutils literal notranslate"><span class="pre">evt</span></code> or <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> subdirectory</p></li>
 <li><p>if the failure is in stacked detection or stacking, inspect the relevant log under <code class="docutils literal notranslate"><span class="pre">stack_dir</span></code></p></li>
 </ol>
 </section>
@@ -831,44 +851,29 @@ stacked exposure map:</p>
 </section>
 <section id="the-summary-json-structure">
 <h3>The Summary JSON Structure<a class="headerlink" href="#the-summary-json-structure" title="Link to this heading">#</a></h3>
-<p>By default, <code class="docutils literal notranslate"><span class="pre">all_obsid.json</span></code> stores the same information as a nested dictionary
-under <code class="docutils literal notranslate"><span class="pre">stack_dir</span></code>:</p>
+<p>By default, <code class="docutils literal notranslate"><span class="pre">all_obsid.json</span></code> stores one flat per-stream record under each OBSID:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>all_obsid.json
 |-- &lt;obsid&gt;
-|   |-- &lt;datatype&gt;
-|   |   |-- &lt;evt_fname_prefix&gt;
-|   |   |   |-- clevt
-|   |   |   |-- image
-|   |   |   |-- images
-|   |   |   |   |-- e00300_10000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- image_band_channels
-|   |   |   |   |-- e00300_10000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- vexpmap
-|   |   |   |-- eefmap
-|   |   |   |-- eefmaps
-|   |   |   |   |-- e00300_10000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- exp
-|   |   |   |-- alllc
-|   |   |   |-- lightcurves
-|   |   |   |   |-- e00100_12000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- lightcurve_band_channels
-|   |   |   |   |-- e00100_12000
-|   |   |   |   |-- e01000_03000
-|   |   |   |-- srcclevt
-|   |   |   |-- srcpi
-|   |   |   |-- bkgpi
-|   |   |   |-- srclc
-|   |   |   |-- bkglc
-|   |   |   |-- arf
-|   |   |   |-- rmf
-|   |   |   |-- fsa_spec
-|   |   |   |-- fsa_lc
-|   |   |   |-- fsa_img
-|   |   |   |-- instbkgpi
+|   |-- &lt;stream_key&gt;
+|   |   |-- evt_clevt
+|   |   |-- image
+|   |   |-- images
+|   |   |-- vexpmap
+|   |   |-- eefmaps
+|   |   |-- exp
+|   |   |-- lightcurves
+|   |   |-- screened_gti
+|   |   |-- flare_lc
+|   |   |-- flare_diag
+|   |   |-- srcclevt
+|   |   |-- srcpi
+|   |   |-- bkgpi
+|   |   |-- arf
+|   |   |-- rmf
+|   |   |-- fsa_spec
+|   |   |-- fsa_lc
+|   |   |-- fsa_img
+|   |   |-- instbkgpi
 </pre></div>
 </div>
 <p>Important conventions:</p>
@@ -880,7 +885,8 @@ under <code class="docutils literal notranslate"><span class="pre">stack_dir</sp
 <li><p><code class="docutils literal notranslate"><span class="pre">lightcurves</span></code> stores all requested light-curve bands</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">lightcurve_band_channels</span></code> stores the per-module PI/channel ranges derived from the requested light-curve energy bands</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">srcclevt</span></code>, <code class="docutils literal notranslate"><span class="pre">srcpi</span></code>, <code class="docutils literal notranslate"><span class="pre">bkgpi</span></code>, <code class="docutils literal notranslate"><span class="pre">srclc</span></code>, <code class="docutils literal notranslate"><span class="pre">bkglc</span></code>, <code class="docutils literal notranslate"><span class="pre">arf</span></code>, and <code class="docutils literal notranslate"><span class="pre">rmf</span></code> appear only after Stage 4</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">fsa_spec</span></code>, <code class="docutils literal notranslate"><span class="pre">fsa_lc</span></code>, <code class="docutils literal notranslate"><span class="pre">fsa_img</span></code>, and <code class="docutils literal notranslate"><span class="pre">instbkgpi</span></code> appear only for <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">flare_lc</span></code>, <code class="docutils literal notranslate"><span class="pre">flare_diag</span></code>, <code class="docutils literal notranslate"><span class="pre">flare_gti</span></code>, and <code class="docutils literal notranslate"><span class="pre">screened_gti</span></code> appear when <code class="docutils literal notranslate"><span class="pre">FF</span></code> flare screening runs</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fsa_spec</span></code>, <code class="docutils literal notranslate"><span class="pre">fsa_lc</span></code>, <code class="docutils literal notranslate"><span class="pre">fsa_img</span></code>, and <code class="docutils literal notranslate"><span class="pre">instbkgpi</span></code> appear only when matching <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> was available</p></li>
 </ul>
 <p>Example: collect all light-curve filenames from <code class="docutils literal notranslate"><span class="pre">all_obsid.json</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
@@ -894,18 +900,16 @@ under <code class="docutils literal notranslate"><span class="pre">stack_dir</sp
 <span class="n">all_lc</span> <span class="o">=</span> <span class="p">[]</span>
 
 <span class="k">for</span> <span class="n">obsid</span><span class="p">,</span> <span class="n">obsid_products</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-    <span class="k">for</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">datatype_products</span> <span class="ow">in</span> <span class="n">obsid_products</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="k">for</span> <span class="n">evt_prefix</span><span class="p">,</span> <span class="n">prod</span> <span class="ow">in</span> <span class="n">datatype_products</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">for</span> <span class="n">band_key</span><span class="p">,</span> <span class="n">lc_path</span> <span class="ow">in</span> <span class="n">prod</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lightcurves&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                <span class="n">all_lc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;obsid&quot;</span><span class="p">:</span> <span class="n">obsid</span><span class="p">,</span>
-                        <span class="s2">&quot;datatype&quot;</span><span class="p">:</span> <span class="n">datatype</span><span class="p">,</span>
-                        <span class="s2">&quot;evt_prefix&quot;</span><span class="p">:</span> <span class="n">evt_prefix</span><span class="p">,</span>
-                        <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band_key</span><span class="p">,</span>
-                        <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">lc_path</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
+    <span class="k">for</span> <span class="n">stream_key</span><span class="p">,</span> <span class="n">prod</span> <span class="ow">in</span> <span class="n">obsid_products</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">band_key</span><span class="p">,</span> <span class="n">lc_path</span> <span class="ow">in</span> <span class="n">prod</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lightcurves&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">all_lc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;obsid&quot;</span><span class="p">:</span> <span class="n">obsid</span><span class="p">,</span>
+                    <span class="s2">&quot;stream_key&quot;</span><span class="p">:</span> <span class="n">stream_key</span><span class="p">,</span>
+                    <span class="s2">&quot;band&quot;</span><span class="p">:</span> <span class="n">band_key</span><span class="p">,</span>
+                    <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">lc_path</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
 
 <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">all_lc</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;obsid&quot;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;band&quot;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">])</span>
@@ -920,10 +924,9 @@ under <code class="docutils literal notranslate"><span class="pre">stack_dir</sp
 <span class="n">default_lc</span> <span class="o">=</span> <span class="p">[]</span>
 
 <span class="k">for</span> <span class="n">obsid</span><span class="p">,</span> <span class="n">obsid_products</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-    <span class="k">for</span> <span class="n">datatype</span><span class="p">,</span> <span class="n">datatype_products</span> <span class="ow">in</span> <span class="n">obsid_products</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="k">for</span> <span class="n">evt_prefix</span><span class="p">,</span> <span class="n">prod</span> <span class="ow">in</span> <span class="n">datatype_products</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">if</span> <span class="s2">&quot;alllc&quot;</span> <span class="ow">in</span> <span class="n">prod</span><span class="p">:</span>
-                <span class="n">default_lc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prod</span><span class="p">[</span><span class="s2">&quot;alllc&quot;</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">stream_key</span><span class="p">,</span> <span class="n">prod</span> <span class="ow">in</span> <span class="n">obsid_products</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="s2">&quot;alllc&quot;</span> <span class="ow">in</span> <span class="n">prod</span><span class="p">:</span>
+            <span class="n">default_lc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prod</span><span class="p">[</span><span class="s2">&quot;alllc&quot;</span><span class="p">])</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="n">default_lc</span><span class="p">)</span>
 </pre></div>
@@ -934,35 +937,17 @@ under <code class="docutils literal notranslate"><span class="pre">stack_dir</sp
 <h2>Detailed Algorithm and How It Works<a class="headerlink" href="#detailed-algorithm-and-how-it-works" title="Link to this heading">#</a></h2>
 <section id="per-obsid-preprocessing">
 <h3>1. Per-OBSID Preprocessing<a class="headerlink" href="#per-obsid-preprocessing" title="Link to this heading">#</a></h3>
-<p>For each selected OBSID and each selected event file:</p>
+<p>For each selected OBSID and each coupled event stream:</p>
 <ol class="arabic simple">
-<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtcoord</span></code></p></li>
-<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtpical</span></code></p></li>
-<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtparticleidentify</span></code></p></li>
-<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtbadpix</span></code></p></li>
-<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtgrade</span></code></p></li>
-<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtgtigen</span></code></p></li>
-<li><p>run <code class="docutils literal notranslate"><span class="pre">xselect</span></code></p>
-<ul class="simple">
-<li><p>for <code class="docutils literal notranslate"><span class="pre">evt</span></code>:</p>
-<ul>
-<li><p>clean events</p></li>
-<li><p>one image per requested image energy band</p></li>
-<li><p>one whole-field light curve per requested light-curve energy band</p></li>
-</ul>
-</li>
-<li><p>for <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>:</p>
-<ul>
-<li><p>cleaned FSA events</p></li>
-<li><p>the default cleaned FSA spectrum</p></li>
-<li><p>the default cleaned FSA light curve</p></li>
-<li><p>the default cleaned FSA image</p></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><p>for <code class="docutils literal notranslate"><span class="pre">evt</span></code>, run <code class="docutils literal notranslate"><span class="pre">fxtexpogen</span></code> to produce a vignetted exposure map</p></li>
-<li><p>for <code class="docutils literal notranslate"><span class="pre">evt</span></code>, run <code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code> on each requested image energy band to produce one per-OBSID EEF bundle per band</p></li>
+<li><p>if <code class="docutils literal notranslate"><span class="pre">FF</span></code> with matching <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>, run the FSA chain first through <code class="docutils literal notranslate"><span class="pre">fxtgtigen</span></code></p></li>
+<li><p>build an FSA flare-screening light curve and run <code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code></p></li>
+<li><p>intersect the flare GTI with the base GTI to create a screened GTI</p></li>
+<li><p>apply the screened GTI to <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> and generate cleaned FSA products plus <code class="docutils literal notranslate"><span class="pre">instbkg</span></code></p></li>
+<li><p>run the <code class="docutils literal notranslate"><span class="pre">evt</span></code> chain through <code class="docutils literal notranslate"><span class="pre">fxtgtigen</span></code></p></li>
+<li><p>apply the screened GTI, or the base GTI when flare screening is skipped</p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">xselect</span></code> for cleaned <code class="docutils literal notranslate"><span class="pre">evt</span></code>, one image per requested image band, and one whole-field light curve per requested light-curve band</p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxtexpogen</span></code> to produce a vignetted exposure map</p></li>
+<li><p>run <code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code> on each requested image energy band to produce one per-OBSID EEF bundle per band</p></li>
 <li><p>for <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code>, run <code class="docutils literal notranslate"><span class="pre">fxtbkggen</span></code> on the cleaned FSA spectrum to predict one instrumental-background spectrum for the image area</p></li>
 </ol>
 <p>This stage creates the per-OBSID products that are later stacked.
@@ -1071,9 +1056,12 @@ touch the same output files.</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">--module</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--datamode</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">--datatype</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--grade</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--expr</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--disable-flare-screen</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--flare-energy-range</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--flare-binsize</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--flare-min-time-ratio</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--jobs</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--srcdet-scales</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">--srcdet-background-sigma-grid</span></code></p></li>
@@ -1121,7 +1109,7 @@ touch the same output files.</p>
 </li>
 <li><p>What does <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> do inside <code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code>?</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> is not used for stacked imaging, source detection, or source/background region generation. Instead, it is used only to generate one per-OBSID instrumental-background spectrum with <code class="docutils literal notranslate"><span class="pre">fxtbkggen</span></code>, and those per-OBSID products are then stacked into <code class="docutils literal notranslate"><span class="pre">stack_instbkgpi.fits</span></code>.</p></li>
+<li><p>In <code class="docutils literal notranslate"><span class="pre">FF</span></code> mode, matching <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> is used first to build the flare-screening light curve and derive a screened GTI through <code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code>. That same screened GTI is then reused for both the final cleaned <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> and the final cleaned <code class="docutils literal notranslate"><span class="pre">evt</span></code>. <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> also provides one per-OBSID instrumental-background spectrum with <code class="docutils literal notranslate"><span class="pre">fxtbkggen</span></code>, and those per-OBSID products are then stacked into <code class="docutils literal notranslate"><span class="pre">stack_instbkgpi.fits</span></code>.</p></li>
 </ul>
 </li>
 <li><p>Why does the <code class="docutils literal notranslate"><span class="pre">fsaevt</span></code> path use <code class="docutils literal notranslate"><span class="pre">DETX=3:382</span> <span class="pre">DETY=3:382</span></code>?</p>
@@ -1173,11 +1161,11 @@ touch the same output files.</p>
       </div>
     </a>
     <a class="right-next"
-       href="fxtsrcdet.html"
+       href="fxtbkgoptrate.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code></p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

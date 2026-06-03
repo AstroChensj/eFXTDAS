@@ -44,6 +44,7 @@ def _run_stage1_obsid(
 	image_energy_ranges,
 	lightcurve_energy_ranges,
 	flare_screen,
+	flare_threshold_method,
 	flare_energy_range,
 	flare_binsize,
 	flare_min_time_ratio,
@@ -70,6 +71,7 @@ def _run_stage1_obsid(
 		image_energy_ranges=image_energy_ranges,
 		lightcurve_energy_ranges=lightcurve_energy_ranges,
 		flare_screen=flare_screen,
+		flare_threshold_method=flare_threshold_method,
 		flare_energy_range=flare_energy_range,
 		flare_binsize=flare_binsize,
 		flare_min_time_ratio=flare_min_time_ratio,
@@ -83,7 +85,7 @@ def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
 		out_dir="./",stack_dir=None,module="a,b",datamode="ff",grade="0-12",expr="DEFAULT",
 		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
-		flare_screen=True,flare_energy_range="0.5:10.0",flare_binsize=20.0,flare_min_time_ratio=0.05,
+		flare_screen=True,flare_threshold_method="robust_iqr",flare_energy_range="0.5:10.0",flare_binsize=20.0,flare_min_time_ratio=0.05,
 		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",
 		summary_json=None,srcpi_filelist=None,skip_existing=False,
 		logger: logging.Logger | None = None,
@@ -123,6 +125,8 @@ def fxtcombine_pipeline(
 		Stage 1.
 	flare_screen : bool, optional
 		Whether to run automatic FF-mode flare screening from FSAEVT data.
+	flare_threshold_method : str, optional
+		Threshold method passed to ``fxtbkgoptrate`` for FSA flare screening.
 	flare_energy_range : str | tuple[float, float], optional
 		Energy range in keV used for the flare-screening light curve.
 	flare_binsize : float, optional
@@ -198,6 +202,7 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Image energy ranges are: {image_energy_ranges}")
 	emit(main_logger, "info", f"Light-curve energy ranges are: {lightcurve_energy_ranges}")
 	emit(main_logger, "info", f"Flare screening enabled: {flare_screen}")
+	emit(main_logger, "info", f"Flare screening threshold method is: {flare_threshold_method}")
 	emit(main_logger, "info", f"Flare screening energy range is: {flare_energy_range}")
 	emit(main_logger, "info", f"Flare screening bin size is: {flare_binsize}")
 	emit(main_logger, "info", f"Flare screening min time ratio is: {flare_min_time_ratio}")
@@ -250,6 +255,7 @@ def fxtcombine_pipeline(
 				image_energy_ranges=image_energy_ranges,
 				lightcurve_energy_ranges=lightcurve_energy_ranges,
 				flare_screen=flare_screen,
+				flare_threshold_method=flare_threshold_method,
 				flare_energy_range=flare_energy_range,
 				flare_binsize=flare_binsize,
 				flare_min_time_ratio=flare_min_time_ratio,
@@ -275,6 +281,7 @@ def fxtcombine_pipeline(
 					image_energy_ranges,
 					lightcurve_energy_ranges,
 					flare_screen,
+					flare_threshold_method,
 					flare_energy_range,
 					flare_binsize,
 					flare_min_time_ratio,
@@ -726,6 +733,12 @@ def build_parser() -> argparse.ArgumentParser:
 		help="Disable automatic FF-mode FSA-based flare screening during Stage 1.",
 	)
 	parser.add_argument(
+		"--flare-threshold-method",
+		choices=["robust_iqr", "snr"],
+		default="robust_iqr",
+		help="Threshold method passed to fxtbkgoptrate for FSA flare screening. Default: robust_iqr",
+	)
+	parser.add_argument(
 		"--flare-energy-range",
 		default="0.5:10.0",
 		help="Energy range in keV used for the flare-screening light curve. Default: 0.5:10.0",
@@ -801,6 +814,7 @@ def main() -> None:
 		image_energy_ranges=args.image_energy_ranges,
 		lightcurve_energy_ranges=args.lightcurve_energy_ranges,
 		flare_screen=not args.disable_flare_screen,
+		flare_threshold_method=args.flare_threshold_method,
 		flare_energy_range=args.flare_energy_range,
 		flare_binsize=args.flare_binsize,
 		flare_min_time_ratio=args.flare_min_time_ratio,

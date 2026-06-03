@@ -121,13 +121,16 @@ fxtcombine_pipeline(
     - disable the default `FF`-mode FSA-based flare screening
   - `--flare-energy-range`
     - energy range in keV used to build the FSA flare-screening light curve
+  - `--flare-threshold-method`
+    - threshold method passed to `fxtbkgoptrate` for FSA flare screening
+    - default: `robust_iqr`
   - `--flare-binsize`
     - flare-screening light-curve bin size in seconds
   - `--flare-min-time-ratio`
     - minimum retained exposure fraction accepted by `fxtbkgoptrate`
   - `--skip-existing`
     - reuses the FSA flare-screening products when the flare light curve, diagnostic FITS, flare GTI, and screened GTI already exist
-    - in that reuse path, the flare threshold, kept fraction, and screening status are reloaded from the diagnostic FITS header
+    - in that reuse path, the flare method, threshold, kept fraction, and screening status are reloaded from the diagnostic FITS header
   - `--jobs`
     - number of parallel OBSID workers used in Stage 1
     - each worker owns one OBSID and writes only inside that OBSID's own
@@ -500,7 +503,9 @@ For each selected OBSID and each coupled event stream:
 1. if `FF` with matching `fsaevt`, run the FSA chain first through `fxtgtigen`
 2. build an FSA flare-screening light curve and run `fxtbkgoptrate`
    - `fxtcombine` invokes the installed CLI task through its normal shell-task wrapper rather than importing `run_bkgoptrate(...)` directly
-   - the diagnostic FITS written by `fxtbkgoptrate` is the persisted source of truth for `BGOPTCUT`, `FRACTLFT`, and `OPTSTAT`
+   - by default it requests `--method robust_iqr`, with `snr` still available as an override
+   - `robust_iqr` derives the flare cutoff from `Q3 + 1.5 * IQR` on the valid flare-LC rate bins
+   - the diagnostic FITS written by `fxtbkgoptrate` is the persisted source of truth for `BGOPTCUT`, `FRACTLFT`, `OPTSTAT`, and `OPTMETH`
 3. intersect the flare GTI with the base GTI to create a screened GTI
 4. apply the screened GTI to `fsaevt` and generate cleaned FSA products plus `instbkg`
 5. run the `evt` chain through `fxtgtigen`
@@ -649,7 +654,7 @@ The main user-facing pipeline controls are:
 
 7. What does `fsaevt` do inside `fxtcombine`?
 
-   - In `FF` mode, matching `fsaevt` is used first to build the flare-screening light curve and derive a screened GTI through `fxtbkgoptrate`. `fxtcombine` calls the installed `fxtbkgoptrate` CLI task, then reads `BGOPTCUT`, `FRACTLFT`, and `OPTSTAT` back from the diagnostic FITS. That same screened GTI is then reused for both the final cleaned `fsaevt` and the final cleaned `evt`. `fsaevt` also provides one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkgpi.fits`.
+   - In `FF` mode, matching `fsaevt` is used first to build the flare-screening light curve and derive a screened GTI through `fxtbkgoptrate`. `fxtcombine` calls the installed CLI task with `--method robust_iqr` by default, then reads `BGOPTCUT`, `FRACTLFT`, `OPTSTAT`, and `OPTMETH` back from the diagnostic FITS. That same screened GTI is then reused for both the final cleaned `fsaevt` and the final cleaned `evt`. `fsaevt` also provides one per-OBSID instrumental-background spectrum with `fxtbkggen`, and those per-OBSID products are then stacked into `stack_instbkgpi.fits`.
 
 8. Why does the `fsaevt` path use `DETX=3:382 DETY=3:382`?
 

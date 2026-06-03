@@ -29,6 +29,7 @@ def _load_flare_diag_metadata(diag_path: str) -> dict:
     with fits.open(diag_path) as hdul:
         hdr = hdul[1].header
         return {
+            "flare_threshold_method": hdr.get("OPTMETH", "snr"),
             "flare_threshold": hdr.get("BGOPTCUT", np.nan),
             "flare_kept_fraction": hdr.get("FRACTLFT", 1.0),
             "flare_screen_status": hdr.get("OPTSTAT", "optimal"),
@@ -41,6 +42,7 @@ def run_fsa_flare_screening(
     *,
     base_gti_path: str,
     grade: str,
+    flare_threshold_method: str,
     flare_energy_range: tuple[float, float],
     flare_binsize: float,
     flare_min_time_ratio: float,
@@ -60,6 +62,8 @@ def run_fsa_flare_screening(
         Base GTI path used to derive the screened GTI.
     grade : str
         Grade filter passed to xselect.
+    flare_threshold_method : str
+        Flare-threshold method passed to ``fxtbkgoptrate``.
     flare_energy_range : tuple[float, float]
         Energy range in keV used for the flare-screening light curve.
     flare_binsize : float
@@ -131,6 +135,8 @@ def run_fsa_flare_screening(
         [
             "fxtbkgoptrate",
             shlex.quote(flare_lc_path),
+            "--method",
+            shlex.quote(flare_threshold_method),
             "--min-time-ratio",
             shlex.quote(str(flare_min_time_ratio)),
             "--diag-out",
@@ -143,7 +149,7 @@ def run_fsa_flare_screening(
             shlex.quote(screened_gti_path),
         ]
     )
-    emit(obsid_logger, "info", "Running fxtbkgoptrate for FSA flare screening ...")
+    emit(obsid_logger, "info", f"Running fxtbkgoptrate for FSA flare screening with method={flare_threshold_method} ...")
     flare_opt_log = os.path.join(fsa_prep["sub_log_dir"], "fxtbkgoptrate_fsaevt.log")
     run_cmd(flare_cmd, logger=obsid_logger, logname=flare_opt_log, cwd=obsid_out_dir)
 

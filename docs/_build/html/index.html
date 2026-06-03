@@ -142,6 +142,7 @@
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Tasks</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="fxtcombine.html"><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="fxtbkgoptrate.html"><code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a></li>
 <li class="toctree-l1"><a class="reference internal" href="fxteefmap.html"><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code></a></li>
@@ -322,6 +323,13 @@
 <li class="toctree-l2"><a class="reference internal" href="fxtcombine.html#suggested-future-additions">Suggested Future Additions</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="fxtbkgoptrate.html"><code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="fxtbkgoptrate.html#what-it-does">What It Does</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fxtbkgoptrate.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fxtbkgoptrate.html#main-inputs-and-outputs">Main Inputs and Outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fxtbkgoptrate.html#notes">Notes</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="fxtsrcdet.html"><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code></a><ul>
 <li class="toctree-l2"><a class="reference internal" href="fxtsrcdet.html#what-it-does">What It Does</a></li>
 <li class="toctree-l2"><a class="reference internal" href="fxtsrcdet.html#basic-usage">Basic Usage</a></li>
@@ -329,7 +337,6 @@
 <li class="toctree-l2"><a class="reference internal" href="fxtsrcdet.html#detailed-algorithm-and-how-it-works">Detailed Algorithm and How It Works</a></li>
 <li class="toctree-l2"><a class="reference internal" href="fxtsrcdet.html#tunable-parameters-and-heuristic-constants">Tunable Parameters and Heuristic Constants</a></li>
 <li class="toctree-l2"><a class="reference internal" href="fxtsrcdet.html#trouble-shooting-and-faq">Trouble shooting, and FAQ</a></li>
-<li class="toctree-l2"><a class="reference internal" href="fxtsrcdet.html#suggested-future-additions">Suggested Future Additions</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="fxtregions.html"><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code></a><ul>
@@ -352,9 +359,10 @@
 </div>
 <section id="scope">
 <h2>Scope<a class="headerlink" href="#scope" title="Link to this heading">#</a></h2>
-<p>The current toolkit contains four user-facing tasks:</p>
+<p>The current toolkit contains five user-facing tasks:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">fxtcombine</span></code>: multi-epoch stacking and spectral combination</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fxtbkgoptrate</span></code>: optimum-threshold flare/background screening on one light curve</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">fxtsrcdet</span></code>: wavelet-style source detection and catalog construction</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">fxtregions</span></code>: source/background region construction for downstream analysis</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">fxteefmap</span></code>: image-sized EEF-radius map generation</p></li>

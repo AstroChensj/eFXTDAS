@@ -229,6 +229,86 @@ def find_optimal_rate(
     }
 
 
+def find_robust_iqr_rate(
+    lc_data: dict,
+    *,
+    min_time_ratio: float = 0.05,
+) -> dict:
+    """Find a robust background threshold from the light-curve rate distribution.
+
+    Parameters
+    ----------
+    lc_data : dict
+        Structured light-curve arrays from :func:`load_lightcurve`.
+    min_time_ratio : float, optional
+        Minimum retained exposure fraction allowed for candidate thresholds.
+
+    Returns
+    -------
+    dict
+        Optimization result including the chosen threshold, kept-bin mask, and
+        one-row diagnostic trial summary.
+    """
+    valid_mask = np.asarray(lc_data["valid_mask"], dtype=bool)
+    rate = np.asarray(lc_data["rate"], dtype=np.float64)
+    exposure = np.asarray(lc_data["exposure"], dtype=np.float64)
+    total_exposure = float(np.sum(exposure[valid_mask]))
+    if total_exposure <= 0.0 or not np.any(valid_mask):
+        return {
+            "status": "no_valid_bin",
+            "best_threshold": np.nan,
+            "kept_mask": valid_mask.copy(),
+            "kept_fraction": 0.0,
+            "score": np.nan,
+            "trials": [],
+        }
+
+    valid_rate = rate[valid_mask]
+    q1 = float(np.nanpercentile(valid_rate, 25.0))
+    q3 = float(np.nanpercentile(valid_rate, 75.0))
+    iqr = q3 - q1
+    threshold = q3 + 1.5 * iqr
+    kept_mask = valid_mask & (rate <= threshold)
+    kept_exposure = float(np.sum(exposure[kept_mask]))
+    kept_fraction = kept_exposure / total_exposure if total_exposure > 0.0 else 0.0
+
+    if kept_fraction < min_time_ratio:
+        candidate_thresholds = np.unique(valid_rate)
+        for candidate in candidate_thresholds:
+            candidate_mask = valid_mask & (rate <= candidate)
+            candidate_exposure = float(np.sum(exposure[candidate_mask]))
+            candidate_fraction = candidate_exposure / total_exposure if total_exposure > 0.0 else 0.0
+            if candidate_fraction >= min_time_ratio:
+                threshold = float(candidate)
+                kept_mask = candidate_mask
+                kept_exposure = candidate_exposure
+                kept_fraction = candidate_fraction
+                break
+
+    background_sum = float(np.sum(rate[kept_mask] * exposure[kept_mask]))
+    score = kept_exposure / np.sqrt(background_sum) if background_sum > 0.0 else np.nan
+    max_rate_kept = float(np.max(rate[kept_mask])) if np.any(kept_mask) else np.nan
+    status = "optimal"
+    if np.all(kept_mask == valid_mask):
+        status = "no_cut_needed"
+    trial = {
+        "threshold": float(threshold),
+        "max_rate_kept": max_rate_kept,
+        "score": float(score) if np.isfinite(score) else np.nan,
+        "n_bin": int(np.sum(kept_mask)),
+        "kept_fraction": kept_fraction,
+        "kept_mask": kept_mask.copy(),
+    }
+    return {
+        "status": status,
+        "best_threshold": float(threshold),
+        "kept_mask": kept_mask,
+        "kept_fraction": kept_fraction,
+        "score": float(score) if np.isfinite(score) else np.nan,
+        "trials": [trial],
+    }
+
+
 def write_diagnostic_table(
     outfile: str,
     lc_data: dict,
@@ -276,6 +356,7 @@ def write_diagnostic_table(
     table_hdu.header["BGOPTCUT"] = (float(result["best_threshold"]) if np.isfinite(result["best_threshold"]) else np.nan, "Optimum background threshold")
     table_hdu.header["FRACTLFT"] = (float(result["kept_fraction"]), "Retained exposure fraction")
     table_hdu.header["OPTSTAT"] = (str(result["status"]), "Threshold optimization status")
+    table_hdu.header["OPTMETH"] = (str(result.get("method", "snr")), "Threshold optimization method")
     primary_hdu = fits.PrimaryHDU(header=lc_data["primary_header"])
     fits.HDUList([primary_hdu, table_hdu]).writeto(outfile, overwrite=True)
     return outfile
@@ -391,6 +472,7 @@ def intersect_gtis(
 def run_bkgoptrate(
     infile: str,
     *,
+    method: str = "snr",
     xcol: str = "TIME",
     ycol: str | None = None,
     fracexpcol: str = "FRACEXP",
@@ -413,6 +495,8 @@ def run_bkgoptrate(
     ----------
     infile : str
         Input light-curve FITS path.
+    method : {"snr", "robust_iqr"}, optional
+        Threshold optimization method.
     xcol, ycol, fracexpcol, tsstyle, fracexpstyle, fracexplower, starttime, endtime, lowercutoffcount
         Passed through to :func:`load_lightcurve`.
     min_time_ratio : float, optional
@@ -445,8 +529,15 @@ def run_bkgoptrate(
         endtime=endtime,
         lowercutoffcount=lowercutoffcount,
     )
-    result = find_optimal_rate(lc_data, min_time_ratio=min_time_ratio)
-    emit(logger, "info", f"fxtbkgoptrate status={result['status']} threshold={result['best_threshold']} kept_fraction={result['kept_fraction']:.4f}")
+    if method == "snr":
+        result = find_optimal_rate(lc_data, min_time_ratio=min_time_ratio)
+    elif method == "robust_iqr":
+        result = find_robust_iqr_rate(lc_data, min_time_ratio=min_time_ratio)
+    else:
+        raise ValueError(f"Unknown threshold optimization method: {method}")
+    result = dict(result)
+    result["method"] = method
+    emit(logger, "info", f"fxtbkgoptrate method={method} status={result['status']} threshold={result['best_threshold']} kept_fraction={result['kept_fraction']:.4f}")
     if diagnostic_outfile is not None:
         write_diagnostic_table(diagnostic_outfile, lc_data, result)
     if flare_gti_outfile is not None:
@@ -469,6 +560,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser for ``fxtbkgoptrate``."""
     parser = argparse.ArgumentParser(description="Optimize a background light-curve threshold and optionally write flare GTIs.")
     parser.add_argument("infile", help="Input light-curve FITS file.")
+    parser.add_argument("--method", choices=["snr", "robust_iqr"], default="snr", help="Threshold optimization method. Default: snr")
     parser.add_argument("--xcol", default="TIME", help="Time column name. Default: TIME")
     parser.add_argument("--ycol", default=None, help="Rate/count column name. Default: auto-detect")
     parser.add_argument("--fracexpcol", default="FRACEXP", help="FRACEXP column name. Default: FRACEXP")
@@ -494,6 +586,7 @@ def main() -> None:
     logger = build_cli_logger("eFXTDAS.fxtbkgoptrate", args.log_level, args.log_file)
     result = run_bkgoptrate(
         args.infile,
+        method=args.method,
         xcol=args.xcol,
         ycol=args.ycol,
         fracexpcol=args.fracexpcol,
