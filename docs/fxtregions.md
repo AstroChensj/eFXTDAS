@@ -21,6 +21,8 @@ Unlike eSASS `srctool`, the current implementation does not use catalog flags su
 It means that nearby confusing source around target could contaminate source counts. 
 ```
 
+`fxtrspgen` removes that response-generation limitation by accepting an external DS9 source region with supported exclusion composition and generating a standalone ARF/RMF pair from that region.
+
 ## Basic Usage
 
 ### Command-Line Usage

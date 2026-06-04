@@ -12,17 +12,19 @@ fxtcombine
 fxtbkgoptrate
 fxtsrcdet
 fxtregions
+fxtrspgen
 fxteefmap
 ```
 
 ## Scope
 
-The current toolkit contains five user-facing tasks:
+ The current toolkit contains six user-facing tasks:
 
 - `fxtcombine`: multi-epoch stacking and spectral combination
 - `fxtbkgoptrate`: optimum-threshold flare/background screening on one light curve
 - `fxtsrcdet`: wavelet-style source detection and catalog construction
 - `fxtregions`: source/background region construction for downstream analysis
+- `fxtrspgen`: standalone ARF/RMF generation from external DS9 source regions
 - `fxteefmap`: image-sized EEF-radius map generation
 
 ## Notes for Further Expansion

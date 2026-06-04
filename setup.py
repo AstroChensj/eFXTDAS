@@ -22,6 +22,8 @@ setup(
             "fxtsrcdet.*",
             "fxtregions",
             "fxtregions.*",
+            "fxtrspgen",
+            "fxtrspgen.*",
             "fxteefmap",
             "fxteefmap.*",
             "fxtcombine",
@@ -44,6 +46,7 @@ setup(
         "console_scripts": [
             "fxtsrcdet=fxtsrcdet.pipeline:main",
             "fxtregions=fxtregions.pipeline:main",
+            "fxtrspgen=fxtrspgen.pipeline:main",
             "fxteefmap=fxteefmap.pipeline:main",
             "fxtcombine=fxtcombine.pipeline:main",
             "fxtbkgoptrate=fxtbkgoptrate.pipeline:main",
