@@ -41,6 +41,22 @@ class CBDCondition(CBDValue):
     op1: str = "AND"
 
 
+@dataclass(frozen=True)
+class CaldbRequest:
+    """One normalized CALDB lookup request."""
+
+    telescope: str
+    instrument: str
+    detname: str
+    filt: str
+    codename: str
+    start_date: str
+    start_time: str
+    stop_date: str
+    stop_time: str
+    expr: str
+
+
 def _to_text(value: object) -> str:
     """Convert a FITS table value to stripped text."""
     if isinstance(value, bytes):
@@ -60,6 +76,23 @@ def _is_number(text: str) -> bool:
     except (TypeError, ValueError):
         return False
     return True
+
+
+def _parse_prefixed_numeric(token: str) -> tuple[str, str, float | None, float | None] | None:
+    """Parse ``PREFIX:value`` or ``PREFIX:min-max`` CBD payloads."""
+    match = re.match(
+        r"^\s*([A-Z0-9_]+)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*(?:-\s*([+-]?\d+(?:\.\d+)?))?\s*$",
+        token,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    prefix = _normalize_name(match.group(1))
+    first = float(match.group(2))
+    second = match.group(3)
+    if second is None:
+        return "val", prefix, first, first
+    return "range", prefix, first, float(second)
 
 
 def _classify_value(token: str) -> tuple[str, float | None, float | None, str]:
@@ -220,6 +253,34 @@ def _compare_range(op: str, row_min: float | None, row_max: float | None, target
     return False
 
 
+def _compare_prefixed_numeric_strings(condition_text: str, candidate_text: str) -> bool:
+    """Compare structured CBD strings such as ``G0:12`` and ``G0:0-12``."""
+    condition = _parse_prefixed_numeric(condition_text)
+    candidate = _parse_prefixed_numeric(candidate_text)
+    if condition is None or candidate is None:
+        return False
+    condition_type, condition_prefix, condition_min, condition_max = condition
+    candidate_type, candidate_prefix, candidate_min, candidate_max = candidate
+    if condition_prefix != candidate_prefix:
+        return False
+    if condition_type == "val":
+        if candidate_type == "val":
+            return candidate_min == condition_min
+        return candidate_min is not None and candidate_max is not None and condition_min is not None and candidate_min <= condition_min <= candidate_max
+    if condition_type == "range":
+        if candidate_type != "range":
+            return False
+        return (
+            candidate_min is not None
+            and candidate_max is not None
+            and condition_min is not None
+            and condition_max is not None
+            and candidate_min <= condition_min <= candidate_max
+            and candidate_min <= condition_max <= candidate_max
+        )
+    return False
+
+
 def _compare_condition(condition: CBDCondition, values: list[CBDValue]) -> bool:
     """Evaluate one parsed condition against row CBD values."""
     if not values:
@@ -227,6 +288,8 @@ def _compare_condition(condition: CBDCondition, values: list[CBDValue]) -> bool:
     for candidate in values:
         if condition.value_type == "str" and candidate.value_type == "str":
             if candidate.sval.upper() == condition.sval.upper():
+                return True
+            if _compare_prefixed_numeric_strings(condition.sval, candidate.sval):
                 return True
         elif condition.value_type == "val":
             if candidate.value_type == "val" and _compare_numeric(condition.op2, candidate.min_val, condition.min_val):
@@ -310,22 +373,21 @@ def _filter_by_expr(rows, expr: str):
     return rows[np.asarray(mask, dtype=bool)]
 
 
-def _filter_rows(calidx, telescope: str, instrument: str, detname: str, filt: str, codename: str, expr: str):
-    """Filter CIF rows by mission, detector, filter, codename, quality, and CBD."""
-    tele_req = _normalize_name(telescope)
-    inst_req = _normalize_name(instrument)
-    code_req = _normalize_name(codename)
+def _filter_rows_by_metadata(calidx, request: CaldbRequest):
+    """Filter CIF rows by mission, detector, filter, codename, and quality."""
+    tele_req = _normalize_name(request.telescope)
+    inst_req = _normalize_name(request.instrument)
+    code_req = _normalize_name(request.codename)
     mask = []
     for row in calidx:
         tele_ok = _normalize_name(_to_text(row["TELESCOP"])) == tele_req
         inst_ok = _normalize_name(_to_text(row["INSTRUME"])) == inst_req
-        det_ok = _match_optional_with_aliases(_to_text(row["DETNAM"]), detname, _detector_aliases)
-        filt_ok = _match_optional_with_aliases(_to_text(row["FILTER"]), filt, _filter_aliases)
+        det_ok = _match_optional_with_aliases(_to_text(row["DETNAM"]), request.detname, _detector_aliases)
+        filt_ok = _match_optional_with_aliases(_to_text(row["FILTER"]), request.filt, _filter_aliases)
         code_ok = _normalize_name(_to_text(row["CAL_CNAM"])) == code_req
         qual_ok = int(row["CAL_QUAL"]) == 0
         mask.append(bool(tele_ok and inst_ok and det_ok and filt_ok and code_ok and qual_ok))
-    rows = calidx[np.asarray(mask, dtype=bool)]
-    return _filter_by_expr(rows, expr) if expr else rows
+    return calidx[np.asarray(mask, dtype=bool)]
 
 
 def _mjd_bounds(start_date: str, start_time: str, stop_date: str, stop_time: str) -> tuple[float | None, float | None]:
@@ -366,6 +428,56 @@ def _choose_record(rows, start_mjd: float | None, stop_mjd: float | None):
     return subset[sort_idx][-1]
 
 
+def _describe_row(row) -> str:
+    """Build one compact description for a candidate CALDB row."""
+    return (
+        f"file={_to_text(row['CAL_FILE'])}, dir={_to_text(row['CAL_DIR'])}, "
+        f"ext={int(row['CAL_XNO'])}, det={_to_text(row['DETNAM'])}, "
+        f"filter={_to_text(row['FILTER'])}, cbd={_to_text(row['CAL_CBD'])}, "
+        f"reftime={float(row['REF_TIME']):.5f}"
+    )
+
+
+def _sample_rows(rows, limit: int = 5) -> str:
+    """Return a compact sample of candidate rows for diagnostics."""
+    if len(rows) == 0:
+        return "<none>"
+    return " | ".join(_describe_row(row) for row in rows[:limit])
+
+
+def _format_request(request: CaldbRequest) -> str:
+    """Format one normalized CALDB request for diagnostics."""
+    return (
+        f"telescope={request.telescope}, instrument={request.instrument}, "
+        f"detname={request.detname}, filter={request.filt}, codename={request.codename}, "
+        f"start={request.start_date}T{request.start_time}, stop={request.stop_date}T{request.stop_time}, "
+        f"expr={request.expr or '<none>'}"
+    )
+
+
+def _raise_lookup_error(
+    stage: str,
+    request: CaldbRequest,
+    paths: CaldbPaths,
+    total_rows: int,
+    metadata_rows,
+    cbd_rows,
+    extra: str = "",
+) -> None:
+    """Raise one detailed CALDB lookup failure."""
+    message = (
+        f"CALDB lookup failed at stage={stage}; "
+        f"CALDB={paths.root}; CALDBCONFIG={paths.config}; CALDBINDEX={paths.index}; "
+        f"request=({_format_request(request)}); "
+        f"row_counts=(total={total_rows}, metadata={len(metadata_rows)}, cbd={len(cbd_rows)}); "
+        f"metadata_candidates=[{_sample_rows(metadata_rows)}]; "
+        f"cbd_candidates=[{_sample_rows(cbd_rows)}]"
+    )
+    if extra:
+        message = f"{message}; {extra}"
+    raise RuntimeError(message)
+
+
 def find_calibration_file(
     telescope: str,
     instrument: str,
@@ -381,14 +493,32 @@ def find_calibration_file(
     caldb_config: str | None = None,
 ) -> tuple[str, int]:
     """Resolve one calibration file path and extension from the local CIF."""
+    request = CaldbRequest(
+        telescope=_normalize_name(telescope),
+        instrument=_normalize_name(instrument),
+        detname=_normalize_optional(detname),
+        filt=_normalize_optional(filt),
+        codename=_normalize_name(codename),
+        start_date=str(start_date).strip(),
+        start_time=str(start_time).strip(),
+        stop_date=str(stop_date).strip(),
+        stop_time=str(stop_time).strip(),
+        expr=str(expr).strip(),
+    )
     paths = CaldbPaths.resolve(caldb_root=caldb_root, caldb_config=caldb_config)
     with fits.open(paths.index) as hdul:
         calidx = hdul[1].data
-    rows = _filter_rows(calidx, telescope, instrument, detname, filt, codename, expr)
-    if len(rows) == 0:
-        raise RuntimeError("No calibration rows matched the selection criteria")
-    start_mjd, stop_mjd = _mjd_bounds(start_date, start_time, stop_date, stop_time)
-    record = _choose_record(rows, start_mjd, stop_mjd)
+    metadata_rows = _filter_rows_by_metadata(calidx, request)
+    if len(metadata_rows) == 0:
+        _raise_lookup_error("metadata", request, paths, len(calidx), metadata_rows, metadata_rows)
+    cbd_rows = _filter_by_expr(metadata_rows, request.expr)
+    if len(cbd_rows) == 0:
+        _raise_lookup_error("cbd", request, paths, len(calidx), metadata_rows, cbd_rows)
+    start_mjd, stop_mjd = _mjd_bounds(request.start_date, request.start_time, request.stop_date, request.stop_time)
+    try:
+        record = _choose_record(cbd_rows, start_mjd, stop_mjd)
+    except RuntimeError as exc:
+        _raise_lookup_error("time", request, paths, len(calidx), metadata_rows, cbd_rows, extra=str(exc))
     cal_dir = _to_text(record["CAL_DIR"])
     cal_file = _to_text(record["CAL_FILE"])
     filepath = paths.root

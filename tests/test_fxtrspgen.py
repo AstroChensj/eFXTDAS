@@ -10,13 +10,15 @@ import pytest
 from astropy.io import fits
 from astropy.wcs import WCS
 
+from fxtcaldb.metadata import read_spectrum_metadata
+from fxtcaldb.response import resolve_base_arf
+from fxtcaldb.query import find_calibration_file
 from fxtpsf_helpers import build_mission_psf_context, load_local_eef
 from fxteefmap.pipeline import build_eef_radius_map
 from fxtrspgen.arf import resolve_source_position
 from fxtrspgen.pipeline import run_fxtrspgen
 from fxtrspgen.regions import UnsupportedRegionError, load_region_set
 from fxtrspgen.rmf import generate_rmf
-from fxtrspgen.caldb import read_spectrum_metadata
 
 
 def _build_simple_wcs(nx: int = 100, ny: int = 100) -> WCS:
@@ -239,7 +241,7 @@ def fake_caldb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 "CAL_FILE": "base_arf.fits",
                 "CAL_DIR": "data/ep/fxt/cpf/arf",
                 "CAL_XNO": 1,
-                "CAL_CBD": "DATAMODE(FF) GRADE(G0:12)",
+                "CAL_CBD": "DATAMODE(FF) GRADE(G0:0-12)",
             },
             {
                 "TELESCOP": "EP",
@@ -252,7 +254,7 @@ def fake_caldb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 "CAL_FILE": "rmf_grade12.fits",
                 "CAL_DIR": "data/ep/fxt/cpf/rmf",
                 "CAL_XNO": 1,
-                "CAL_CBD": "DATAMODE(FF) GRADE(G0:12)",
+                "CAL_CBD": "DATAMODE(FF) GRADE(G0:0-12)",
             },
             {
                 "TELESCOP": "EP",
@@ -379,17 +381,122 @@ def test_rmf_selection_uses_grade_specific_caldb_row(tmp_path: Path, fake_caldb:
         assert hdul[1].data["MATRIX"][0][0] == pytest.approx(2.0)
 
 
+def test_base_arf_selection_matches_grade_range_rows(tmp_path: Path, fake_caldb: Path) -> None:
+    """Base ARF lookup should accept CALDB grade ranges such as ``G0:0-12``."""
+    specfile = _write_spectrum(tmp_path / "src.pi")
+    metadata = read_spectrum_metadata(str(specfile))
+    filepath, extno = resolve_base_arf(metadata)
+    assert Path(filepath).name == "base_arf.fits"
+    assert extno == 1
+
+
 def test_rmf_selection_falls_back_when_grade_specific_row_is_missing(tmp_path: Path, fake_caldb: Path) -> None:
     """RMF lookup should retry without grade when the strict row is unavailable."""
     specfile = _write_spectrum(tmp_path / "src_grade8.pi")
     with fits.open(specfile, mode="update") as hdul:
-        hdul[1].header["DSVAL1"] = "G0:8"
+        hdul[1].header["DSVAL1"] = "G0:20"
         hdul.flush()
     metadata = read_spectrum_metadata(str(specfile))
     outfile = tmp_path / "src_grade8.rmf"
     generate_rmf(str(specfile), str(outfile), metadata, clobber=True)
     with fits.open(outfile) as hdul:
         assert hdul[1].data["MATRIX"][0][0] == pytest.approx(8.0)
+
+
+def test_base_arf_selection_falls_back_when_grade_specific_row_is_missing(
+    tmp_path: Path,
+    fake_caldb: Path,
+) -> None:
+    """Base ARF lookup should retry without grade when the strict row is unavailable."""
+    index_path = fake_caldb / "data/ep/fxt/index/caldb.indx"
+    _write_caldb_index(
+        index_path,
+        [
+            {
+                "TELESCOP": "EP",
+                "INSTRUME": "FXT",
+                "DETNAM": "A",
+                "FILTER": "1",
+                "CAL_CNAM": "SPECRESP",
+                "CAL_QUAL": 0,
+                "REF_TIME": 60000.0,
+                "CAL_FILE": "base_arf.fits",
+                "CAL_DIR": "data/ep/fxt/cpf/arf",
+                "CAL_XNO": 1,
+                "CAL_CBD": "DATAMODE(FF)",
+            },
+            {
+                "TELESCOP": "EP",
+                "INSTRUME": "FXT",
+                "DETNAM": "A",
+                "FILTER": "NONE",
+                "CAL_CNAM": "MATRIX",
+                "CAL_QUAL": 0,
+                "REF_TIME": 60000.0,
+                "CAL_FILE": "rmf_default.fits",
+                "CAL_DIR": "data/ep/fxt/cpf/rmf",
+                "CAL_XNO": 1,
+                "CAL_CBD": "DATAMODE(FF)",
+            },
+            {
+                "TELESCOP": "EP",
+                "INSTRUME": "FXT",
+                "DETNAM": "A",
+                "FILTER": "1",
+                "CAL_CNAM": "VIGNET",
+                "CAL_QUAL": 0,
+                "REF_TIME": 60000.0,
+                "CAL_FILE": "vign.fits",
+                "CAL_DIR": "data/ep/fxt/cpf/vignetting",
+                "CAL_XNO": 1,
+                "CAL_CBD": "NONE",
+            },
+            {
+                "TELESCOP": "EP",
+                "INSTRUME": "FXT",
+                "DETNAM": "A",
+                "FILTER": "NONE",
+                "CAL_CNAM": "TELDEF",
+                "CAL_QUAL": 0,
+                "REF_TIME": 60000.0,
+                "CAL_FILE": "teldef.fits",
+                "CAL_DIR": "data/ep/fxt/bcf/teldef",
+                "CAL_XNO": 0,
+                "CAL_CBD": "NONE",
+            },
+        ],
+    )
+    specfile = _write_spectrum(tmp_path / "src_grade8.pi")
+    with fits.open(specfile, mode="update") as hdul:
+        hdul[1].header["DSVAL1"] = "G0:8"
+        hdul.flush()
+    metadata = read_spectrum_metadata(str(specfile))
+    filepath, extno = resolve_base_arf(metadata)
+    assert Path(filepath).name == "base_arf.fits"
+    assert extno == 1
+
+
+def test_caldb_lookup_error_includes_stage_paths_and_candidates(fake_caldb: Path) -> None:
+    """Lookup failures should report stage, CALDB paths, and candidate rows."""
+    with pytest.raises(RuntimeError, match="stage=cbd") as excinfo:
+        find_calibration_file(
+            telescope="EP",
+            instrument="FXT",
+            detname="A",
+            filt="1",
+            codename="SPECRESP",
+            start_date="2026-01-01",
+            start_time="00:00:00",
+            stop_date="2026-01-01",
+            stop_time="00:10:00",
+            expr="DATAMODE(BAD) .AND. GRADE(G0:12)",
+        )
+    message = str(excinfo.value)
+    assert "CALDBINDEX=" in message
+    assert "row_counts=(" in message
+    assert "metadata_candidates=[" in message
+    assert "base_arf.fits" in message
+    assert "GRADE(G0:0-12)" in message
 
 
 def test_fxtpsf_helpers_and_fxteefmap_use_shared_fxtcaldb(fake_caldb: Path) -> None:

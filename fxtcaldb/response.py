@@ -25,10 +25,28 @@ def _lookup_file(metadata: SpectrumMetadata, codename: str, filt: str, expr: str
     )
 
 
+def _format_lookup_error(metadata: SpectrumMetadata, codename: str, filt: str, expr: str) -> str:
+    """Build one detailed response-lookup failure message."""
+    return (
+        f"{codename} lookup failed for "
+        f"telescope={metadata.telescope}, instrument={metadata.instrument}, "
+        f"detector={metadata.detector_code}, filter={filt}, datamode={metadata.datamode}, "
+        f"grade=G0:{metadata.max_grade}, start={metadata.start_date}T{metadata.start_time}, "
+        f"stop={metadata.stop_date}T{metadata.stop_time}, expr={expr}"
+    )
+
+
 def resolve_base_arf(metadata: SpectrumMetadata) -> tuple[str, int]:
-    """Resolve the CALDB base ARF file."""
+    """Resolve the CALDB base ARF file with a controlled grade-less fallback."""
     expr = f"DATAMODE({metadata.datamode}) .AND. GRADE(G0:{metadata.max_grade})"
-    return _lookup_file(metadata, "SPECRESP", metadata.filt, expr)
+    try:
+        return _lookup_file(metadata, "SPECRESP", metadata.filt, expr)
+    except RuntimeError as exc:
+        fallback_expr = f"DATAMODE({metadata.datamode})"
+        try:
+            return _lookup_file(metadata, "SPECRESP", metadata.filt, fallback_expr)
+        except RuntimeError:
+            raise RuntimeError(_format_lookup_error(metadata, "SPECRESP", metadata.filt, expr)) from exc
 
 
 def resolve_rmf(metadata: SpectrumMetadata) -> tuple[str, int]:
@@ -40,13 +58,7 @@ def resolve_rmf(metadata: SpectrumMetadata) -> tuple[str, int]:
         try:
             return _lookup_file(metadata, "MATRIX", "NONE", f"DATAMODE({metadata.datamode})")
         except RuntimeError:
-            raise RuntimeError(
-                "RMF lookup failed for "
-                f"telescope={metadata.telescope}, instrument={metadata.instrument}, "
-                f"detector={metadata.detector_code}, filter=NONE, datamode={metadata.datamode}, "
-                f"grade=G0:{metadata.max_grade}, start={metadata.start_date}T{metadata.start_time}, "
-                f"stop={metadata.stop_date}T{metadata.stop_time}"
-            ) from exc
+            raise RuntimeError(_format_lookup_error(metadata, "MATRIX", "NONE", expr)) from exc
 
 
 def read_base_arf_table(metadata: SpectrumMetadata) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
