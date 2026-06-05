@@ -10,6 +10,8 @@ import pytest
 from astropy.io import fits
 from astropy.wcs import WCS
 
+from fxtpsf_helpers import build_mission_psf_context, load_local_eef
+from fxteefmap.pipeline import build_eef_radius_map
 from fxtrspgen.arf import resolve_source_position
 from fxtrspgen.pipeline import run_fxtrspgen
 from fxtrspgen.regions import UnsupportedRegionError, load_region_set
@@ -151,6 +153,25 @@ def _write_beta(path: Path) -> None:
     fits.HDUList([fits.PrimaryHDU(), table]).writeto(path, overwrite=True)
 
 
+def _write_eef(path: Path) -> None:
+    """Write a minimal EEF calibration FITS file."""
+    radius = np.array([0.0, 2.0, 4.0, 8.0], dtype=np.float32)
+    frac_near = np.array([0.0, 0.4, 0.7, 1.0], dtype=np.float32)
+    frac_far = np.array([0.0, 0.3, 0.6, 1.0], dtype=np.float32)
+    hdus = [fits.PrimaryHDU()]
+    for name, frac in (("0arcmin", frac_near), ("10arcmin", frac_far)):
+        hdus.append(
+            fits.BinTableHDU.from_columns(
+                [
+                    fits.Column(name="radius_pixel", format="E", array=radius),
+                    fits.Column(name="EEF", format="E", array=frac),
+                ],
+                name=name,
+            )
+        )
+    fits.HDUList(hdus).writeto(path, overwrite=True)
+
+
 def _write_teldef(path: Path) -> None:
     """Write a minimal TELDEF file."""
     header = fits.Header()
@@ -192,14 +213,17 @@ def fake_caldb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     rmf_dir = caldb / "data/ep/fxt/cpf/rmf"
     vign_dir = caldb / "data/ep/fxt/cpf/vignetting"
     psf_dir = caldb / "data/ep/fxt/cpf/psf"
+    eef_dir = caldb / "data/ep/fxt/cpf/eef"
     teldef_dir = caldb / "data/ep/fxt/bcf/teldef"
-    for directory in (index_dir, arf_dir, rmf_dir, vign_dir, psf_dir, teldef_dir):
+    for directory in (index_dir, arf_dir, rmf_dir, vign_dir, psf_dir, eef_dir, teldef_dir):
         directory.mkdir(parents=True, exist_ok=True)
     _write_base_arf(arf_dir / "base_arf.fits", np.array([100.0, 80.0, 50.0]))
     _write_rmf(rmf_dir / "rmf_grade12.fits", 2.0)
     _write_rmf(rmf_dir / "rmf_grade4.fits", 4.0)
+    _write_rmf(rmf_dir / "rmf_default.fits", 8.0)
     _write_vign(vign_dir / "vign.fits")
     _write_beta(psf_dir / "fxta_beta.fits")
+    _write_eef(eef_dir / "fxta_thin_C_K_eef.fits")
     _write_teldef(teldef_dir / "teldef.fits")
     _write_caldb_index(
         index_dir / "caldb.indx",
@@ -242,6 +266,19 @@ def fake_caldb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 "CAL_DIR": "data/ep/fxt/cpf/rmf",
                 "CAL_XNO": 1,
                 "CAL_CBD": "DATAMODE(FF) GRADE(G0:4)",
+            },
+            {
+                "TELESCOP": "EP",
+                "INSTRUME": "FXT",
+                "DETNAM": "A",
+                "FILTER": "NONE",
+                "CAL_CNAM": "MATRIX",
+                "CAL_QUAL": 0,
+                "REF_TIME": 60000.0,
+                "CAL_FILE": "rmf_default.fits",
+                "CAL_DIR": "data/ep/fxt/cpf/rmf",
+                "CAL_XNO": 1,
+                "CAL_CBD": "DATAMODE(FF)",
             },
             {
                 "TELESCOP": "EP",
@@ -340,6 +377,46 @@ def test_rmf_selection_uses_grade_specific_caldb_row(tmp_path: Path, fake_caldb:
         assert hdul[1].header["EXTNAME"] == "MATRIX"
         assert hdul[1].header["HDUCLAS3"] == "REDIST"
         assert hdul[1].data["MATRIX"][0][0] == pytest.approx(2.0)
+
+
+def test_rmf_selection_falls_back_when_grade_specific_row_is_missing(tmp_path: Path, fake_caldb: Path) -> None:
+    """RMF lookup should retry without grade when the strict row is unavailable."""
+    specfile = _write_spectrum(tmp_path / "src_grade8.pi")
+    with fits.open(specfile, mode="update") as hdul:
+        hdul[1].header["DSVAL1"] = "G0:8"
+        hdul.flush()
+    metadata = read_spectrum_metadata(str(specfile))
+    outfile = tmp_path / "src_grade8.rmf"
+    generate_rmf(str(specfile), str(outfile), metadata, clobber=True)
+    with fits.open(outfile) as hdul:
+        assert hdul[1].data["MATRIX"][0][0] == pytest.approx(8.0)
+
+
+def test_fxtpsf_helpers_and_fxteefmap_use_shared_fxtcaldb(fake_caldb: Path) -> None:
+    """PSF helpers and EEF-map generation should resolve EEF files through the shared layer."""
+    context = build_mission_psf_context(
+        mission="ep-fxt",
+        instrument="fxta",
+        filter_name="thin",
+        emin_keV=0.5,
+        emax_keV=1.0,
+    )
+    radius_pix, frac = load_local_eef(context, 5.0)
+    assert np.all(np.diff(radius_pix) >= 0.0)
+    assert np.all(np.diff(frac) >= -1e-8)
+    image = np.ones((20, 20), dtype=np.float64)
+    radius_map, meta = build_eef_radius_map(
+        image=image,
+        pixel_scale_arcsec=9.6,
+        eeffrac=0.9,
+        mission="ep-fxt",
+        instrument="fxta",
+        filter_name="thin",
+        emin_keV=0.5,
+        emax_keV=1.0,
+    )
+    assert radius_map.shape == image.shape
+    assert float(meta["theta_max_caldb"]) == pytest.approx(10.0)
 
 
 def test_run_fxtrspgen_writes_factorized_outputs_and_optional_headers(

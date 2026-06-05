@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,25 +11,19 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 from scipy import interpolate
 
-from fxtrspgen.caldb import (
-    SpectrumMetadata,
-    read_base_arf_table,
-    resolve_base_arf,
-    resolve_teldef,
-    resolve_vignetting_table,
-)
+from fxtcaldb.env import CaldbPaths
+from fxtcaldb.eef import load_eef_curve_for_theta
+from fxtcaldb.metadata import SpectrumMetadata
+from fxtcaldb.psf import load_beta_psf_table
+from fxtcaldb.response import read_base_arf_table
+from fxtcaldb.teldef import read_teldef_info, resolve_teldef
+from fxtcaldb.vignetting import resolve_vignetting_table
+from fxtrspgen import attitude
 from fxtrspgen.regions import RegionSet, load_region_set
-from fxtrspgen.runtime import ensure_fxtdas_py_path
-
-ensure_fxtdas_py_path()
-
-import attitude  # type: ignore  # noqa: E402
-from eef_read import cal_eefcurve  # type: ignore  # noqa: E402
 
 
 PIXEL_ARCSEC = 9.6687
 BETA_EEF_THETA_MAX_ARCMIN = 3.0
-BETA_CACHE: dict[str, dict[str, np.ndarray]] = {}
 
 
 @dataclass(frozen=True)
@@ -95,69 +88,27 @@ def _filter_name(filt: str) -> str:
     return {0: "open", 1: "thin", 2: "medium", 3: "hole"}[int(str(filt)[-1])]
 
 
-def _read_teldef_alignment(filepath: str) -> tuple[np.ndarray, float, float, float]:
-    """Read the TELDEF quantities needed for the optical-axis world position."""
-    header = fits.getheader(filepath)
-    mij = np.array(
-        [
-            [header["ALIGNM11"], header["ALIGNM12"], header["ALIGNM13"]],
-            [header["ALIGNM21"], header["ALIGNM22"], header["ALIGNM23"]],
-            [header["ALIGNM31"], header["ALIGNM32"], header["ALIGNM33"]],
-        ],
-        dtype=np.float64,
-    )
-    return (
-        mij,
-        float(header["FOCALLEN"]),
-        float(header["DET_XSCL"]),
-        float(header["OPTAXISX"]),
-        float(header["OPTAXISY"]),
-    )
-
-
 def compute_optical_axis_pixel(specfile: str, exp_wcs: WCS, metadata: SpectrumMetadata) -> tuple[float, float]:
     """Project the telescope optical axis onto the exposure-map pixel grid."""
     teldef_path, _ = resolve_teldef(metadata)
-    mij, focallen, pixel_size, optaxis_x, optaxis_y = _read_teldef_alignment(teldef_path)
+    teldef = read_teldef_info(teldef_path)
     with fits.open(specfile) as hdul:
         header = hdul[1].header
         ra_pnt = float(header["RA_PNT"])
         dec_pnt = float(header["DEC_PNT"])
         pa_pnt = float(header["PA_PNT"])
-    det_center = [optaxis_x - 1.0, optaxis_y - 1.0]
+    det_center = [teldef.optaxis_x - 1.0, teldef.optaxis_y - 1.0]
     quat = attitude.eq_to_quat(ra_pnt, dec_pnt, pa_pnt)
-    axis_ra, axis_dec = attitude.det2radecpix(det_center, det_center, pixel_size, focallen, quat, mij)
+    axis_ra, axis_dec = attitude.det2radecpix(
+        det_center,
+        det_center,
+        teldef.pixel_size,
+        teldef.focal_length,
+        quat,
+        teldef.alignment_matrix,
+    )
     xpix, ypix = exp_wcs.all_world2pix(float(np.asarray(axis_ra).ravel()[0]), float(np.asarray(axis_dec).ravel()[0]), 0)
     return float(xpix), float(ypix)
-
-
-def _load_beta_table(det_prefix: str) -> dict[str, np.ndarray]:
-    """Load the near-axis beta PSF parametrization from CALDB."""
-    if det_prefix in BETA_CACHE:
-        return BETA_CACHE[det_prefix]
-    caldb = Path(os.environ["CALDB"])
-    for directory in ("data/ep/fxt/cpf/psf", "data/ep/fxt/cpf/eef"):
-        for suffix in (".fits", ".fits.gz"):
-            path = caldb / directory / f"{det_prefix}_beta{suffix}"
-            if path.is_file():
-                with fits.open(path) as hdul:
-                    data = hdul[1].data
-                    bandwidth = np.asarray(data["EMAX"] - data["EMIN"], dtype=np.float64)
-                    use = bandwidth < 4.0 * np.median(bandwidth)
-                    e_mid = 0.5 * np.asarray(data["EMIN"] + data["EMAX"], dtype=np.float64)[use]
-                    order = np.argsort(e_mid)
-                    table = {
-                        "e_mid": e_mid[order],
-                        "A1": np.asarray(data["A1"], dtype=np.float64)[use][order],
-                        "R1": np.asarray(data["R1"], dtype=np.float64)[use][order],
-                        "ALP1": np.asarray(data["ALP1"], dtype=np.float64)[use][order],
-                        "A2": np.asarray(data["A2"], dtype=np.float64)[use][order],
-                        "R2": np.asarray(data["R2"], dtype=np.float64)[use][order],
-                        "ALP2": np.asarray(data["ALP2"], dtype=np.float64)[use][order],
-                    }
-                BETA_CACHE[det_prefix] = table
-                return table
-    raise FileNotFoundError(f"No beta PSF file found for {det_prefix}")
 
 
 def _dual_beta_cdf(
@@ -187,7 +138,7 @@ def _beta_psf_fraction(
     subpixels: int = 5,
 ) -> np.ndarray:
     """Integrate the near-axis beta PSF over an arbitrary aperture mask."""
-    table = _load_beta_table(det_prefix)
+    table = load_beta_psf_table(det_prefix)
     ny, nx = region_mask.shape
     y_index, x_index = np.indices((ny, nx), dtype=np.float64)
     offsets = (np.arange(subpixels, dtype=np.float64) + 0.5) / subpixels - 0.5
@@ -268,7 +219,7 @@ def _legacy_eef_fraction(
     region_mask: np.ndarray,
 ) -> np.ndarray:
     """Integrate the legacy off-axis EEF curves over an arbitrary aperture."""
-    caldb = Path(os.environ["CALDB"])
+    caldb = Path(CaldbPaths.resolve().root)
     eef_path = caldb / "data/ep/fxt/cpf/eef"
     energy_points = np.array([0.277, 0.93, 1.49, 3.0, 4.51, 8.048], dtype=np.float64)
     energy_tags = np.array(["C_K", "Cu_L", "Al_K", "Ag_L", "Ti_K", "Cu_K"])
@@ -278,7 +229,7 @@ def _legacy_eef_fraction(
         filename = eef_path / f"{det_prefix}_{_filter_name(filt)}_{tag}_eef.fits"
         if not filename.is_file():
             continue
-        radius_list, eef_curve = cal_eefcurve(theta_arcmin, str(filename))
+        radius_list, eef_curve = load_eef_curve_for_theta(filename, theta_arcmin)
         radius_list = np.asarray(radius_list, dtype=np.float64)
         eef_curve = np.asarray(eef_curve, dtype=np.float64)
         fractions = _region_area_fractions(radius_list, region_mask, source_xy)

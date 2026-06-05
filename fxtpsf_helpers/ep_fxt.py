@@ -8,13 +8,15 @@ build a mission PSF context once, then query the local EEF/PSF for a source.
 from __future__ import annotations
 
 import math
-import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
-from astropy.io import fits
+from fxtcaldb.eef import (
+    available_theta_arcmin as available_eef_theta_arcmin,
+    load_eef_curve_for_theta,
+    select_ep_eef_files,
+)
 
 
 EPS = 1e-12
@@ -41,52 +43,6 @@ class MissionPSFContext:
     mean_eef_files: tuple[Path, ...]
     meta: dict[str, str | float]
     default_pixel_scale_arcsec: float
-
-
-def _read_fits_table_xy(path: Path, xcol: str, ycol: str, ext: int) -> tuple[np.ndarray, np.ndarray]:
-    """Read two numeric columns from a FITS binary table extension.
-
-    Parameters
-    ----------
-    path : Path
-        FITS file path.
-    xcol : str
-        Name of the first column.
-    ycol : str
-        Name of the second column.
-    ext : int
-        FITS extension index.
-
-    Returns
-    -------
-    columns : tuple[np.ndarray, np.ndarray]
-        ``(x_values, y_values)`` as ``float64`` arrays.
-    """
-    data = fits.getdata(path, ext=ext)
-    return np.asarray(data[xcol], dtype=np.float64), np.asarray(data[ycol], dtype=np.float64)
-
-
-def _eef_theta_extensions(path: Path) -> list[tuple[float, int]]:
-    """Discover the off-axis EEF extensions available in one FITS file.
-
-    Parameters
-    ----------
-    path : Path
-        EEF FITS file path.
-
-    Returns
-    -------
-    extensions : list[tuple[float, int]]
-        A list of ``(theta_arcmin, ext_index)`` pairs.
-    """
-    out: list[tuple[float, int]] = []
-    with fits.open(path) as hdul:
-        for idx, hdu in enumerate(hdul[1:], start=1):
-            name = str(hdu.name)
-            if "arcmin" not in name:
-                continue
-            out.append((float(name.replace("arcmin", "")), idx))
-    return out
 
 
 def eef_radius(radius_values: np.ndarray, frac: np.ndarray, target: float) -> float:
@@ -170,70 +126,8 @@ def _select_ep_eef_file(
     selection : tuple[Path | None, dict[str, str | float], tuple[Path, ...]]
         ``(selected_file, metadata, mean_files)`` for local EEF queries.
     """
-    caldb = os.environ["CALDB"]
-    eef_dir = Path(caldb) / "data" / "ep" / "fxt" / "cpf" / "eef"
-
-    entries: list[dict[str, Any]] = []
-    for path in sorted(eef_dir.glob("fxt*_eef.fits")):
-        parts = path.stem.split("_")
-        if len(parts) < 4:
-            continue
-        line = "_".join(parts[2:-1])
-        energy = EP_LINE_ENERGY_KEV.get(line)
-        if energy is None:
-            continue
-        entries.append(
-            {
-                "path": path,
-                "instrument": parts[0].lower(),
-                "filter": parts[1].lower(),
-                "line": line,
-                "energy": float(energy),
-            }
-        )
-
-    if not entries:
-        raise RuntimeError(f"No EP/FXT EEF FITS files found under {eef_dir}")
-
-    target_energy = None
-    if emin_keV is not None and emax_keV is not None:
-        target_energy = 0.5 * (float(emin_keV) + float(emax_keV))
-    elif emin_keV is not None:
-        target_energy = float(emin_keV)
-    elif emax_keV is not None:
-        target_energy = float(emax_keV)
-
-    subset = entries
-    if instrument:
-        subset = [entry for entry in subset if entry["instrument"] == instrument.lower()]
-    if filter_name:
-        subset = [entry for entry in subset if entry["filter"] == filter_name.lower()]
-    if not subset:
-        subset = entries
-
-    if target_energy is not None:
-        chosen = min(subset, key=lambda entry: abs(entry["energy"] - target_energy))
-        return (
-            Path(chosen["path"]),
-            {
-                "instrument": str(chosen["instrument"]),
-                "filter": str(chosen["filter"]),
-                "line": str(chosen["line"]),
-                "energy_keV": float(chosen["energy"]),
-            },
-            (),
-        )
-
-    return (
-        None,
-        {
-            "instrument": instrument or "mean",
-            "filter": filter_name or "mean",
-            "line": "mean",
-            "energy_keV": float(np.mean([entry["energy"] for entry in subset])),
-        },
-        tuple(Path(entry["path"]) for entry in subset),
-    )
+    selection = select_ep_eef_files(instrument, filter_name, emin_keV, emax_keV)
+    return selection.selected_eef, dict(selection.meta), selection.mean_eef_files
 
 
 def _load_ep_eef_curve_for_theta(
@@ -257,59 +151,7 @@ def _load_ep_eef_curve_for_theta(
     eef_curve : tuple[np.ndarray, np.ndarray]
         ``(radius_pix, eef_fraction)`` for the nearest off-axis calibration.
     """
-    def interpolate_one_file(path: Path, target_theta: float) -> tuple[np.ndarray, np.ndarray]:
-        theta_grid = _eef_theta_extensions(path)
-        if not theta_grid:
-            raise RuntimeError(f"No off-axis EEF extensions found in {path}")
-
-        theta_vals = np.asarray([item[0] for item in theta_grid], dtype=np.float64)
-        curves = [_read_fits_table_xy(path, "radius_pixel", "EEF", ext) for _theta, ext in theta_grid]
-
-        if len(curves) == 1:
-            return curves[0]
-
-        idx_hi = int(np.searchsorted(theta_vals, float(target_theta), side="left"))
-        if idx_hi <= 0:
-            idx_lo = 0
-            idx_hi = 1
-        elif idx_hi >= len(theta_vals):
-            idx_hi = len(theta_vals) - 1
-            idx_lo = idx_hi - 1
-        else:
-            idx_lo = idx_hi - 1
-
-        theta_lo = float(theta_vals[idx_lo])
-        theta_hi = float(theta_vals[idx_hi])
-        radius_lo, eef_lo = curves[idx_lo]
-        radius_hi, eef_hi = curves[idx_hi]
-        radius_common = radius_lo if radius_lo[-1] >= radius_hi[-1] else radius_hi
-        eef_lo_common = np.interp(radius_common, radius_lo, eef_lo, left=0.0, right=float(eef_lo[-1]))
-        eef_hi_common = np.interp(radius_common, radius_hi, eef_hi, left=0.0, right=float(eef_hi[-1]))
-
-        if abs(theta_hi - theta_lo) < EPS:
-            frac = eef_lo_common
-        else:
-            weight_hi = (float(target_theta) - theta_lo) / (theta_hi - theta_lo)
-            weight_lo = 1.0 - weight_hi
-            frac = weight_lo * eef_lo_common + weight_hi * eef_hi_common
-        frac = np.clip(frac, 0.0, 1.0)
-        frac = np.maximum.accumulate(frac)
-        return radius_common, frac
-
-    if eef_file is None:
-        curves = [interpolate_one_file(path, theta_arcmin) for path in mean_files]
-        if not curves:
-            raise RuntimeError("No EP/FXT EEF curves available for mean PSF selection.")
-        ref_radius = max(curves, key=lambda item: item[0][-1])[0]
-        frac_stack = [
-            np.interp(ref_radius, radius, eef, left=0.0, right=float(eef[-1]))
-            for radius, eef in curves
-        ]
-        frac_mean = np.clip(np.mean(np.vstack(frac_stack), axis=0), 0.0, 1.0)
-        frac_mean = np.maximum.accumulate(frac_mean)
-        return ref_radius, frac_mean
-
-    return interpolate_one_file(eef_file, theta_arcmin)
+    return load_eef_curve_for_theta(eef_file, theta_arcmin, mean_files)
 
 
 def build_mission_psf_context(
@@ -427,13 +269,7 @@ def available_theta_arcmin(context: MissionPSFContext) -> np.ndarray:
     else:
         paths = context.mean_eef_files
 
-    for path in paths:
-        for theta_arcmin, _ext in _eef_theta_extensions(path):
-            theta_values.add(float(theta_arcmin))
-
-    if not theta_values:
-        raise RuntimeError("No off-axis EEF extensions available for the selected PSF context.")
-    return np.asarray(sorted(theta_values), dtype=np.float64)
+    return available_eef_theta_arcmin(context.selected_eef, context.mean_eef_files)
 
 
 def representative_r90_pix(context: MissionPSFContext) -> float:

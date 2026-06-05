@@ -18,6 +18,8 @@ setup(
     url="https://github.com/AstroChensj/eFXTDAS.git",
     packages=find_packages(
         include=[
+            "fxtcaldb",
+            "fxtcaldb.*",
             "fxtsrcdet",
             "fxtsrcdet.*",
             "fxtregions",
