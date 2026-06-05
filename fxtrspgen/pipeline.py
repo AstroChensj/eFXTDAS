@@ -7,8 +7,8 @@ from pathlib import Path
 
 from astropy.io import fits
 
+from fxtcaldb.metadata import read_spectrum_metadata
 from fxtrspgen.arf import generate_arf
-from fxtrspgen.caldb import read_spectrum_metadata
 from fxtrspgen.rmf import generate_rmf
 
 

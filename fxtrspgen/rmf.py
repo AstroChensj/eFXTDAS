@@ -7,7 +7,8 @@ import shutil
 
 from astropy.io import fits
 
-from fxtrspgen.caldb import SpectrumMetadata, resolve_rmf
+from fxtcaldb.metadata import SpectrumMetadata
+from fxtcaldb.response import resolve_rmf
 
 
 def _normalize_rmf_headers(outfile: str, specfile: str) -> None:
