@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 
-from fxtpsf_helpers import MissionPSFContext, eef_radius, infer_optical_axis, load_local_eef, sample_radius_map
+from fxtpsfgen.mapper import ObservationPSFMapper, StackedPSFMapper
 from fxtsrcdet.config import (
     BACKGROUND_CARVE_MIN_COUNTS,
     BACKGROUND_CARVE_MIN_SUPPORT_SCALES,
@@ -25,14 +25,11 @@ from fxtsrcdet.utils.measure import aperture_pixels
 def create_background_map(
     image: np.ndarray,
     rows: list,
-    psf_context: MissionPSFContext,
     pixel_scale_arcsec: float,
+    psf_mapper: ObservationPSFMapper | StackedPSFMapper | None = None,
     exposure_map: np.ndarray | None = None,
     analysis_mask: np.ndarray | None = None,
-    optaxis_x: float | None = None,
-    optaxis_y: float | None = None,
     sigma_grid: tuple[float, ...] | list[float] | np.ndarray = (4.0, 8.0, 16.0, 32.0, 64.0),
-    eef_radius_maps: dict | None = None,
 ) -> np.ndarray:
     """Build an exposure-aware, source-masked smoothed background map.
 
@@ -42,24 +39,18 @@ def create_background_map(
         Counts image.
     rows : list[dict]
         Initial detection candidates used to carve the source mask.
-    psf_context : MissionPSFContext
-        Mission-specific PSF selection context.
     pixel_scale_arcsec : float
         Image pixel scale in arcsec/pixel.
+    psf_mapper : ObservationPSFMapper | StackedPSFMapper | None
+        PSF mapper used to query local PSF radii.
     exposure_map : np.ndarray | None
         Optional exposure map matched to ``image``.
     analysis_mask : np.ndarray | None
         Optional boolean mask selecting globally valid pixels for background
         estimation.
-    optaxis_x : float | None
-        Optional optical-axis x coordinate in 1-based pixels.
-    optaxis_y : float | None
-        Optional optical-axis y coordinate in 1-based pixels.
     sigma_grid : tuple[float, ...] | list[float] | np.ndarray
         Gaussian smoothing scales in pixels available to the adaptive
         background model.
-    eef_radius_maps : dict | None
-        Optional precomputed EEF-radius maps from ``fxteefmap``.
 
     Returns
     -------
@@ -89,7 +80,8 @@ def create_background_map(
     support is strong, while automatically switching to broader smoothing where
     the source-free background is sparse.
     """
-    opt_x, opt_y = infer_optical_axis(image.shape, optaxis_x, optaxis_y)
+    if psf_mapper is None:
+        raise ValueError("A PSF mapper is required for PSF-aware background estimation.")
 
     #--- valid region for bkg estimation: must have non-zero exposure
     if exposure_map is not None:
@@ -108,11 +100,7 @@ def create_background_map(
             continue
         x_ima = float(row.x)
         y_ima = float(row.y)
-        local_psf_r90_pix = sample_radius_map(eef_radius_maps, "R90", x_ima, y_ima)
-        if local_psf_r90_pix is None:
-            theta_arcmin = math.hypot(x_ima - opt_x, y_ima - opt_y) * pixel_scale_arcsec / 60.0
-            radius_pix, frac = load_local_eef(psf_context, theta_arcmin)
-            local_psf_r90_pix = eef_radius(radius_pix, frac, 0.90)
+        local_psf_r90_pix = psf_mapper.radius_at_position(x_ima, y_ima, 0.90)
         x0 = float(x_ima - 1.0)
         y0 = float(y_ima - 1.0)
         ##--- carving out radius dependent on local R90 size, and source extendedness

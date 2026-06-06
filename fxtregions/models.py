@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing import Any
-
 from scipy import ndimage
 
 from astropy.coordinates import SkyCoord
 
+from fxtpsfgen.mapper import ObservationPSFMapper, StackedPSFMapper
 from fxtregions.measure import kernel_cumulative_curve
-from fxtpsf_helpers import build_psf_kernel, load_local_eef
 
 
 @dataclass
@@ -80,8 +78,9 @@ class TargetContext:
 
 
 def source_kernel(
-    psf_context: Any,
-    theta_arcmin: float,
+    psf_mapper: ObservationPSFMapper | StackedPSFMapper,
+    x_ima: float,
+    y_ima: float,
     source_type: str,
     fitted_extent_sigma_pix: float,
 ) -> tuple[object, object, object]:
@@ -89,11 +88,12 @@ def source_kernel(
 
     Parameters
     ----------
-    psf_context : Any
-        Mission-specific PSF context returned by
-        :func:`fxtpsf_helpers.build_mission_psf_context`.
-    theta_arcmin : float
-        Off-axis angle of the source in arcminutes.
+    psf_mapper : ObservationPSFMapper | StackedPSFMapper
+        Observation or stacked PSF mapper used to evaluate the local kernel.
+    x_ima : float
+        Source x coordinate in 1-based image pixels.
+    y_ima : float
+        Source y coordinate in 1-based image pixels.
     source_type : str
         Source type label. When equal to ``"extended"``, the point-source PSF
         is broadened by the fitted extent scale.
@@ -110,8 +110,7 @@ def source_kernel(
     cum : np.ndarray
         Encircled-energy fraction on ``rr``.
     """
-    radius_pix, frac = load_local_eef(psf_context, theta_arcmin)
-    kernel = build_psf_kernel(radius_pix, frac)
+    kernel = psf_mapper.kernel_at_position(x_ima, y_ima)
     if str(source_type).lower() == "extended" and float(fitted_extent_sigma_pix) > 0.0:
         kernel = ndimage.gaussian_filter(kernel, float(fitted_extent_sigma_pix), mode="constant", cval=0.0)
         kernel /= kernel.sum()

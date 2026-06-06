@@ -24,7 +24,7 @@ The implementation draws inspiration from CIAO `wavdetect` on the initial detect
 ```bash
 fxtsrcdet img.fits \
   --expmap expmap.fits \
-  --eefmap eef_maps.fits \
+  --psfprod stack_psfprod.fits \
   --mission ep-fxt \
   --instrument fxta \
   --filter open \
@@ -74,17 +74,19 @@ per_scale = result["per_scale"]
     - non-zero pixels are treated as globally valid
     - this mask is applied consistently to detection, adaptive background
       estimation, PSF-aware fitting, and final `maskfrac` diagnostics
-  - precomputed multi-extension EEF-radius map from `fxteefmap`: `--eefmap`
-    - when supplied, `fxtsrcdet` uses this directly for PSF-aware aperture and
-      morphology work
+  - precomputed PSF product from `fxtpsfgen`: `--psfprod`
+    - when supplied, `fxtsrcdet` uses this directly for local PSF-aware aperture,
+      morphology, and grouped-fitting work
   - mission / instrument / filter / energy metadata:
     - `--mission`
     - `--instrument`
     - `--filter`
     - `--emin`
     - `--emax`
-    - these are used to construct the spatial PSF model if `--eefmap` is not
-      provided
+    - these are used to construct an observation PSF mapper if `--psfprod` is
+      not provided
+    - for stacked images, the preferred path is to pass an explicit stacked
+      PSF product such as `stack_psfprod.fits`
   - adaptive background-model smoothing grid:
     - `--background-sigma-grid`
     - Gaussian smoothing scales in pixels available to the adaptive
@@ -92,9 +94,6 @@ per_scale = result["per_scale"]
     - default: `4,8,16,32,64`
     - values below the internal floor are promoted to
       `BACKGROUND_SIGMA_FLOOR_PIX = 4.0`
-  - optional optical-axis override:
-    - `--optaxis-x`
-    - `--optaxis-y`
 - wavelet detection controls:
   - `--scales`
     - wavelet scales in pixels, for example `1,2,4,8,16`
@@ -232,6 +231,10 @@ The products mean:
   - optional final carved-and-smoothed background map
   - this is the most useful intermediate diagnostic product for later aperture
     or spectral region work
+- `psf_mapper`
+  - in-memory observation or stacked PSF mapper used by the fitting stages
+  - comes directly from `--psfprod` when supplied, otherwise from an
+    observation mapper built from the input image metadata
 - `sources.log`
   - CLI log file
   - by default this is written beside `sources.fits` as `<out>.log`
@@ -246,7 +249,7 @@ result
 |-- best_sig
 |-- background_map
 |-- analysis_mask
-|-- psf_context
+|-- psf_mapper
 |-- pixel_scale_arcsec
 ```
 
@@ -266,8 +269,8 @@ where:
 - `analysis_mask`
   - normalized user-supplied global validity mask, or `None` if no mask was
     provided
-- `psf_context`
-  - resolved mission/instrument/filter/energy PSF context
+- `psf_mapper`
+  - loaded stacked or observation PSF mapper used for local PSF queries
 - `pixel_scale_arcsec`
   - inferred image pixel scale in arcsec/pixel
 
@@ -677,4 +680,3 @@ The non-user-facing heuristics are now collected in `fxtsrcdet/config.py`. They 
      - PSF-aware fitting
      - final `maskfrac` diagnostics
    - It does not replace the internal source masks or neighbor-exclusion masks used for deblending and local fitting.
-

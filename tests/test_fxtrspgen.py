@@ -10,11 +10,11 @@ import pytest
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from fxtcaldb.metadata import read_spectrum_metadata
+from fxtcaldb.optics import compute_optical_axis_pixel
+from fxtcaldb.query import read_observation_metadata
 from fxtcaldb.response import resolve_base_arf
 from fxtcaldb.query import find_calibration_file
-from fxtpsf_helpers import build_mission_psf_context, load_local_eef
-from fxteefmap.pipeline import build_eef_radius_map
+from fxtpsfgen.mapper import ObservationPSFMapper, StackedPSFMapper, build_observation_psf_mapper, build_stacked_psf_mapper
 from fxtrspgen.arf import resolve_source_position
 from fxtrspgen.pipeline import run_fxtrspgen
 from fxtrspgen.regions import UnsupportedRegionError, load_region_set
@@ -177,9 +177,21 @@ def _write_eef(path: Path) -> None:
 def _write_teldef(path: Path) -> None:
     """Write a minimal TELDEF file."""
     header = fits.Header()
+    # Match the legacy FXTDAS attitude convention used by ``det2radecpix``:
+    # the detector boresight vector is carried along the detector -Z axis and
+    # must be rotated onto the sky-pointing +X direction for the on-axis
+    # optical axis to land at ``RA_PNT``/``DEC_PNT`` in synthetic tests.
+    align = np.array(
+        [
+            [0.0, 0.0, -1.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
     for row in range(3):
         for col in range(3):
-            header[f"ALIGNM{row + 1}{col + 1}"] = 1.0 if row == col else 0.0
+            header[f"ALIGNM{row + 1}{col + 1}"] = float(align[row, col])
     header["FOCALLEN"] = 3000.0
     header["DET_XSCL"] = 0.075
     header["OPTAXISX"] = 50.5
@@ -222,7 +234,6 @@ def fake_caldb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _write_base_arf(arf_dir / "base_arf.fits", np.array([100.0, 80.0, 50.0]))
     _write_rmf(rmf_dir / "rmf_grade12.fits", 2.0)
     _write_rmf(rmf_dir / "rmf_grade4.fits", 4.0)
-    _write_rmf(rmf_dir / "rmf_default.fits", 8.0)
     _write_vign(vign_dir / "vign.fits")
     _write_beta(psf_dir / "fxta_beta.fits")
     _write_eef(eef_dir / "fxta_thin_C_K_eef.fits")
@@ -268,19 +279,6 @@ def fake_caldb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 "CAL_DIR": "data/ep/fxt/cpf/rmf",
                 "CAL_XNO": 1,
                 "CAL_CBD": "DATAMODE(FF) GRADE(G0:4)",
-            },
-            {
-                "TELESCOP": "EP",
-                "INSTRUME": "FXT",
-                "DETNAM": "A",
-                "FILTER": "NONE",
-                "CAL_CNAM": "MATRIX",
-                "CAL_QUAL": 0,
-                "REF_TIME": 60000.0,
-                "CAL_FILE": "rmf_default.fits",
-                "CAL_DIR": "data/ep/fxt/cpf/rmf",
-                "CAL_XNO": 1,
-                "CAL_CBD": "DATAMODE(FF)",
             },
             {
                 "TELESCOP": "EP",
@@ -372,7 +370,7 @@ def test_resolve_source_position_variants(tmp_path: Path) -> None:
 def test_rmf_selection_uses_grade_specific_caldb_row(tmp_path: Path, fake_caldb: Path) -> None:
     """RMF selection should match the grade-derived legacy CALDB policy."""
     specfile = _write_spectrum(tmp_path / "src.pi")
-    metadata = read_spectrum_metadata(str(specfile))
+    metadata = read_observation_metadata(str(specfile), preferred_ext=1)
     outfile = tmp_path / "src.rmf"
     generate_rmf(str(specfile), str(outfile), metadata, clobber=True)
     with fits.open(outfile) as hdul:
@@ -384,96 +382,36 @@ def test_rmf_selection_uses_grade_specific_caldb_row(tmp_path: Path, fake_caldb:
 def test_base_arf_selection_matches_grade_range_rows(tmp_path: Path, fake_caldb: Path) -> None:
     """Base ARF lookup should accept CALDB grade ranges such as ``G0:0-12``."""
     specfile = _write_spectrum(tmp_path / "src.pi")
-    metadata = read_spectrum_metadata(str(specfile))
+    metadata = read_observation_metadata(str(specfile), preferred_ext=1)
     filepath, extno = resolve_base_arf(metadata)
     assert Path(filepath).name == "base_arf.fits"
     assert extno == 1
 
 
-def test_rmf_selection_falls_back_when_grade_specific_row_is_missing(tmp_path: Path, fake_caldb: Path) -> None:
-    """RMF lookup should retry without grade when the strict row is unavailable."""
+def test_rmf_selection_rejects_unsupported_grade(tmp_path: Path, fake_caldb: Path) -> None:
+    """RMF lookup should fail immediately for unsupported EP-FXT grades."""
     specfile = _write_spectrum(tmp_path / "src_grade8.pi")
     with fits.open(specfile, mode="update") as hdul:
         hdul[1].header["DSVAL1"] = "G0:20"
         hdul.flush()
-    metadata = read_spectrum_metadata(str(specfile))
+    metadata = read_observation_metadata(str(specfile), preferred_ext=1)
     outfile = tmp_path / "src_grade8.rmf"
-    generate_rmf(str(specfile), str(outfile), metadata, clobber=True)
-    with fits.open(outfile) as hdul:
-        assert hdul[1].data["MATRIX"][0][0] == pytest.approx(8.0)
+    with pytest.raises(ValueError, match="Unsupported EP-FXT response grade"):
+        generate_rmf(str(specfile), str(outfile), metadata, clobber=True)
 
 
-def test_base_arf_selection_falls_back_when_grade_specific_row_is_missing(
+def test_base_arf_selection_rejects_unsupported_grade(
     tmp_path: Path,
     fake_caldb: Path,
 ) -> None:
-    """Base ARF lookup should retry without grade when the strict row is unavailable."""
-    index_path = fake_caldb / "data/ep/fxt/index/caldb.indx"
-    _write_caldb_index(
-        index_path,
-        [
-            {
-                "TELESCOP": "EP",
-                "INSTRUME": "FXT",
-                "DETNAM": "A",
-                "FILTER": "1",
-                "CAL_CNAM": "SPECRESP",
-                "CAL_QUAL": 0,
-                "REF_TIME": 60000.0,
-                "CAL_FILE": "base_arf.fits",
-                "CAL_DIR": "data/ep/fxt/cpf/arf",
-                "CAL_XNO": 1,
-                "CAL_CBD": "DATAMODE(FF)",
-            },
-            {
-                "TELESCOP": "EP",
-                "INSTRUME": "FXT",
-                "DETNAM": "A",
-                "FILTER": "NONE",
-                "CAL_CNAM": "MATRIX",
-                "CAL_QUAL": 0,
-                "REF_TIME": 60000.0,
-                "CAL_FILE": "rmf_default.fits",
-                "CAL_DIR": "data/ep/fxt/cpf/rmf",
-                "CAL_XNO": 1,
-                "CAL_CBD": "DATAMODE(FF)",
-            },
-            {
-                "TELESCOP": "EP",
-                "INSTRUME": "FXT",
-                "DETNAM": "A",
-                "FILTER": "1",
-                "CAL_CNAM": "VIGNET",
-                "CAL_QUAL": 0,
-                "REF_TIME": 60000.0,
-                "CAL_FILE": "vign.fits",
-                "CAL_DIR": "data/ep/fxt/cpf/vignetting",
-                "CAL_XNO": 1,
-                "CAL_CBD": "NONE",
-            },
-            {
-                "TELESCOP": "EP",
-                "INSTRUME": "FXT",
-                "DETNAM": "A",
-                "FILTER": "NONE",
-                "CAL_CNAM": "TELDEF",
-                "CAL_QUAL": 0,
-                "REF_TIME": 60000.0,
-                "CAL_FILE": "teldef.fits",
-                "CAL_DIR": "data/ep/fxt/bcf/teldef",
-                "CAL_XNO": 0,
-                "CAL_CBD": "NONE",
-            },
-        ],
-    )
+    """Base ARF lookup should fail immediately for unsupported EP-FXT grades."""
     specfile = _write_spectrum(tmp_path / "src_grade8.pi")
     with fits.open(specfile, mode="update") as hdul:
         hdul[1].header["DSVAL1"] = "G0:8"
         hdul.flush()
-    metadata = read_spectrum_metadata(str(specfile))
-    filepath, extno = resolve_base_arf(metadata)
-    assert Path(filepath).name == "base_arf.fits"
-    assert extno == 1
+    metadata = read_observation_metadata(str(specfile), preferred_ext=1)
+    with pytest.raises(ValueError, match="Unsupported EP-FXT response grade"):
+        resolve_base_arf(metadata)
 
 
 def test_caldb_lookup_error_includes_stage_paths_and_candidates(fake_caldb: Path) -> None:
@@ -499,31 +437,50 @@ def test_caldb_lookup_error_includes_stage_paths_and_candidates(fake_caldb: Path
     assert "GRADE(G0:0-12)" in message
 
 
-def test_fxtpsf_helpers_and_fxteefmap_use_shared_fxtcaldb(fake_caldb: Path) -> None:
-    """PSF helpers and EEF-map generation should resolve EEF files through the shared layer."""
-    context = build_mission_psf_context(
-        mission="ep-fxt",
+def test_fxtpsfgen_uses_shared_fxtcaldb_backend(
+    fake_caldb: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Observation PSF mappers should resolve EEF files through the shared CALDB layer."""
+    image_path = _write_exposure(tmp_path / "mapper_img.fits", shape=(20, 20), value=1.0)
+    monkeypatch.setattr("fxtpsfgen.mapper.compute_optical_axis_pixel", lambda *args, **kwargs: (10.5, 10.5))
+    mapper = build_observation_psf_mapper(
+        image_path=image_path,
         instrument="fxta",
         filter_name="thin",
         emin_keV=0.5,
         emax_keV=1.0,
     )
-    radius_pix, frac = load_local_eef(context, 5.0)
+    radius_pix, frac = mapper.eef_curve(5.0, energy_keV=0.75)
     assert np.all(np.diff(radius_pix) >= 0.0)
     assert np.all(np.diff(frac) >= -1e-8)
-    image = np.ones((20, 20), dtype=np.float64)
-    radius_map, meta = build_eef_radius_map(
-        image=image,
-        pixel_scale_arcsec=9.6,
-        eeffrac=0.9,
-        mission="ep-fxt",
-        instrument="fxta",
-        filter_name="thin",
-        emin_keV=0.5,
-        emax_keV=1.0,
-    )
-    assert radius_map.shape == image.shape
-    assert float(meta["theta_max_caldb"]) == pytest.approx(10.0)
+    radius_map = mapper.radius_map(0.90, energy_keV=0.75)
+    assert radius_map.shape == (20, 20)
+    assert np.all(np.isfinite(mapper.theta_map_arcmin))
+    assert float(np.nanmax(mapper.theta_map_arcmin)) > 0.0
+
+
+def test_observation_metadata_supports_pointing_projection(tmp_path: Path, fake_caldb: Path) -> None:
+    """General observation metadata should carry pointing needed for optaxis projection."""
+    specfile = _write_spectrum(tmp_path / "src.pi")
+    metadata = read_observation_metadata(str(specfile), preferred_ext=1)
+    assert metadata.telescope == "EP"
+    assert metadata.instrument == "FXT"
+    assert metadata.detector_code == "A"
+    assert metadata.ra_pnt == pytest.approx(10.0)
+    assert metadata.dec_pnt == pytest.approx(20.0)
+    assert metadata.pa_pnt == pytest.approx(0.0)
+
+
+def test_optaxis_projection_fails_when_required_pointing_is_missing(tmp_path: Path, fake_caldb: Path) -> None:
+    """Exposure-like products missing ``PA_PNT`` should fail clearly for optaxis projection."""
+    expfile = _write_exposure(tmp_path / "exp_missing_pa.fits")
+    metadata = read_observation_metadata(str(expfile), preferred_ext=0)
+    with fits.open(expfile) as hdul:
+        wcs = WCS(hdul[0].header).celestial
+    with pytest.raises(ValueError, match="PA_PNT"):
+        compute_optical_axis_pixel(metadata, wcs)
 
 
 def test_run_fxtrspgen_writes_factorized_outputs_and_optional_headers(
@@ -531,21 +488,27 @@ def test_run_fxtrspgen_writes_factorized_outputs_and_optional_headers(
     fake_caldb: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The new task should write decomposed ARF columns and leave PHA untouched by default."""
+    """The new task should write diagnostic ARF columns and leave PHA untouched by default."""
     specfile = _write_spectrum(tmp_path / "src.pi")
     expfile = _write_exposure(tmp_path / "exp.fits")
     region_path = tmp_path / "src.reg"
     region_path.write_text(
-        "# Region file format: DS9 version 4.1\nimage\ncircle(50,50,10)\n-circle(50,50,3)\n",
+        "# Region file format: DS9 version 4.1\nimage\ncircle(12,50,10)\n-circle(12,50,3)\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr("fxtrspgen.arf.compute_optical_axis_pixel", lambda *args, **kwargs: (49.5, 49.5))
+    monkeypatch.setattr("fxtrspgen.arf.compute_optical_axis_pixel", lambda *args, **kwargs: (70.5, 50.5))
     outputs = run_fxtrspgen(str(specfile), str(expfile), str(region_path), clobber=True)
     with fits.open(outputs["arf_out"]) as hdul:
         data = hdul[1].data
         assert {"SPECRESP", "BASE_ARF", "VIGN_CORR", "PSF_CORR", "REGCOV_CORR", "TOT_CORR"} <= set(data.names)
-        assert np.allclose(data["TOT_CORR"], data["VIGN_CORR"] * data["PSF_CORR"] * data["REGCOV_CORR"])
         assert np.allclose(data["SPECRESP"], data["BASE_ARF"] * data["TOT_CORR"])
+        assert not np.allclose(
+            data["TOT_CORR"],
+            data["VIGN_CORR"] * data["PSF_CORR"] * data["REGCOV_CORR"],
+            rtol=0.0,
+            atol=1e-6,
+        )
+        assert hdul[1].header["FXTRSPNT"] == "Joint total is non-separable"
     with fits.open(outputs["rmf_out"]) as hdul:
         assert hdul[1].header["EXTNAME"] == "MATRIX"
         assert hdul[1].header["TLMIN4"] == 0
@@ -601,3 +564,61 @@ def test_repo_fixture_runs_end_to_end_with_synthetic_caldb(
     with fits.open(specfile) as hdul:
         assert hdul[1].header["ANCRFILE"] == original_arf
         assert hdul[1].header["RESPFILE"] == original_rmf
+
+
+def test_observation_psf_mapper_builds_and_roundtrips(fake_caldb: Path, tmp_path: Path) -> None:
+    """Observation PSF products should build, serialize, and answer local queries."""
+    image_path = _write_exposure(tmp_path / "image.fits")
+    with fits.open(image_path, mode="update") as hdul:
+        hdul[0].header["FILTER"] = "01"
+        hdul[0].header["PA_PNT"] = 0.0
+    mapper = build_observation_psf_mapper(
+        image_path,
+        instrument="fxta",
+        filter_name="thin",
+        emin_keV=0.3,
+        emax_keV=10.0,
+    )
+    out_path = tmp_path / "obs.psfprod.fits"
+    mapper.write(out_path)
+    loaded = ObservationPSFMapper.read(out_path)
+    radius, frac = loaded.local_eef_curve(50.0, 50.0)
+    assert radius.ndim == 1
+    assert frac.ndim == 1
+    assert np.all(np.diff(frac) >= -1e-8)
+    assert loaded.radius_at_position(50.0, 50.0, 0.90) > 0.0
+    assert loaded.kernel_at_position(50.0, 50.0).sum() == pytest.approx(1.0)
+
+
+def test_stacked_psf_mapper_builds_and_answers_weighted_queries(fake_caldb: Path, tmp_path: Path) -> None:
+    """Stacked PSF products should combine per-observation mappers on one WCS."""
+    image_a = _write_exposure(tmp_path / "image_a.fits")
+    image_b = _write_exposure(tmp_path / "image_b.fits")
+    for path, ra_pnt in ((image_a, 10.0), (image_b, 10.05)):
+        with fits.open(path, mode="update") as hdul:
+            hdul[0].header["FILTER"] = "01"
+            hdul[0].header["PA_PNT"] = 0.0
+            hdul[0].header["RA_PNT"] = ra_pnt
+    obs_a = build_observation_psf_mapper(image_a, instrument="fxta", filter_name="thin", emin_keV=0.3, emax_keV=10.0)
+    obs_b = build_observation_psf_mapper(image_b, instrument="fxta", filter_name="thin", emin_keV=0.3, emax_keV=10.0)
+    obs_a_path = tmp_path / "obs_a.psfprod.fits"
+    obs_b_path = tmp_path / "obs_b.psfprod.fits"
+    obs_a.write(obs_a_path)
+    obs_b.write(obs_b_path)
+
+    weight_a = tmp_path / "weight_a.fits"
+    weight_b = tmp_path / "weight_b.fits"
+    fits.PrimaryHDU(data=np.ones((100, 100), dtype=np.float32), header=fits.getheader(image_a)).writeto(weight_a, overwrite=True)
+    fits.PrimaryHDU(data=np.full((100, 100), 0.5, dtype=np.float32), header=fits.getheader(image_b)).writeto(weight_b, overwrite=True)
+
+    ref_header = fits.getheader(image_a)
+    stacked = build_stacked_psf_mapper([obs_a_path, obs_b_path], [weight_a, weight_b], ref_header)
+    stacked_path = tmp_path / "stack.psfprod.fits"
+    stacked.write(stacked_path)
+    loaded = StackedPSFMapper.read(stacked_path)
+    radius, frac = loaded.local_eef_curve(50.0, 50.0)
+    assert radius.ndim == 1
+    assert frac.ndim == 1
+    assert np.all(np.diff(frac) >= -1e-8)
+    assert loaded.radius_at_position(50.0, 50.0, 0.90) > 0.0
+    assert loaded.kernel_at_position(50.0, 50.0).sum() == pytest.approx(1.0)

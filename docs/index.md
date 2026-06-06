@@ -13,7 +13,7 @@ fxtbkgoptrate
 fxtsrcdet
 fxtregions
 fxtrspgen
-fxteefmap
+fxtpsfgen
 ```
 
 ## Scope
@@ -25,7 +25,7 @@ fxteefmap
 - `fxtsrcdet`: wavelet-style source detection and catalog construction
 - `fxtregions`: source/background region construction for downstream analysis
 - `fxtrspgen`: standalone ARF/RMF generation from external DS9 source regions
-- `fxteefmap`: image-sized EEF-radius map generation
+- `fxtpsfgen`: observation and stacked PSF-product generation
 
 ## Notes for Further Expansion
 

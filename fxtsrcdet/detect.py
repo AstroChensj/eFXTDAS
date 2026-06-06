@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 from scipy import ndimage
 
-from fxtpsf_helpers import MissionPSFContext, eef_radius, load_local_eef, sample_radius_map
+from fxtpsfgen.mapper import ObservationPSFMapper, StackedPSFMapper
 from fxtsrcdet.config import (
     CLUSTER_MAX_RADIUS_PIX,
     CLUSTER_MIN_RADIUS_PIX,
@@ -47,11 +47,8 @@ def detect_sources(
     iterstop: float = 1e-4,
     expthresh: float = 0.1,
     ellsigma: float = 3.0,
-    psf_context: MissionPSFContext | None = None,
     pixel_scale_arcsec: float | None = None,
-    optaxis_x: float | None = None,
-    optaxis_y: float | None = None,
-    eef_radius_maps: dict | None = None,
+    psf_mapper: ObservationPSFMapper | StackedPSFMapper | None = None,
 ) -> tuple[list[DetectionCandidate], list[ScaleResult], np.ndarray, np.ndarray]:
     """Run the multi-scale wavelet detection stage on an image.
 
@@ -78,17 +75,12 @@ def detect_sources(
         Minimum relative exposure allowed in the analysis.
     ellsigma : float
         Ellipse size scale factor for output regions.
-    psf_context : MissionPSFContext | None
-        Optional mission PSF context used to adapt the cross-scale clustering
-        radius to the local PSF size.
     pixel_scale_arcsec : float | None
-        Pixel scale in arcsec/pixel, required when ``psf_context`` is used.
-    optaxis_x : float | None
-        Optional optical-axis x coordinate in 1-based image pixels.
-    optaxis_y : float | None
-        Optional optical-axis y coordinate in 1-based image pixels.
-    eef_radius_maps : dict | None
-        Optional precomputed EEF-radius map product from ``fxteefmap``.
+        Pixel scale in arcsec/pixel. Retained for downstream provenance and
+        future diagnostics.
+    psf_mapper : ObservationPSFMapper | StackedPSFMapper | None
+        PSF mapper product used to evaluate local PSF radii directly on the
+        analysis image.
 
     Returns
     -------
@@ -219,11 +211,8 @@ def detect_sources(
         per_scale,
         ellsigma,
         z_thresh,
-        psf_context=psf_context,
         pixel_scale_arcsec=pixel_scale_arcsec,
-        optaxis_x=optaxis_x,
-        optaxis_y=optaxis_y,
-        eef_radius_maps=eef_radius_maps,
+        psf_mapper=psf_mapper,
     )
     return rows, per_scale, agg_mask, best_sig
 
@@ -479,11 +468,8 @@ def local_maxima(mask: np.ndarray, values: np.ndarray) -> np.ndarray:
 def cluster_peak_candidates(
     candidates: list[DetectionCandidate],
     radius: float = CLUSTER_MIN_RADIUS_PIX,
-    psf_context: MissionPSFContext | None = None,
     pixel_scale_arcsec: float | None = None,
-    optaxis_x: float | None = None,
-    optaxis_y: float | None = None,
-    eef_radius_maps: dict | None = None,
+    psf_mapper: ObservationPSFMapper | StackedPSFMapper | None = None,
 ) -> list[list[DetectionCandidate]]:
     """Group nearby peak candidates from different wavelet scales.
 
@@ -494,18 +480,10 @@ def cluster_peak_candidates(
     radius : float
         Minimum clustering radius in pixels when no PSF information is
         available.
-    psf_context : MissionPSFContext | None
-        Optional mission PSF context used to adapt the clustering radius to the
-        local PSF size.
     pixel_scale_arcsec : float | None
-        Image pixel scale in arcsec/pixel. Required when ``psf_context`` is
-        used.
-    optaxis_x : float | None
-        Optional optical-axis x coordinate in 1-based image pixels.
-    optaxis_y : float | None
-        Optional optical-axis y coordinate in 1-based image pixels.
-    eef_radius_maps : dict | None
-        Optional precomputed EEF-radius map product from ``fxteefmap``.
+        Image pixel scale in arcsec/pixel. Retained for future diagnostics.
+    psf_mapper : ObservationPSFMapper | StackedPSFMapper | None
+        PSF mapper used to adapt the clustering radius to the local PSF size.
 
     Returns
     -------
@@ -523,26 +501,13 @@ def cluster_peak_candidates(
     """
     #--- determine cluster radius
     clusters: list[list[DetectionCandidate]] = []
-    dynamic_radius = (
-        psf_context is not None
-        and pixel_scale_arcsec is not None
-        and pixel_scale_arcsec > 0.0
-    )
-    if dynamic_radius:
-        if optaxis_x is None or optaxis_y is None:
-            peak_x = np.array([cand.peak_x for cand in candidates], dtype=np.float64)
-            peak_y = np.array([cand.peak_y for cand in candidates], dtype=np.float64)
-            optaxis_x = float(0.5 * (np.nanmax(peak_x) + np.nanmin(peak_x))) if len(peak_x) else 0.0
-            optaxis_y = float(0.5 * (np.nanmax(peak_y) + np.nanmin(peak_y))) if len(peak_y) else 0.0
+    dynamic_radius = psf_mapper is not None
 
     def local_cluster_radius(cand: DetectionCandidate) -> float:
         if not dynamic_radius:
             return float(radius)
-        local_r90 = sample_radius_map(eef_radius_maps, "R90", cand.peak_x, cand.peak_y)
-        if local_r90 is None:
-            theta_arcmin = math.hypot(float(cand.peak_x) - float(optaxis_x), float(cand.peak_y) - float(optaxis_y)) * float(pixel_scale_arcsec) / 60.0
-            radius_pix, frac = load_local_eef(psf_context, theta_arcmin)
-            local_r90 = float(eef_radius(radius_pix, frac, 0.90))
+        local_r90 = psf_mapper.radius_at_position(float(cand.peak_x), float(cand.peak_y), 0.90) # sampled at (emin+emax)/2
+        ##--- IMPORTANT: to avoid local_r90 blowing up near the edge of the field of view where PSF is not calibrated, we need to cap the cluster radius with a reasonable maximum value; otherwise, it can lead to over-merging of unrelated candidates into one cluster and thus degrade the detection performance
         return min(max(CLUSTER_R90_FACTOR * float(local_r90), float(radius)), float(CLUSTER_MAX_RADIUS_PIX))
 
     #--- for each candidate ...
@@ -571,11 +536,8 @@ def combine_scales(
     per_scale: list[ScaleResult],
     ellsigma: float,
     z_thresh: float,
-    psf_context: MissionPSFContext | None = None,
     pixel_scale_arcsec: float | None = None,
-    optaxis_x: float | None = None,
-    optaxis_y: float | None = None,
-    eef_radius_maps: dict | None = None,
+    psf_mapper: ObservationPSFMapper | StackedPSFMapper | None = None,
 ) -> tuple[list[DetectionCandidate], np.ndarray, np.ndarray]:
     """Merge per-scale wavelet detections into final source candidates.
 
@@ -593,17 +555,10 @@ def combine_scales(
     z_thresh : float
         Detection threshold in Gaussian ``z`` units, used here to suppress weak
         one-scale fragments.
-    psf_context : MissionPSFContext | None
-        Optional mission PSF context used to adapt the cross-scale clustering
-        radius to the local PSF size.
     pixel_scale_arcsec : float | None
-        Pixel scale in arcsec/pixel, required when ``psf_context`` is used.
-    optaxis_x : float | None
-        Optional optical-axis x coordinate in 1-based image pixels.
-    optaxis_y : float | None
-        Optional optical-axis y coordinate in 1-based image pixels.
-    eef_radius_maps : dict | None
-        Optional precomputed EEF-radius map product from ``fxteefmap``.
+        Pixel scale in arcsec/pixel. Retained for future diagnostics.
+    psf_mapper : ObservationPSFMapper | StackedPSFMapper | None
+        PSF mapper used to evaluate local PSF radii directly on the analysis image.
 
     Returns
     -------
@@ -751,11 +706,8 @@ def combine_scales(
     #--- and keep only clusters detected on multiple scales
     clusters = cluster_peak_candidates(
         candidates,
-        psf_context=psf_context,
         pixel_scale_arcsec=pixel_scale_arcsec,
-        optaxis_x=optaxis_x,
-        optaxis_y=optaxis_y,
-        eef_radius_maps=eef_radius_maps,
+        psf_mapper=psf_mapper,
     )
     rows: list[DetectionCandidate] = []
     for cluster in clusters:

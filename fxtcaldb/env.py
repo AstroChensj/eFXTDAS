@@ -55,7 +55,10 @@ class CaldbPaths:
         caldb_config: str | None = None,
         mission_tag: str = "EP FXT",
     ) -> "CaldbPaths":
-        """Resolve the active CALDB root, config, and index file."""
+        """Resolve the active CALDB root, config, and index file.
+        
+        Fallback to environment variables if explicit paths are not provided.
+        """
         root = os.path.abspath(_require_env("CALDB", caldb_root))
         config = os.path.abspath(_require_env("CALDBCONFIG", caldb_config))
         index_path, data_root = _parse_caldb_config(root, config, mission_tag)

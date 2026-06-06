@@ -7,26 +7,27 @@ The official FXTDAS tasks handle the basic event calibration chain. `eFXTDAS` ad
 - stacked multi-OBSID imaging and spectral combination (improved version of `FXTDAS`-`fxtpipeline`)
 - wavelet-style source detection as seeding (inspired from `CIAO`-`wavdetect`, tailored now to FXT), followed by PSF fitting + extended source testing (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html))
 - automated source/background extraction/exclusion-region generation (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html) `AUTO` mode) that optimizes SNR and avoid nearby neighbor contamination
-- image-sized EEF-radius map generation for PSF-aware workflows
+- observation and stacked PSF-product generation for PSF-aware workflows
 
-The repository currently provides five user-facing tasks:
+The repository currently provides six user-facing tasks:
 
-- `fxtcombine`: top-level multi-epoch stacking and spectral combination that calls `fxtsrcdet` `fxtregions` `fxteefmap`
+- `fxtcombine`: top-level multi-epoch stacking and spectral combination that calls `fxtsrcdet` and `fxtregions`
 - `fxtbkgoptrate`: optimum-threshold flare/background screening on one light curve
 - `fxtsrcdet`: source detection and source catalog construction on one image
 - `fxtregions`: source/background region generation from a source catalog
-- `fxteefmap`: EEF-radius map generation on one image footprint
+- `fxtrspgen`: standalone ARF/RMF generation from an external DS9 source region
+- `fxtpsfgen`: observation and stacked PSF-product generation
 
 ![eFXTDAS summary figure](docs/figs/readme_summary_2x3.png)
 
-Example stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked analysis mask, stacked exposure map, and stacked EEF-radius map.
+Example stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked analysis mask, stacked exposure map, and stacked PSF support products.
 - The stacked counts image is labeled with detected sources (out to `75%` EEF radius). 
   - By default the catalog generated with `fxtsrcdet` keeps only sources with detection likelihood over `6` (as per [eROSITA simulation](https://ui.adsabs.harvard.edu/abs/2022A%26A...665A..78S/abstract), this roughly corresponds to a false detection rate of 14\%).
   - Note that we have grayed out the masked region with insufficient exposure near the image edge; sources in those regions are dropped. This is a conservative approach, and is because the EP-FXT *vignetting correction is not perfect*, so the rate near the edge will be erroneously high and thus leading to many false positives.
 - The stacked background map is created after carving out wavelet-detected sources from the image. Per-pixel smoothing is adopted.
 - The target zoom-in shows the target region (cyan), background region (crimson), and nearby contamination sources (white) to be carved out. This is inspired from `eSASS`-`srctool`.
 - The mask map is defined so that invalid pixels are those with stacked exposure smaller than `30%` of maximum exposure. 
-- The EEF map (enclosed energy fraction) actually shows the number of pixels that correspond to `90%` enclosed area of local PSF. Since PSF is poorer off-axis, the value is smallest on-axis, and largest off-axis.
+- The stacked PSF product carries the local PSF/EEF support used by `fxtsrcdet` for source fitting and by downstream region/response workflows.
 
 For full information on the packages, please check the [docs](https://efxtdas.readthedocs.io/en/latest/).
 
@@ -55,7 +56,8 @@ This installs the Python packages and CLI entry points:
 - `fxtbkgoptrate`
 - `fxtsrcdet`
 - `fxtregions`
-- `fxteefmap`
+- `fxtrspgen`
+- `fxtpsfgen`
 
 Because `fxtcombine` will stack spectra and responses from multiple observations, [Xstack](https://github.com/AstroChensj/Xstack) software is also needed:
 
@@ -72,16 +74,18 @@ python -m pip install -e .
 | --- | --- | --- | --- |
 | combine multiple OBSIDs of the same target | `fxtcombine` | FXT archive tree, target RA/Dec, OBSID list | stacked images, mask, background map, regions, stacked spectrum |
 | optimize a flare/background threshold on one LC | `fxtbkgoptrate` | FITS light curve, optional base GTI | optimum rate cut, diagnostic FITS, flare/screened GTIs |
-| detect sources on one counts image | `fxtsrcdet` | counts image, optional exposure/mask/eefmap | source catalog, DS9 regions, background map |
+| detect sources on one counts image | `fxtsrcdet` | counts image, optional exposure/mask/psfprod | source catalog, DS9 regions, background map |
 | build extraction regions for one target | `fxtregions` | counts image, source catalog, target RA/Dec | `source.reg`, `background.reg` |
-| build a per-pixel EEF-radius map | `fxteefmap` | counts image, optional exposure map | EEF FITS bundle such as `R50/R75/R80/R90` |
+| build ARF/RMF from one extracted spectrum and DS9 region | `fxtrspgen` | source PHA, exposure map, DS9 source region | `*.arf`, `*.rmf`, optional PHA header updates |
+| build observation or stacked PSF products | `fxtpsfgen` | counts image or observation `psfprod` list plus weight maps | `*.psfprod.fits`, `stack_psfprod.fits` |
 
 Recommended rule:
 
 - use `fxtcombine` first for the normal multi-OBSID science workflow
 - use `fxtbkgoptrate` directly when you want to inspect or tune a flare-screening threshold outside `fxtcombine`
 - use `fxtsrcdet` and `fxtregions` directly when tuning detection or extraction on a single stacked image
-- use `fxteefmap` directly when you need standalone PSF/EEF support products
+- use `fxtrspgen` when you already have the extracted source PHA and need a response pair from a DS9 source region
+- use `fxtpsfgen` when you need standalone PSF support products
 
 ## Typical Workflow
 
@@ -105,8 +109,8 @@ Important current behavior:
 - In `FF` mode, `fxtcombine` automatically uses matching `fsaevt` when available to derive a flare-screened GTI, then reuses that screened GTI for both `fsaevt` and `evt`.
 - In that `FF`/`fsaevt` flare-screening path, `fxtcombine` calls the installed `fxtbkgoptrate` CLI task through its normal task wrapper rather than importing the optimizer directly in-process.
 - `fxtcombine` reads the persisted flare-screening summary from the `fxtbkgoptrate` diagnostic FITS headers, including `BGOPTCUT`, `FRACTLFT`, `OPTSTAT`, and `OPTMETH`.
-- `fxtcombine` generates `stack_mask.fits` and passes it to `fxtsrcdet`.
-- `fxtregions` currently does **not** carve exclusion regions into the source region because complex source-region geometry can confuse `fxtarfgen`.
+- `fxtcombine` generates `stack_mask.fits` and `stack_psfprod.fits`, then passes both to `fxtsrcdet`.
+- `fxtcombine` now generates per-OBSID spectral responses through `fxtrspgen`, using the DS9 source region directly for the ARF/RMF pair.
 
 > [!IMPORTANT]
 > The input parameters in `eFXTDAS` fall into two classes:
@@ -121,8 +125,7 @@ Important current behavior:
 > Package-specific internal parameters are documented in:
 > [docs/fxtcombine.md](docs/fxtcombine.md),
 > [docs/fxtsrcdet.md](docs/fxtsrcdet.md),
-> [docs/fxtregions.md](docs/fxtregions.md),
-> [docs/fxteefmap.md](docs/fxteefmap.md).
+> [docs/fxtregions.md](docs/fxtregions.md).
 
 
 ## Quick Start
@@ -189,7 +192,7 @@ Use this for source detection and background-map generation on one image.
 fxtsrcdet stack_cts.fits \
   --expmap stack_exp.fits \
   --mask stack_mask.fits \
-  --eefmap stack_eef.fits \
+  --psfprod stack_psfprod.fits \
   --mission ep-fxt \
   --emin 0.3 \
   --emax 10.0 \
@@ -203,7 +206,7 @@ Key parameters:
 - `image`: counts image
 - `--expmap`: exposure map
 - `--mask`: global analysis-validity mask
-- `--eefmap`: precomputed EEF map bundle, usually from `fxteefmap`
+- `--psfprod`: stacked or observation PSF product, usually from `fxtpsfgen`
 - `--scales`: wavelet scales
 - `--background-sigma-grid`: adaptive background smoothing grid
 - `--save-bkgmap`: most useful intermediate diagnostic
@@ -243,30 +246,62 @@ Python users can call `fxtregions.pipeline.build_regions(...)`.
 
 See: [docs/fxtregions.md](docs/fxtregions.md)
 
-### 5. `fxteefmap`
+### 5. `fxtrspgen`
 
-Use this when you need a spatial PSF/EEF support product on one image.
+Use this when you need standalone ARF/RMF generation from a DS9 source region.
 
 ```bash
-fxteefmap stack_cts.fits \
-  --expmap stack_exp.fits \
-  --mission ep-fxt \
-  --emin 0.3 \
-  --emax 10.0 \
-  --out stack_eef.fits
+fxtrspgen source.pi source.expo source.reg \
+  --arf-out source.arf \
+  --rmf-out source.rmf \
+  --update-pha
 ```
 
 Key parameters:
 
-- `image`: image footprint and WCS source
-- `--expmap`: zeroes invalid pixels in the output
-- `--eeffrac`: request a single map
-- `--fractions`: request a multi-extension bundle
-- `--optaxis-x`, `--optaxis-y`: optional optical-axis override
+- positional inputs: source PHA, exposure map, and DS9 source region
+- `--arf-out`, `--rmf-out`: explicit output response names
+- `--update-pha`: write `ANCRFILE` and `RESPFILE` into the source PHA
 
-Python API is available through `build_eef_radius_map` and `build_eef_radius_maps`.
+Python users can call `fxtrspgen.run_fxtrspgen(...)`.
 
-See: [docs/fxteefmap.md](docs/fxteefmap.md)
+See: [docs/fxtrspgen.md](docs/fxtrspgen.md)
+
+### 6. `fxtpsfgen`
+
+Use this when you need observation or stacked PSF support products such as `stack_psfprod.fits`.
+
+Per-observation PSF product:
+
+```bash
+fxtpsfgen build-obs evt_image.fits \
+  --expmap evt_vexp.fits \
+  --instrument fxta \
+  --filter thin \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out obs.psfprod.fits
+```
+
+Stacked PSF product:
+
+```bash
+fxtpsfgen stack \
+  --obs-psf obs_a.psfprod.fits \
+  --obs-psf obs_b.psfprod.fits \
+  --weightmap exp_a.fits \
+  --weightmap exp_b.fits \
+  --ref-image stack_cts.fits \
+  --out stack_psfprod.fits
+```
+
+Key parameters:
+
+- `build-obs`: build one per-observation PSF product from an image footprint and optional exposure map
+- `stack`: combine multiple observation PSF products onto one stacked reference image
+- `--obs-psf` and `--weightmap`: repeat once per stacked component and keep them aligned by order
+
+See: [docs/fxtpsfgen.md](docs/fxtpsfgen.md)
 
 ## Repo Layout
 
@@ -277,8 +312,8 @@ The most relevant top-level directories are:
 | `fxtcombine/` | multi-OBSID stacking workflow |
 | `fxtsrcdet/` | source detection and catalog construction |
 | `fxtregions/` | source/background region construction |
-| `fxteefmap/` | EEF-radius map generation |
-| `fxtpsf_helpers/` | mission PSF / EEF support code shared by the tasks |
+| `fxtpsfgen/` | observation and stacked PSF-product generation |
+| `fxtcaldb/` | shared calibration, optics, and PSF / EEF support code |
 | `fxtdas-bin/` | local copies of official FXTDAS task scripts for inspection/reference |
 | `fxtdas-py/` | local Python support code from the FXTDAS environment |
 | `docs/` | detailed package documentation |
@@ -291,7 +326,7 @@ If a user asks for help with this repo:
 - start from `fxtcombine` when the request is about multi-OBSID science products
 - start from `fxtsrcdet` when the request is about source counts maps, background maps, or source catalogs
 - start from `fxtregions` when the request is about extraction-region geometry
-- start from `fxteefmap` when the request is about EEF/PSF radius products
+- start from `fxtpsfgen` when the request is about PSF products or local PSF support
 
 Most useful diagnostics to inspect first:
 
@@ -307,4 +342,3 @@ Detailed package references:
 - [docs/fxtcombine.md](docs/fxtcombine.md)
 - [docs/fxtsrcdet.md](docs/fxtsrcdet.md)
 - [docs/fxtregions.md](docs/fxtregions.md)
-- [docs/fxteefmap.md](docs/fxteefmap.md)

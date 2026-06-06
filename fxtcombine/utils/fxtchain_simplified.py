@@ -8,12 +8,116 @@ import shutil
 import time
 
 from astropy.io import fits
+import numpy as np
+from fxtpsfgen.mapper import ObservationPSFMapper, load_psf_product
 
 from fxtcombine.utils.cmd import finalize_xselect_log, remove_xselect_tmp_files, run_cmd
-from fxtcombine.utils.eefmask import build_detection_mask, filter_code_to_name, infer_optaxis_from_image, module_to_instrument
 from fxtcombine.utils.energy import energy_range_suffix, energy_range_to_channel_range
 from fxtcombine.utils.flarescreen import run_fsa_flare_screening
 from fxtcombine.utils.logger import emit
+
+
+FILTER_NAME_MAP = {
+    "00": "open",
+    "01": "thin",
+    "02": "medium",
+    "03": "hole",
+    "80": "open",
+    "81": "thin",
+    "82": "medium",
+    "83": "hole",
+}
+
+
+def module_to_instrument(module: str) -> str:
+    """Convert one FXT module code into the instrument string.
+
+    Parameters
+    ----------
+    module : str
+        Short module code such as ``"a"`` or ``"b"``.
+
+    Returns
+    -------
+    str
+        Instrument string expected by ``fxtpsfgen``.
+    """
+    lowered = str(module).strip().lower()
+    if lowered not in {"a", "b"}:
+        raise ValueError(f"Unsupported FXT module code: {module!r}")
+    return f"fxt{lowered}"
+
+
+def filter_code_to_name(filter_code: str) -> str:
+    """Convert one FXT filter code into the CALDB filter family name.
+
+    Parameters
+    ----------
+    filter_code : str
+        Filename/header filter code such as ``"01"``.
+
+    Returns
+    -------
+    str
+        Filter name such as ``"thin"`` or ``"open"``.
+    """
+    code = str(filter_code).strip().lower()
+    if code in FILTER_NAME_MAP:
+        return FILTER_NAME_MAP[code]
+    if code in {"open", "thin", "medium", "hole"}:
+        return code
+    raise ValueError(f"Unsupported FXT filter code for PSF selection: {filter_code!r}")
+
+
+def build_detection_mask(
+    image_path: str,
+    expmap_path: str,
+    psfprod_path: str,
+    out_path: str,
+) -> dict[str, float | str | int]:
+    """Build one per-OBSID detection-valid mask from the observation PSF product.
+
+    Parameters
+    ----------
+    image_path : str
+        Detection-band image path.
+    expmap_path : str
+        Matching exposure-map path.
+    psfprod_path : str
+        Matching observation PSF product path.
+    out_path : str
+        Output FITS path for the boolean mask.
+
+    Returns
+    -------
+    dict[str, float | str | int]
+        Summary metadata for logging and downstream bookkeeping.
+    """
+    with fits.open(image_path) as hdul:
+        image = np.asarray(hdul[0].data, dtype=np.float64)
+        header = hdul[0].header.copy()
+    with fits.open(expmap_path) as hdul:
+        exposure = np.asarray(hdul[0].data, dtype=np.float64)
+    mapper = load_psf_product(psfprod_path)
+    if not isinstance(mapper, ObservationPSFMapper):
+        raise TypeError("Per-OBSID detection masks require an observation PSF product.")
+    r90 = np.asarray(mapper.radius_map(0.90), dtype=np.float64)
+    theta_max = float(np.nanmax(mapper.theta_map_arcmin))
+    mask = (
+        np.isfinite(image)
+        & np.isfinite(exposure)
+        & (exposure > 0.0)
+        & np.isfinite(r90)
+        & (r90 > 0.0)
+    )
+    header["MASKTYPE"] = ("DETECT", "Mask valid for stacked source detection")
+    header["THMAXCAL"] = (theta_max, "Largest calibrated off-axis angle [arcmin]")
+    fits.writeto(out_path, mask.astype(np.uint8), header, overwrite=True)
+    return {
+        "path": str(out_path),
+        "valid_pixels": int(np.count_nonzero(mask)),
+        "theta_max_caldb": theta_max,
+    }
 
 
 def _stream_identity(evt_dict: dict) -> tuple[str, str, str, str, str]:
@@ -378,39 +482,30 @@ def _extract_evt_stage1_products(
             cwd=sub_log_dir,
         )
 
-    eefmap_paths = {
-        energy_range_suffix(energy_range): os.path.join(
-            obsid_out_dir,
-            f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}_{energy_range_suffix(energy_range)}.eef",
-        )
-        for energy_range in image_energy_ranges
-    }
     first_image_key = energy_range_suffix(image_energy_ranges[0])
     first_lc_key = energy_range_suffix(lightcurve_energy_ranges[0])
     instrument = module_to_instrument(module)
     filter_name = filter_code_to_name(filt)
-    for energy_range in image_energy_ranges:
-        suffix = energy_range_suffix(energy_range)
-        if os.path.exists(eefmap_paths[suffix]) and skip_existing:
-            continue
-        emin, emax = energy_range
-        optaxis_x, optaxis_y = infer_optaxis_from_image(image_paths[suffix])
+    psfprod_path = os.path.join(
+        obsid_out_dir,
+        f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_{datatype}_{ver}.psfprod.fits",
+    )
+    if not (os.path.exists(psfprod_path) and skip_existing):
+        detect_emin, detect_emax = image_energy_ranges[0]
         run_cmd(
             " ".join([
-                "fxteefmap",
-                image_paths[suffix],
-                "--out", eefmap_paths[suffix],
+                "fxtpsfgen",
+                "build-obs",
+                image_paths[first_image_key],
                 "--expmap", exp_path,
-                "--mission", "ep-fxt",
                 "--instrument", instrument,
                 "--filter", filter_name,
-                "--emin", f"{emin}",
-                "--emax", f"{emax}",
-                "--optaxis-x", f"{optaxis_x}",
-                "--optaxis-y", f"{optaxis_y}",
+                "--emin", f"{detect_emin}",
+                "--emax", f"{detect_emax}",
+                "--out", psfprod_path,
             ]),
             logger=obsid_logger,
-            logname=os.path.join(sub_log_dir, f"fxteefmap_evt_{suffix}.log"),
+            logname=os.path.join(sub_log_dir, "fxtpsfgen_evt.log"),
             cwd=sub_log_dir,
         )
 
@@ -422,7 +517,7 @@ def _extract_evt_stage1_products(
         detection_mask_meta = build_detection_mask(
             image_path=image_paths[first_image_key],
             expmap_path=exp_path,
-            eefmap_path=eefmap_paths[first_image_key],
+            psfprod_path=psfprod_path,
             out_path=detection_mask_path,
         )
         if obsid_logger is not None:
@@ -439,8 +534,7 @@ def _extract_evt_stage1_products(
         "images": image_paths,
         "image_band_channels": image_band_channels,
         "vexpmap": exp_path,
-        "eefmap": eefmap_paths[first_image_key],
-        "eefmaps": eefmap_paths,
+        "psfprod": psfprod_path,
         "detection_mask": detection_mask_path,
         "exp": fits.getval(exp_path, ext=0, keyword="EXPOSURE"),
         "alllc": lightcurve_paths[first_lc_key],
@@ -713,34 +807,24 @@ def fxt_extract_spec(
             )
             finalize_xselect_log(obsid_out_dir, os.path.join(sub_log_dir, "xselect_evt_stage4_spec.log"))
 
-        arf_path = os.path.join(obsid_out_dir, f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_evt_{ver}_src.arf")
-        if not (os.path.exists(arf_path) and skip_existing):
-            run_cmd(
-                " ".join([
-                    "fxtarfgen",
-                    f"specfile={srcpi_path}",
-                    f"expfile={prod['vexpmap']}",
-                    "extend=0",
-                    "psfcor=1",
-                    f"outfile={arf_path}",
-                    "clobber=yes",
-                ]),
-                logger=obsid_logger,
-                logname=os.path.join(sub_log_dir, "fxtarfgen.log"),
-                cwd=sub_log_dir,
-            )
-
         rmf_path = os.path.join(obsid_out_dir, f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_evt_{ver}_src.rmf")
-        if not (os.path.exists(rmf_path) and skip_existing):
+        arf_path = os.path.join(obsid_out_dir, f"fxt_{module}_{obsid}_{datamode}_{filt}_{pp}_evt_{ver}_src.arf")
+        if not (os.path.exists(arf_path) and os.path.exists(rmf_path) and skip_existing):
             run_cmd(
                 " ".join([
-                    "fxtrmfgen",
-                    f"specfile={srcpi_path}",
-                    f"outfile={rmf_path}",
-                    "clobber=yes",
+                    "fxtrspgen",
+                    f'"{srcpi_path}"',
+                    f'"{prod["vexpmap"]}"',
+                    f'"{src_reg_fname}"',
+                    "--arf-out",
+                    f'"{arf_path}"',
+                    "--rmf-out",
+                    f'"{rmf_path}"',
+                    "--update-pha",
+                    "--clobber",
                 ]),
                 logger=obsid_logger,
-                logname=os.path.join(sub_log_dir, "fxtrmfgen.log"),
+                logname=os.path.join(sub_log_dir, "fxtrspgen.log"),
                 cwd=sub_log_dir,
             )
 
@@ -748,8 +832,6 @@ def fxt_extract_spec(
         emit(obsid_logger, "info", "Running fxtplotgrade ...")
         # keep as a logged no-op until the existing plotting workflow is re-enabled
         fits.setval(srcpi_path, ext=1, keyword="BACKFILE", value=os.path.basename(bkgpi_path), comment="bkg")
-        fits.setval(srcpi_path, ext=1, keyword="RESPFILE", value=os.path.basename(rmf_path), comment="rmf")
-        fits.setval(srcpi_path, ext=1, keyword="ANCRFILE", value=os.path.basename(arf_path), comment="arf")
         fits.setval(bkgpi_path, ext=1, keyword="RESPFILE", value=os.path.basename(rmf_path), comment="rmf")
         fits.setval(bkgpi_path, ext=1, keyword="ANCRFILE", value=os.path.basename(arf_path), comment="arf")
         fits.setval(rmf_path, ext=1, keyword="ANCRFILE", value=os.path.basename(arf_path), comment="arf")

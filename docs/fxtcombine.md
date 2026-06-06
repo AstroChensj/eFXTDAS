@@ -9,9 +9,9 @@ The current workflow:
 - scans multiple OBSID directories and builds one coupled per-stream workflow from each `evt`
 - for `FF` mode with matching `fsaevt`, processes `fsaevt` first, derives a flare-screened GTI with `fxtbkgoptrate`, then reuses that GTI for both `fsaevt` and `evt`
 - in that flare-screening step, shells out to the installed `fxtbkgoptrate` task and records one dedicated command log under the per-OBSID log directory
-- for `evt`, creates clean events, multi-band images/light curves, exposure maps, and EEF bundles
+- for `evt`, creates clean events, multi-band images/light curves, exposure maps, and observation PSF products
 - for `fsaevt`, creates the cleaned FSA products needed by `fxtbkggen` and predicts one instrumental-background spectrum per OBSID
-- reprojects and stacks `evt` images, exposure maps, and EEF bundles onto a common reference frame
+- reprojects and stacks `evt` images and exposure maps onto a common reference frame, then builds one default stacked PSF product
 - runs `fxtsrcdet` on the stacked `evt` image
 - runs `fxtregions` to generate source and background extraction regions
 - re-enters each OBSID to extract source/background spectra and response products from `evt`
@@ -102,7 +102,7 @@ fxtcombine_pipeline(
       for the relevant FXT module and then applied through `xselect`
     - one image is generated per range
     - the first requested image band is used by default for later stacked source
-      detection, and its `emin`/`emax` are also passed to `fxteefmap`,
+      detection, and its `emin`/`emax` are also passed to `fxtpsfgen`,
       `fxtsrcdet`, and `fxtregions`
   - `--lightcurve-energy-ranges`
     - comma-separated energy ranges in keV such as `0.1:12.0,10.0:12.0`
@@ -279,11 +279,9 @@ then the layout is conceptually:
 |   |   |   |   |-- fxtgtigen_evt.log
 |   |   |   |   |-- xselect_evt_stage1.log
 |   |   |   |   |-- fxtexpogen_evt.log
-|   |   |   |   |-- fxteefmap_evt_e00300_10000.log
-|   |   |   |   |-- fxteefmap_evt_e01000_03000.log
+|   |   |   |   |-- fxtpsfgen_evt.log
 |   |   |   |   |-- xselect_evt_stage4_spec.log
-|   |   |   |   |-- fxtarfgen.log
-|   |   |   |   |-- fxtrmfgen.log
+|   |   |   |   |-- fxtrspgen.log
 |   |   |   |-- <module>_<obsid>_<mode>_<filter>_<pp>_fsaevt_<ver>/
 |   |   |   |   |-- fsaevt_flare.xsl
 |   |   |   |   |-- fsaevt_stage1.xsl
@@ -306,14 +304,12 @@ then the layout is conceptually:
 |   |-- stack_exp.fits
 |   |-- stack_cts.fits
 |   |-- stack_rate.fits
-|   |-- stack_eef.fits
+|   |-- stack_psfprod.fits
 |   |-- stack_mask.fits
 |   |-- e00300_10000_stack_cts.fits
 |   |-- e00300_10000_stack_rate.fits
-|   |-- e00300_10000_stack_eef.fits
 |   |-- e01000_03000_stack_cts.fits
 |   |-- e01000_03000_stack_rate.fits
-|   |-- e01000_03000_stack_eef.fits
 |   |-- stack_src.fits
 |   |-- stack_src.reg
 |   |-- stack_bkgmap.fits
@@ -335,7 +331,7 @@ then the layout is conceptually:
   - original input archive for each observation
 - `out_dir/<obsid>/products/`
   - all per-OBSID intermediate and extracted products
-  - this includes the per-band `.img`, `.lc`, and `.eef` products plus
+  - this includes the per-band `.img`, `.lc`, and single-observation `.psfprod.fits` products plus
     per-OBSID step logs under `products/log/`
   - in `FF` mode with matching `fsaevt`, this also includes the flare-screening
     light curve, flare GTIs, cleaned FSA products, and one predicted
@@ -400,11 +396,12 @@ For stacking:
   - explicit band-labelled names:
     - `e00300_10000_stack_cts.fits`
     - `e00300_10000_stack_rate.fits`
-    - `e00300_10000_stack_eef.fits`
 - additional image bands are written only with explicit band labels
 - one stacked analysis mask is built from the default stacked count image and
   stacked exposure map:
   - `stack_mask.fits`
+- one default stacked PSF product is also written for source detection and fitting:
+  - `stack_psfprod.fits`
 
 ### The Summary JSON Structure
 
@@ -418,7 +415,7 @@ all_obsid.json
 |   |   |-- image
 |   |   |-- images
 |   |   |-- vexpmap
-|   |   |-- eefmaps
+|   |   |-- psfprod
 |   |   |-- exp
 |   |   |-- lightcurves
 |   |   |-- screened_gti
@@ -512,7 +509,7 @@ For each selected OBSID and each coupled event stream:
 6. apply the screened GTI, or the base GTI when flare screening is skipped
 7. run `xselect` for cleaned `evt`, one image per requested image band, and one whole-field light curve per requested light-curve band
 8. run `fxtexpogen` to produce a vignetted exposure map
-9. run `fxteefmap` on each requested image energy band to produce one per-OBSID EEF bundle per band
+9. run `fxtpsfgen build-obs` once per observation to produce one observation PSF product
 10. for `fsaevt`, run `fxtbkggen` on the cleaned FSA spectrum to predict one instrumental-background spectrum for the image area
 
 This stage creates the per-OBSID products that are later stacked.
@@ -559,8 +556,7 @@ Only `evt` enters this stage. After the stacked source/background regions are cr
 - extracts source-filtered events
 - extracts source and background PI spectra
 - extracts source and background light curves
-- runs `fxtarfgen`
-- runs `fxtrmfgen`
+- runs `fxtrspgen` to generate both the per-OBSID ARF and RMF
 - updates OGIP header keywords so the products are internally linked
 
 ### 5. Spectral Stacking
@@ -588,7 +584,7 @@ Per-OBSID logs are written under:
 
 - `<out-dir>/<OBSID>/products/log/`
 
-Command-specific logs such as `xselect.log`, `fxtarfgen.log`, and `fxtbkggen.log` are written beside the stage that generated them.
+Command-specific logs such as `xselect.log`, `fxtrspgen.log`, and `fxtbkggen.log` are written beside the stage that generated them.
 
 For the `FF`/`fsaevt` flare-screening substep, the dedicated optimizer command log is:
 

@@ -7,7 +7,7 @@ import shutil
 
 from astropy.io import fits
 
-from fxtcaldb.metadata import SpectrumMetadata
+from fxtcaldb.query import ObservationMetadata
 from fxtcaldb.response import resolve_rmf
 
 
@@ -41,7 +41,7 @@ def _normalize_rmf_headers(outfile: str, specfile: str) -> None:
 def generate_rmf(
     specfile: str,
     outfile: str,
-    metadata: SpectrumMetadata,
+    metadata: ObservationMetadata,
     clobber: bool = False,
 ) -> str:
     """Generate an RMF file chosen from CALDB.
@@ -52,7 +52,7 @@ def generate_rmf(
         Input PHA path.
     outfile : str
         Output RMF path.
-    metadata : SpectrumMetadata
+    metadata : ObservationMetadata
         Spectrum metadata used for CALDB lookup.
     clobber : bool, optional
         Overwrite the output if it exists.

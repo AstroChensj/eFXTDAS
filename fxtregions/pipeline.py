@@ -5,14 +5,13 @@ from __future__ import annotations
 
 import argparse
 import logging
-import math
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from astropy.coordinates import SkyCoord
 
-from fxtpsf_helpers import build_mission_psf_context, infer_optical_axis
+from fxtpsfgen.mapper import build_observation_psf_mapper
 from fxtregions.auto import (
     auto_background_annulus_pix,
     auto_source_radius_pix,
@@ -51,8 +50,6 @@ def build_regions(
     bkg_inner_arcsec: float | None = None,
     bkg_outer_arcsec: float | None = None,
     match_threshold_arcsec: float = FXT_POSITION_ERR90_ARCSEC,
-    optaxis_x: float | None = None,
-    optaxis_y: float | None = None,
     src_regfile: Path | None = None,
     bkg_regfile: Path | None = None,
     logger: logging.Logger | None = None,
@@ -92,10 +89,6 @@ def build_regions(
         Manual background annulus outer radius in arcseconds.
     match_threshold_arcsec : float
         Maximum catalog-match separation in arcseconds.
-    optaxis_x : float | None
-        Optional optical-axis x coordinate in 1-based image pixels.
-    optaxis_y : float | None
-        Optional optical-axis y coordinate in 1-based image pixels.
     src_regfile : Path | None
         Optional output path for the source region file. When supplied, the
         region file is written inside this function.
@@ -171,8 +164,9 @@ def build_regions(
             )
 
     #--- read psf
-    psf_context = build_mission_psf_context(
-        mission=mission,
+    psf_mapper = build_observation_psf_mapper(
+        image_path=str(image_path),
+        expmap_path=None,
         instrument=instrument,
         filter_name=filter_name,
         emin_keV=emin_keV,
@@ -181,8 +175,6 @@ def build_regions(
     x_cen, y_cen = wcs.world_to_pixel(adopted_coord)
     x_cen = float(np.asarray(x_cen))
     y_cen = float(np.asarray(y_cen))
-    opt_x, opt_y = infer_optical_axis(image_ccd.data.shape, optaxis_x, optaxis_y)
-    theta_arcmin = math.hypot((x_cen + 1.0) - opt_x, (y_cen + 1.0) - opt_y) * pixel_scale / 60.0
 
     #--- resolve required catalog schema explicitly
     ra_col = find_column(catalog, ["RA"])
@@ -196,7 +188,7 @@ def build_regions(
     emit(logger, "info", "Determining source type and local PSF ...")
     source_type = "point" if not matched else str(matched_row[source_type_col]).lower()
     fitted_extent_sigma_pix = 0.0 if not matched else float(matched_row[ext_col]) / pixel_scale
-    kernel, rr, cum = source_kernel(psf_context, theta_arcmin, source_type, fitted_extent_sigma_pix)
+    kernel, rr, cum = source_kernel(psf_mapper, x_cen + 1.0, y_cen + 1.0, source_type, fitted_extent_sigma_pix)
     psf_r90_pix = np.interp(0.90, cum, rr)
     psf_r99_pix = np.interp(0.99, cum, rr)
 
@@ -325,10 +317,10 @@ def build_regions(
         nx, ny = wcs.world_to_pixel(neighbor_coord)
         nx = float(np.asarray(nx))
         ny = float(np.asarray(ny))
-        neighbor_theta = math.hypot((nx + 1.0) - opt_x, (ny + 1.0) - opt_y) * pixel_scale / 60.0
         nkernel, nrr, ncum = source_kernel(
-            psf_context,
-            neighbor_theta,
+            psf_mapper,
+            nx + 1.0,
+            ny + 1.0,
             str(row[source_type_col]).lower(),
             float(row[ext_col]) / pixel_scale,
         )   # cumulative surface brightness profile
@@ -485,8 +477,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bkg-inner", type=float, default=None, help="Manual background annulus inner radius in arcsec")
     p.add_argument("--bkg-outer", type=float, default=None, help="Manual background annulus outer radius in arcsec")
     p.add_argument("--match-threshold", type=float, default=FXT_POSITION_ERR90_ARCSEC, help="Catalog matching threshold in arcsec")
-    p.add_argument("--optaxis-x", type=float, default=None, help="Optical-axis X position in 1-based image pixels")
-    p.add_argument("--optaxis-y", type=float, default=None, help="Optical-axis Y position in 1-based image pixels")
     p.add_argument("--src-regfile", type=Path, default=Path("source.reg"), help="Output source DS9 region file")
     p.add_argument("--bkg-regfile", type=Path, default=Path("background.reg"), help="Output background DS9 region file")
     p.add_argument("--log-level", type=str, default="INFO", help="Logging level for CLI and output log file")
@@ -524,8 +514,6 @@ def main() -> None:
         bkg_inner_arcsec=args.bkg_inner,
         bkg_outer_arcsec=args.bkg_outer,
         match_threshold_arcsec=args.match_threshold,
-        optaxis_x=args.optaxis_x,
-        optaxis_y=args.optaxis_y,
         src_regfile=args.src_regfile,
         bkg_regfile=args.bkg_regfile,
         logger=logger,

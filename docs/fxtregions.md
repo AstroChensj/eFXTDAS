@@ -16,12 +16,16 @@ Unlike eSASS `srctool`, the current implementation does not use catalog flags su
 
 ```{admonition} Warning on current source region
 :class: warning
-`fxtarfgen` does not recognize complex shape in source region, so at the moment, the exclusion region in source is disabled!
+`fxtregions` currently writes the source region as a plain aperture without
+source-side exclusion carving.
 
-It means that nearby confusing source around target could contaminate source counts. 
+It means that nearby confusing sources around the target could still contaminate
+the extracted source counts when this region is used directly.
 ```
 
-`fxtrspgen` removes that response-generation limitation by accepting an external DS9 source region with supported exclusion composition and generating a standalone ARF/RMF pair from that region.
+`fxtrspgen` can generate the response pair from an external DS9 source region
+that already contains supported exclusion composition, but `fxtregions` itself
+does not currently emit such carved source-region geometry.
 
 ## Basic Usage
 
@@ -220,8 +224,7 @@ The products mean:
   - DS9/XSELECT-readable source extraction region
   - centered on the adopted target coordinate
   - in current practice, this is written as a plain source aperture without
-    carved source exclusions, because complex source-region geometry can confuse
-    downstream `fxtarfgen`
+    carved source exclusions
 - `background.reg`
   - DS9/XSELECT-readable background annulus region
   - includes contaminating-source exclusion regions where needed

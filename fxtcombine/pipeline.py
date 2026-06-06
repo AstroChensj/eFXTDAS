@@ -16,6 +16,7 @@ from astropy.io.fits.verify import VerifyWarning
 from astropy.wcs import WCS
 from astropy.wcs import FITSFixedWarning
 from reproject import reproject_interp
+from astropy.wcs import WCS
 from tqdm import tqdm
 
 from fxtcombine.config import (
@@ -31,6 +32,7 @@ from fxtcombine.utils.fxtchain_simplified import fxtchain_obsid, fxt_extract_spe
 from fxtcombine.utils.fxtprep import get_input_files
 from fxtcombine.utils.image import reproject_events_xy_to_refwcs
 from fxtcombine.utils.spectrum import stack_instbkg_spectra
+from fxtpsfgen.mapper import build_stacked_psf_mapper
 
 
 def _run_stage1_obsid(
@@ -297,10 +299,10 @@ def fxtcombine_pipeline(
 				emit(main_logger, "info", f"Finished Stage 1 for {obsid_name}.")
 
 
-	#===================================================
-	#--- stack all images, expmaps and eefmaps; evt only
-	#===================================================
-	emit(main_logger, "info", "**** Stage 2: stacking evt images, exposure maps, and EEF maps ****")
+	#=================================================
+	#--- stack all images, expmaps and PSF products
+	#=================================================
+	emit(main_logger, "info", "**** Stage 2: stacking evt images, exposure maps, and PSF products ****")
 	os.makedirs(stack_dir,exist_ok=True)
 	detection_image_suffix = energy_range_suffix(image_energy_ranges[0])
 	detect_emin, detect_emax = image_energy_ranges[0]
@@ -310,7 +312,6 @@ def fxtcombine_pipeline(
 	exp_lst = []
 	detect_mask_fname_lst = []
 	img_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
-	eef_fname_map = { energy_range_suffix(energy_range): [] for energy_range in image_energy_ranges }
 	image_band_channels_map = {}
 
 	for obsid, obsid_prod_dict in all_prod_dict.items():
@@ -318,7 +319,6 @@ def fxtcombine_pipeline(
 			clevt_fname_lst.append(prod["evt_clevt"])
 			for image_key in img_fname_map:
 				img_fname_map[image_key].append(prod["images"][image_key])
-				eef_fname_map[image_key].append(prod["eefmaps"][image_key])
 			if not image_band_channels_map:
 				image_band_channels_map = dict(prod["image_band_channels"])
 			exp_fname_lst.append(prod["vexpmap"])
@@ -340,8 +340,6 @@ def fxtcombine_pipeline(
 	detect_mask_fname_lst = detect_mask_fname_lst[idx_sort]
 	for image_key, img_list in img_fname_map.items():
 		img_fname_map[image_key] = np.array(img_list)[idx_sort]
-	for image_key, eef_list in eef_fname_map.items():
-		eef_fname_map[image_key] = np.array(eef_list)[idx_sort]
 	exp_tot = np.sum(exp_lst)
 
 	##--- logging all files
@@ -434,55 +432,25 @@ def fxtcombine_pipeline(
 	fits.writeto(exp_sum_fname,exp_sum,refexp.header,overwrite=True)
 	emit(main_logger, "info", f"Stacked exposure map written to {exp_sum_fname}")
 	
-	##--- reproject and stack eefmap for each requested energy range
-	stack_eefmap_map = {}
-	for energy_range in image_energy_ranges:
-		image_key = energy_range_suffix(energy_range)
-		eef_fname_lst = eef_fname_map[image_key]
-		emit(main_logger, "info", f"Reprojecting and stacking EEF maps for {image_key} ...")
-		with warnings.catch_warnings():
-			warnings.simplefilter("ignore", VerifyWarning)
-			warnings.simplefilter("ignore", FITSFixedWarning)
-			with fits.open(eef_fname_lst[0]) as hdul:
-				eef_primary_header = hdul[0].header.copy()
-				eef_extnames = [hdu.name for hdu in hdul[1:]]
-		eef_numerators = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
-		eef_weight_sums = {extname: np.zeros(refimg_shape, dtype=np.float64) for extname in eef_extnames}
-		for eef_fname_i, exp_fname_i in zip(eef_fname_lst, exp_fname_lst):
-			with warnings.catch_warnings():
-				warnings.simplefilter("ignore", VerifyWarning)
-				warnings.simplefilter("ignore", FITSFixedWarning)
-				with fits.open(exp_fname_i) as hdu:
-					exp_i = hdu[0]
-					exp_data_i = exp_i.data
-					exp_wcs_i = WCS(exp_i.header)
-			exp_reproj_i, exp_footprint_i = reproject_interp((exp_data_i, exp_wcs_i), refexp_wcs, shape_out=refexp_shape)
-			exp_weight_i = np.where(np.isfinite(exp_reproj_i) & (exp_footprint_i > 0), exp_reproj_i, 0.0)
-			with warnings.catch_warnings():
-				warnings.simplefilter("ignore", VerifyWarning)
-				warnings.simplefilter("ignore", FITSFixedWarning)
-				with fits.open(eef_fname_i) as hdul:
-					eef_wcs_i = WCS(hdul[1].header)
-					for extname in eef_extnames:
-						eef_data_i = hdul[extname].data
-						eef_reproj_i, eef_footprint_i = reproject_interp((eef_data_i, eef_wcs_i), refimg_wcs, shape_out=refimg_shape)
-						valid_i = np.isfinite(eef_reproj_i) & (eef_footprint_i > 0) & (exp_weight_i > 0) & (eef_reproj_i > 0.0)
-						eef_numerators[extname][valid_i] += eef_reproj_i[valid_i] * exp_weight_i[valid_i]
-						eef_weight_sums[extname][valid_i] += exp_weight_i[valid_i]
-		eef_hdus = [fits.PrimaryHDU(header=eef_primary_header)]
-		for extname in eef_extnames:
-			eef_stack = np.zeros(refimg_shape, dtype=np.float32)
-			valid = eef_weight_sums[extname] > 0
-			eef_stack[valid] = (eef_numerators[extname][valid] / eef_weight_sums[extname][valid]).astype(np.float32)
-			eef_hdus.append(fits.ImageHDU(data=eef_stack, header=refimg.header.copy(), name=extname))
-		stack_eefmap_fname = os.path.join(stack_dir, f"{image_key}_stack_eef.fits")
-		fits.HDUList(eef_hdus).writeto(stack_eefmap_fname, overwrite=True)
-		emit(main_logger, "info", f"Stacked EEF map bundle written to {stack_eefmap_fname}")
-		stack_eefmap_map[image_key] = stack_eefmap_fname
-		if image_key == detection_image_suffix:
-			stack_eefmap_default_fname = os.path.join(stack_dir, "stack_eef.fits")
-			fits.HDUList(eef_hdus).writeto(stack_eefmap_default_fname, overwrite=True)
-			emit(main_logger, "info", f"Default stacked EEF map bundle also written to {stack_eefmap_default_fname}")
+	##--- build one stacked PSF product for the default detection band
+	psfprod_fname_lst = []
+	weight_fname_lst = []
+	for obsid in obsid_lst:
+		obsid_prod_dict = all_prod_dict[obsid]
+		for _stream_key, prod in obsid_prod_dict.items():
+			psfprod_path = prod.get("psfprod")
+			if psfprod_path is None:
+				continue
+			psfprod_fname_lst.append(psfprod_path)
+			weight_fname_lst.append(prod["vexpmap"])
+	if not psfprod_fname_lst:
+		raise ValueError("No per-observation PSF products were produced during Stage 1.")
+	with fits.open(default_cts_sum_fname) as hdu:
+		ref_header = hdu[0].header.copy()
+	stack_psfprod_default_fname = os.path.join(stack_dir, "stack_psfprod.fits")
+	stacked_psf = build_stacked_psf_mapper(psfprod_fname_lst, weight_fname_lst, ref_header)
+	stacked_psf.write(stack_psfprod_default_fname)
+	emit(main_logger, "info", f"Stacked PSF product written to {stack_psfprod_default_fname}")
 	
 	##--- obtain stacked rate image for each image band
 	finite_exp = exp_sum[np.isfinite(exp_sum)]
@@ -503,8 +471,6 @@ def fxtcombine_pipeline(
 	
 	stack_expmap_default_fname = exp_sum_fname
 	stack_image_default_fname = default_cts_sum_fname
-	stack_eefmap_default_fname = stack_eefmap_map[detection_image_suffix]
-
 	##--- generate stacked analysis mask for the default detection band
 	stack_mask_fname = os.path.join(stack_dir, "stack_mask.fits")
 	with warnings.catch_warnings():
@@ -554,7 +520,6 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", "**** Stage 3: source detection and region file creation ****")
 	stack_image_fname = stack_image_default_fname
 	stack_expmap_fname = stack_expmap_default_fname
-	stack_eefmap_fname = stack_eefmap_default_fname
 	srcdet_src_fname = os.path.join(stack_dir, "stack_src.fits")
 	srcdet_reg_fname = os.path.join(stack_dir, "stack_src.reg")
 	srcdet_bkg_fname = os.path.join(stack_dir, "stack_bkgmap.fits")
@@ -564,7 +529,7 @@ def fxtcombine_pipeline(
 		f'"{stack_image_fname}"',
 		"--expmap", f'"{stack_expmap_fname}"',
 		"--mask", f'"{stack_mask_fname}"',
-		"--eefmap", f'"{stack_eefmap_fname}"',
+		"--psfprod", f'"{stack_psfprod_default_fname}"',
 		"--mission", "ep-fxt",
 		"--emin", f"{detect_emin}",
 		"--emax", f"{detect_emax}",

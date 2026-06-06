@@ -15,13 +15,14 @@ from astropy.nddata import CCDData
 from astropy.wcs import FITSFixedWarning
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-from fxtpsf_helpers import (
+from fxtcaldb.optics import compute_optical_axis_pixel
+from fxtcaldb.psf import (
     available_theta_arcmin,
     build_mission_psf_context,
     eef_radius,
-    infer_optical_axis,
     load_local_eef,
 )
+from fxtcaldb.query import read_observation_metadata
 from fxteefmap.config import DEFAULT_PIXEL_SCALE_ARCSEC
 from fxteefmap.utils.logger import build_cli_logger, emit
 
@@ -76,6 +77,29 @@ def _infer_pixel_scale_arcsec(wcs: Any | None, fallback: float) -> float:
     return pixel_scale_arcsec if pixel_scale_arcsec > 0 else float(fallback)
 
 
+def _require_optaxis(optaxis_x: float | None, optaxis_y: float | None) -> tuple[float, float]:
+    """Validate that optical-axis coordinates are available.
+
+    Parameters
+    ----------
+    optaxis_x : float | None
+        Optical-axis x coordinate in 1-based image pixels.
+    optaxis_y : float | None
+        Optical-axis y coordinate in 1-based image pixels.
+
+    Returns
+    -------
+    tuple[float, float]
+        Optical-axis coordinates in 1-based image pixels.
+    """
+    if optaxis_x is None or optaxis_y is None:
+        raise ValueError(
+            "Optical-axis coordinates are required for EEF map generation. "
+            "Compute them from calibrated metadata upstream or pass optaxis_x/optaxis_y explicitly."
+        )
+    return float(optaxis_x), float(optaxis_y)
+
+
 def build_eef_radius_map(
     image: np.ndarray,
     pixel_scale_arcsec: float,
@@ -128,7 +152,7 @@ def build_eef_radius_map(
         emin_keV=emin_keV,
         emax_keV=emax_keV,
     )
-    opt_x, opt_y = infer_optical_axis(image.shape, optaxis_x, optaxis_y)
+    opt_x, opt_y = _require_optaxis(optaxis_x, optaxis_y)
     yy, xx = np.indices(image.shape, dtype=np.float64)
     theta_map = np.hypot((xx + 1.0) - opt_x, (yy + 1.0) - opt_y) * float(pixel_scale_arcsec) / 60.0
 
@@ -216,7 +240,7 @@ def build_eef_radius_maps(
         emin_keV=emin_keV,
         emax_keV=emax_keV,
     )
-    opt_x, opt_y = infer_optical_axis(image.shape, optaxis_x, optaxis_y)
+    opt_x, opt_y = _require_optaxis(optaxis_x, optaxis_y)
     yy, xx = np.indices(image.shape, dtype=np.float64)
     theta_map = np.hypot((xx + 1.0) - opt_x, (yy + 1.0) - opt_y) * float(pixel_scale_arcsec) / 60.0
 
@@ -296,8 +320,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--emax", type=float, default=None, help="Upper image energy bound in keV.")
     p.add_argument("--eeffrac", type=float, default=None, help="Requested encircled-energy fraction in [0,1]; when omitted, write multi-extension output with the standard fractions.")
     p.add_argument("--fractions", type=float, nargs="+", default=[0.50, 0.75, 0.80, 0.90], help="Encircled-energy fractions for multi-extension output.")
-    p.add_argument("--optaxis-x", type=float, default=None, help="Optical-axis X position in 1-based image pixels; defaults to image center.")
-    p.add_argument("--optaxis-y", type=float, default=None, help="Optical-axis Y position in 1-based image pixels; defaults to image center.")
+    p.add_argument("--optaxis-x", type=float, default=None, help="Optical-axis X position in 1-based image pixels; defaults to calibrated metadata projection.")
+    p.add_argument("--optaxis-y", type=float, default=None, help="Optical-axis Y position in 1-based image pixels; defaults to calibrated metadata projection.")
     p.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level for CLI and output log file.")
     p.add_argument("--log-file", type=Path, default=None, help="Optional log file path; defaults to <out>.log.")
     return p
@@ -314,6 +338,12 @@ def main() -> None:
     header = _load_header(args.image)
     wcs = _load_wcs(args.image)
     pixel_scale_arcsec = _infer_pixel_scale_arcsec(wcs, DEFAULT_PIXEL_SCALE_ARCSEC)
+    optaxis_x = args.optaxis_x
+    optaxis_y = args.optaxis_y
+    if optaxis_x is None or optaxis_y is None:
+        metadata = read_observation_metadata(str(args.image), preferred_ext=0)
+        optaxis_x, optaxis_y = compute_optical_axis_pixel(metadata, wcs)
+        emit(logger, "info", f"Projected optical axis from metadata: ({optaxis_x:.3f}, {optaxis_y:.3f})")
     emit(logger, "info", f"Using pixel scale = {pixel_scale_arcsec:.4f} arcsec/pixel")
     if args.eeffrac is not None:
         emit(logger, "info", f"Building single EEF-radius map for fraction {float(np.clip(args.eeffrac, 0.0, 1.0)):.3f}")
@@ -326,8 +356,8 @@ def main() -> None:
             filter_name=args.filter_name,
             emin_keV=args.emin,
             emax_keV=args.emax,
-            optaxis_x=args.optaxis_x,
-            optaxis_y=args.optaxis_y,
+            optaxis_x=optaxis_x,
+            optaxis_y=optaxis_y,
             exposure_map=exposure,
         )
 
@@ -357,8 +387,8 @@ def main() -> None:
         filter_name=args.filter_name,
         emin_keV=args.emin,
         emax_keV=args.emax,
-        optaxis_x=args.optaxis_x,
-        optaxis_y=args.optaxis_y,
+        optaxis_x=optaxis_x,
+        optaxis_y=optaxis_y,
         exposure_map=exposure,
     )
     _save_multi_extension_maps(args.out, maps, header, meta)

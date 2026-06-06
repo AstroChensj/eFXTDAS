@@ -43,7 +43,25 @@ class UnsupportedRegionError(ValueError):
 
 @dataclass(frozen=True)
 class RegionSet:
-    """Parsed region collection and its combined inclusion mask."""
+    """Parsed region collection and its combined inclusion mask.
+    
+    - pixel_regions:
+        The individual parsed region objects, already converted into image
+        /pixel-space regions. This preserves the original DS9 region 
+        components so later code can still inspect the underlying shapes 
+        if needed. Note that subtraction flag is not labeled.
+
+    - mask:
+        The combined 2D inclusion mask on the exposure/image grid. This is 
+        the actual rasterized aperture used for calculations. It includes 
+        positive regions and subtracts excluded regions, and can contain 
+        fractional values if oversampling is used.
+
+    - first_positive_center_xy:
+        The center of the first positive DS9 region component in pixel 
+        coordinates. This is only used as the fallback source position when 
+        the user did not explicitly provide srcx/srcy or ra/dec.
+    """
 
     pixel_regions: tuple[object, ...]
     mask: np.ndarray
@@ -68,7 +86,10 @@ def _mask_to_image(mask_object, image_shape: tuple[int, int]) -> np.ndarray:
 
 
 def _region_to_mask_image(pixel_region: object, image_shape: tuple[int, int], oversample: int) -> np.ndarray:
-    """Rasterize one pixel region to an image mask."""
+    """Rasterize one pixel region to an image mask.
+    
+    WARNING: only circle region is being handled at the moment.
+    """
     if isinstance(pixel_region, CircleAnnulusPixelRegion):
         outer_mask = _mask_to_image(
             CirclePixelRegion(center=pixel_region.center, radius=pixel_region.outer_radius).to_mask(
@@ -165,8 +186,25 @@ def load_region_set(
 
     Returns
     -------
-    RegionSet
+    RegionSet : RegionSet
         Parsed region set with a combined mask and fallback center.
+
+        - RegionSet.pixel_regions:
+            The individual parsed region objects, already converted into image
+            /pixel-space regions. This preserves the original DS9 region 
+            components so later code can still inspect the underlying shapes 
+            if needed. Note that subtraction flag is not labeled.
+
+        - RegionSet.mask:
+            The combined 2D inclusion mask on the exposure/image grid. This is 
+            the actual rasterized aperture used for calculations. It includes 
+            positive regions and subtracts excluded regions, and can contain 
+            fractional values if oversampling is used.
+
+        - RegionSet.first_positive_center_xy:
+            The center of the first positive DS9 region component in pixel 
+            coordinates. This is only used as the fallback source position when 
+            the user did not explicitly provide srcx/srcy or ra/dec.
     """
     parsed = Regions.read(Path(regionfile), format="ds9")
     include_mask = np.zeros(image_shape, dtype=np.float64)

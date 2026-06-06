@@ -1,5 +1,13 @@
 # `fxteefmap`
 
+```{admonition} Legacy Internal Task
+:class: note
+`fxteefmap` is no longer part of the main installed public CLI surface
+documented in `README.md` and `docs/index.md`.
+
+For supported public PSF-product workflows, use `fxtpsfgen` instead.
+```
+
 ## What It Does
 
 `fxteefmap` creates an image-sized map of local EEF radii for FXT images.

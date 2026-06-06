@@ -2,9 +2,11 @@
 
 ## What It Does
 
-`fxtrspgen` is a standalone FXT response generator that builds both the ARF and the RMF for one extracted spectrum while taking an external DS9 source-region file as the authoritative aperture definition.
+`fxtrspgen` is the current FXT response generator for one extracted spectrum
+when the source aperture is defined by an external DS9 region.
 
-It is the preferred response path when the source region is not representable by the legacy `fxtarfgen` workflow.
+It builds both the ARF and the RMF while taking that DS9 source-region file as
+the authoritative aperture definition.
 
 Compared with `fxtarfgen` and `fxtrmfgen`, `fxtrspgen`:
 
@@ -13,6 +15,7 @@ Compared with `fxtarfgen` and `fxtrmfgen`, `fxtrspgen`:
 - owns both ARF and RMF generation in one task
 - writes decomposed per-energy correction columns into the output ARF
 - does not mutate the input PHA unless asked to
+- is the response path used by `fxtcombine` Stage 4
 
 ## Basic Usage
 
@@ -42,6 +45,10 @@ To also update the spectrum headers:
 fxtrspgen source.pi source.expo source.reg \
   --update-pha
 ```
+
+This is the mode used by `fxtcombine`, which keeps the existing `..._src.arf`
+and `..._src.rmf` filenames while updating the source PHA `ANCRFILE` and
+`RESPFILE` headers in place.
 
 ## Inputs
 
@@ -106,4 +113,5 @@ The additional per-energy columns are:
 
 - By default `fxtrspgen` writes the ARF and RMF only.
 - `--update-pha` should be used only when the new response pair is intended to become the authoritative response for that exact PHA file.
-- `fxtarfgen` and `fxtrmfgen` remain unchanged; `fxtrspgen` is additive.
+- `fxtcombine` uses `--update-pha` so the source PHA headers are owned by the
+  canonical response-generation task rather than by later manual header edits.

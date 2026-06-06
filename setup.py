@@ -20,20 +20,18 @@ setup(
         include=[
             "fxtcaldb",
             "fxtcaldb.*",
+            "fxtpsfgen",
+            "fxtpsfgen.*",
             "fxtsrcdet",
             "fxtsrcdet.*",
             "fxtregions",
             "fxtregions.*",
             "fxtrspgen",
             "fxtrspgen.*",
-            "fxteefmap",
-            "fxteefmap.*",
             "fxtcombine",
             "fxtcombine.*",
             "fxtbkgoptrate",
             "fxtbkgoptrate.*",
-            "fxtpsf_helpers",
-            "fxtpsf_helpers.*",
         ]
     ),
     install_requires=[
@@ -49,7 +47,7 @@ setup(
             "fxtsrcdet=fxtsrcdet.pipeline:main",
             "fxtregions=fxtregions.pipeline:main",
             "fxtrspgen=fxtrspgen.pipeline:main",
-            "fxteefmap=fxteefmap.pipeline:main",
+            "fxtpsfgen=fxtpsfgen.pipeline:main",
             "fxtcombine=fxtcombine.pipeline:main",
             "fxtbkgoptrate=fxtbkgoptrate.pipeline:main",
         ]

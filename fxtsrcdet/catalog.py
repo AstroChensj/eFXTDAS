@@ -61,7 +61,7 @@ from fxtsrcdet.config import (
     SINGLE_SCALE_DET_LIKE_FACTOR,
     SINGLE_SCALE_DET_LIKE_FLOOR,
 )
-from fxtpsf_helpers import MissionPSFContext, build_psf_kernel, eef_radius, infer_optical_axis, load_local_eef, sample_radius_map
+from fxtpsfgen.mapper import ObservationPSFMapper, StackedPSFMapper
 from fxtsrcdet.detect import EPS
 from fxtsrcdet.background import create_background_map
 from fxtsrcdet.fit import (
@@ -98,14 +98,11 @@ def classify_sources_with_psf(
     pixel_scale_arcsec: float,
     min_det_like: float,
     min_ext_like: float,
-    psf_context: MissionPSFContext,
+    psf_mapper: ObservationPSFMapper | StackedPSFMapper | None,
     background_map: np.ndarray | None = None,
     exposure_map: np.ndarray | None = None,
     analysis_mask: np.ndarray | None = None,
-    optaxis_x: float | None = None,
-    optaxis_y: float | None = None,
     show_progress: bool = False,
-    eef_radius_maps: dict | None = None,
 ) -> list[CatalogRow]:
     """Measure PSF-aware source properties and assign final source classes.
 
@@ -124,8 +121,8 @@ def classify_sources_with_psf(
         Candidates below this threshold are classified as background.
     min_ext_like : float
         Minimum extent likelihood required for a source to be classified as extended.
-    psf_context : MissionPSFContext
-        Mission-specific PSF/EEF calibration context.
+    psf_mapper : ObservationPSFMapper | StackedPSFMapper
+        PSF mapper used for all local PSF queries and kernel generation.
     background_map : np.ndarray | None, optional
         Precomputed background map in counts per pixel. If omitted, a background map is
         constructed from the detection candidates before fitting.
@@ -135,19 +132,8 @@ def classify_sources_with_psf(
     analysis_mask : np.ndarray | None, optional
         Optional boolean mask selecting globally valid pixels for background
         estimation and local fits.
-    optaxis_x : float | None, optional
-        Optical-axis x coordinate in 1-based image pixels. If omitted, it is inferred
-        from the image geometry.
-    optaxis_y : float | None, optional
-        Optical-axis y coordinate in 1-based image pixels. If omitted, it is inferred
-        from the image geometry.
     show_progress : bool, optional
         If ``True``, display progress bars for the single-source and grouped-fit stages.
-    eef_radius_maps : dict | None, optional
-        Optional dictionary of precomputed EEF-radius maps, typically sampled from a
-        multi-extension ``fxteefmap`` product. When provided, local ``r50/r75/r80/r90``
-        values are read from these maps instead of being inferred only from the CALDB
-        EEF lookup.
 
     Returns
     -------
@@ -188,26 +174,20 @@ def classify_sources_with_psf(
         background_map = create_background_map(
             image,
             rows,
-            psf_context,
             pixel_scale_arcsec,
+            psf_mapper=psf_mapper,
             exposure_map=exposure_map,
             analysis_mask=analysis_mask,
-            optaxis_x=optaxis_x,
-            optaxis_y=optaxis_y,
-            eef_radius_maps=eef_radius_maps,
         )
     
     #--- calculate PSF R90 at each source location
-    opt_x, opt_y = infer_optical_axis(image.shape, optaxis_x, optaxis_y)
+    if psf_mapper is None:
+        raise ValueError("A PSF mapper is required for PSF-aware source classification.")
     prelim_psf_r90: list[float] = []
     for row in rows:
         x_ima = float(row.x)
         y_ima = float(row.y)
-        local_r90 = sample_radius_map(eef_radius_maps, "R90", x_ima, y_ima)
-        if local_r90 is None:
-            theta_arcmin = math.hypot(x_ima - opt_x, y_ima - opt_y) * pixel_scale_arcsec / 60.0
-            radius_pix, frac = load_local_eef(psf_context, theta_arcmin)
-            local_r90 = float(eef_radius(radius_pix, frac, 0.90))
+        local_r90 = psf_mapper.radius_at_position(x_ima, y_ima, 0.90)
         prelim_psf_r90.append(float(local_r90))
 
     #--- group nearby candidates for joint fitting
@@ -225,20 +205,12 @@ def classify_sources_with_psf(
         ##--- calculate local PSF R50, R75, R80, R90
         x0 = float(row.x - 1.0)
         y0 = float(row.y - 1.0)
-        theta_arcmin = math.hypot((x0 + 1.0) - opt_x, (y0 + 1.0) - opt_y) * pixel_scale_arcsec / 60.0
-        radius_pix, frac = load_local_eef(psf_context, theta_arcmin)
-        psf_r50_pix_nom = sample_radius_map(eef_radius_maps, "R50", row.x, row.y)
-        psf_r75_pix_nom = sample_radius_map(eef_radius_maps, "R75", row.x, row.y)
-        psf_r80_pix_nom = sample_radius_map(eef_radius_maps, "R80", row.x, row.y)
-        psf_r90_pix_nom = sample_radius_map(eef_radius_maps, "R90", row.x, row.y)
-        if psf_r50_pix_nom is None:
-            psf_r50_pix_nom = eef_radius(radius_pix, frac, 0.50)
-        if psf_r75_pix_nom is None:
-            psf_r75_pix_nom = eef_radius(radius_pix, frac, 0.75)
-        if psf_r80_pix_nom is None:
-            psf_r80_pix_nom = eef_radius(radius_pix, frac, 0.80)
-        if psf_r90_pix_nom is None:
-            psf_r90_pix_nom = eef_radius(radius_pix, frac, 0.90)
+        radius_pix, frac = psf_mapper.local_eef_curve(row.x, row.y)
+        psf_r50_pix_nom = psf_mapper.radius_at_position(row.x, row.y, 0.50)
+        psf_r75_pix_nom = psf_mapper.radius_at_position(row.x, row.y, 0.75)
+        psf_r80_pix_nom = psf_mapper.radius_at_position(row.x, row.y, 0.80)
+        psf_r90_pix_nom = psf_mapper.radius_at_position(row.x, row.y, 0.90)
+        theta_arcmin = math.nan
 
         ##--- use a moderate fit stamp for the likelihood fit, and a separate
         ## tighter profile radius for radial size measurements
@@ -291,11 +263,7 @@ def classify_sources_with_psf(
             if math.hypot(ox - x0, oy - y0) > fit_stamp_radius: # no worries if it's outside the stamp, since it won't pollute the fit
                 continue
             ###--- the rest case is what we really worry about; take care of it
-            other_theta = math.hypot((ox + 1.0) - opt_x, (oy + 1.0) - opt_y) * pixel_scale_arcsec / 60.0
-            other_psf_r90 = sample_radius_map(eef_radius_maps, "R90", other.x, other.y)
-            if other_psf_r90 is None:
-                other_radius_pix, other_frac = load_local_eef(psf_context, other_theta)
-                other_psf_r90 = eef_radius(other_radius_pix, other_frac, 0.90)
+            other_psf_r90 = psf_mapper.radius_at_position(other.x, other.y, 0.90)
             contam_radius = max(
                 CONTAM_R90_FACTOR * float(other_psf_r90),
                 CONTAM_SCALE_FACTOR * float(other.scale),
@@ -320,7 +288,7 @@ def classify_sources_with_psf(
                     valid_mask = np.ones_like(data_stamp, dtype=bool)
 
         ##--- build local PSF image for fitting
-        psf_kernel_nom = build_psf_kernel(radius_pix, frac) # build empirical psf kernel from eef curve
+        psf_kernel_nom = psf_mapper.kernel_at_position(row.x, row.y) # build empirical psf kernel from eef curve
         local_psf = embed_kernel(psf_kernel_nom, data_stamp.shape, x0, y0, x_min, y_min)    # creates an array with the same shape as data_stamp
         if local_psf.sum() <= 0:
             local_psf = np.ones_like(data_stamp, dtype=np.float64)
@@ -380,7 +348,7 @@ def classify_sources_with_psf(
             best_ext_amp = amp_pt
             best_ext_cash = c_point
             ext_like = 0.0
-            ext_r75_pix = eef_radius(radius_pix, frac, 0.75)
+            ext_r75_pix = float(np.interp(0.75, frac, radius_pix))
         
         ##--- measures radial net-count profile around the fitted source center, for calculation of r50, r90, etc.
         ## NOTE: this will be overwritten by later joint fitting
@@ -505,11 +473,7 @@ def classify_sources_with_psf(
                 oy = float(other.y - 1.0)
                 if math.hypot(ox - cx, oy - cy) > stamp_radius:
                     continue
-                other_theta = math.hypot((ox + 1.0) - opt_x, (oy + 1.0) - opt_y) * pixel_scale_arcsec / 60.0
-                other_psf_r90 = sample_radius_map(eef_radius_maps, "R90", other.x, other.y)
-                if other_psf_r90 is None:
-                    other_radius_pix, other_frac = load_local_eef(psf_context, other_theta)
-                    other_psf_r90 = eef_radius(other_radius_pix, other_frac, 0.90)
+                other_psf_r90 = psf_mapper.radius_at_position(other.x, other.y, 0.90)
                 contam_radius = max(
                     CONTAM_R90_FACTOR * float(other_psf_r90),
                     CONTAM_SCALE_FACTOR * float(other.scale),
@@ -535,9 +499,7 @@ def classify_sources_with_psf(
                 row = item.candidate
                 row_x = float(row.x - 1.0 + item.dx_pt)
                 row_y = float(row.y - 1.0 + item.dy_pt)
-                theta_arcmin = math.hypot((row_x + 1.0) - opt_x, (row_y + 1.0) - opt_y) * pixel_scale_arcsec / 60.0
-                radius_pix, frac = load_local_eef(psf_context, theta_arcmin)
-                psf_kernel = build_psf_kernel(radius_pix, frac)
+                psf_kernel = psf_mapper.kernel_at_position(row_x + 1.0, row_y + 1.0)
                 local_psf = embed_kernel(psf_kernel, data_stamp.shape, row_x, row_y, x_min, y_min)
                 if local_psf.sum() <= 0.0:
                     local_psf = np.ones_like(data_stamp, dtype=np.float64)
@@ -789,10 +751,10 @@ def classify_sources_with_psf(
         out.psf_r75_pix = float(item.psf_r75_pix_nom)
         out.psf_r80_pix = float(item.psf_r80_pix_nom)
         out.psf_r90_pix = float(item.psf_r90_pix_nom)
-        out.psf_instrument = str(psf_context.meta["instrument"])
-        out.psf_filter = str(psf_context.meta["filter"])
-        out.psf_line = str(psf_context.meta["line"])
-        out.psf_energy_keV = float(psf_context.meta["energy_keV"]) if isinstance(psf_context.meta["energy_keV"], (int, float)) else math.nan
+        out.psf_instrument = getattr(psf_mapper, "detector", "stacked")
+        out.psf_filter = getattr(psf_mapper, "filter_name", "stacked")
+        out.psf_line = "weighted" if isinstance(psf_mapper, StackedPSFMapper) else "mapper"
+        out.psf_energy_keV = float(psf_mapper.default_energy_keV)
         out.ml_radius_pix = float(item.stamp_radius_pix)
         out.extent_ratio = float(stretch)
         out.fitted_extent_sigma_pix = float(item.best_sigma)

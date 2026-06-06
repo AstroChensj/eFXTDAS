@@ -42,7 +42,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from fxtpsf_helpers import build_mission_psf_context, load_radius_map_bundle
+from fxtpsfgen.mapper import build_observation_psf_mapper, load_psf_product
 from fxtsrcdet.config import BACKGROUND_CARVE_MIN_COUNTS, BACKGROUND_CARVE_MIN_SUPPORT_SCALES
 from fxtsrcdet.background import create_background_map
 from fxtsrcdet.catalog import classify_sources_with_psf, finalize_catalog_columns, prune_nearby_sources
@@ -100,10 +100,6 @@ class PipelineConfig:
         Energy conversion factor used to convert count rate into flux.
     show_progress : bool
         Whether to show a progress bar during catalog fitting.
-    optaxis_x : float | None
-        Optional optical-axis x coordinate in 1-based pixels.
-    optaxis_y : float | None
-        Optional optical-axis y coordinate in 1-based pixels.
     include_background : bool
         Whether to keep rows classified as background in the returned catalog.
         The default ``False`` produces a science-style catalog that excludes
@@ -113,8 +109,8 @@ class PipelineConfig:
         The default ``True`` produces a science-style catalog.
     debug_columns : bool
         Whether CSV output should include internal/debug columns.
-    eefmap : Path | None
-        Optional precomputed EEF-radius map product from ``fxteefmap``.
+    psfprod : Path | None
+        Optional stacked or observation PSF product produced by ``fxtpsfgen``.
     analysis_mask : Path | None
         Optional user-supplied boolean analysis mask FITS image. Non-zero
         pixels are treated as globally valid for detection, background
@@ -141,12 +137,10 @@ class PipelineConfig:
     min_ext_like: float = 6.0
     ecf: float = 0.0
     show_progress: bool = False
-    optaxis_x: float | None = None
-    optaxis_y: float | None = None
     include_background: bool = False
     prune_sources: bool = True
     debug_columns: bool = False
-    eefmap: Path | None = None
+    psfprod: Path | None = None
     analysis_mask: Path | None = None
     logger: logging.Logger | None = None
 
@@ -185,12 +179,10 @@ def fxtsrcdet_pipeline(
     min_ext_like: float = 6.0,
     ecf: float = 0.0,
     show_progress: bool = False,
-    optaxis_x: float | None = None,
-    optaxis_y: float | None = None,
+    psfprod: str | Path | None = None,
     include_background: bool = False,
     prune_sources: bool = True,
     debug_columns: bool = False,
-    eefmap: str | Path | None = None,
     logger: logging.Logger | None = None,
     config: PipelineConfig | None = None,
 ) -> dict[str, Any]:
@@ -242,10 +234,6 @@ def fxtsrcdet_pipeline(
         Energy conversion factor used to convert count rate into flux.
     show_progress : bool
         Whether to show progress bars during catalog fitting.
-    optaxis_x : float | None
-        Optional optical-axis x coordinate in 1-based pixels.
-    optaxis_y : float | None
-        Optional optical-axis y coordinate in 1-based pixels.
     include_background : bool
         Whether to keep rows classified as background in the returned catalog.
         The default ``False`` produces a science-style catalog.
@@ -255,8 +243,8 @@ def fxtsrcdet_pipeline(
     debug_columns : bool
         Whether the output writer should include debug columns when the returned
         rows are later serialized.
-    eefmap : str | Path | None
-        Optional precomputed EEF-radius map product from ``fxteefmap``.
+    psfprod : str | Path | None
+        Optional stacked or observation PSF product produced by ``fxtpsfgen``.
     logger : logging.Logger | None
         Optional logger used for stage-by-stage status messages. If omitted,
         messages are printed directly.
@@ -293,10 +281,6 @@ def fxtsrcdet_pipeline(
             Final exposure-aware, source-masked background map used by the catalog
             fitting stage.
 
-        ``psf_context`` : MissionPSFContext
-            Mission-specific PSF/EEF lookup context used for local PSF radii and
-            fitting templates.
-
         ``pixel_scale_arcsec`` : float
             Image pixel scale in arcsec per pixel, inferred from WCS when available
             and otherwise taken from the mission PSF defaults.
@@ -306,7 +290,7 @@ def fxtsrcdet_pipeline(
     The workflow is staged as follows:
 
     1. Load the image, optional exposure map, and optional WCS.
-    2. Build the mission-specific PSF context and optional precomputed EEF-radius map bundle.
+    2. Load or build the local PSF mapper used for PSF-aware apertures and fitting.
     3. Run multi-scale wavelet detection to create coarse source candidates.
     4. Build a source-masked, exposure-aware background map.
     5. Refit the candidates with PSF-aware single-source and grouped-source likelihood models. The latter helps deblend close pairs.
@@ -390,12 +374,10 @@ def fxtsrcdet_pipeline(
         min_ext_like=min_ext_like,
         ecf=ecf,
         show_progress=show_progress,
-        optaxis_x=optaxis_x,
-        optaxis_y=optaxis_y,
+        psfprod=None if psfprod is None else Path(psfprod),
         include_background=include_background,
         prune_sources=prune_sources,
         debug_columns=debug_columns,
-        eefmap=None if eefmap is None else Path(eefmap),
         analysis_mask=None if analysis_mask is None else Path(analysis_mask),
         logger=logger,
     )
@@ -414,7 +396,7 @@ def fxtsrcdet_pipeline(
     emit(active_logger, "info", f"  energy band = {cfg.emin_keV} to {cfg.emax_keV} keV")
     emit(active_logger, "info", f"  background sigma grid = {', '.join(f'{sigma:g}' for sigma in cfg.background_sigma_grid)}")
     emit(active_logger, "info", f"  scales = {', '.join(f'{scale:g}' for scale in cfg.scales)}")
-    emit(active_logger, "info", f"  eef map = {cfg.eefmap if cfg.eefmap is not None else 'None'}")
+    emit(active_logger, "info", f"  psf product = {cfg.psfprod if cfg.psfprod is not None else 'None'}")
     emit(active_logger, "info", f"  include background rows = {cfg.include_background}")
     emit(active_logger, "info", f"  prune nearby sources = {cfg.prune_sources}")
     emit(active_logger, "info", f"  debug columns = {cfg.debug_columns}")
@@ -428,20 +410,25 @@ def fxtsrcdet_pipeline(
         emit(active_logger, "info", f"Loaded analysis mask with {int(np.count_nonzero(analysis_mask_data))} valid pixel(s)")
     if wcs is None:
         emit(active_logger, "warning", "No celestial WCS available; sky coordinates and sky regions will be unavailable")
-
-    psf_context = build_mission_psf_context(
-        mission=cfg.mission,
-        instrument=cfg.instrument,
-        filter_name=cfg.filter_name,
-        emin_keV=cfg.emin_keV,
-        emax_keV=cfg.emax_keV,
-    )
-    eef_radius_maps = load_radius_map_bundle(cfg.eefmap) if cfg.eefmap is not None else None
-    if eef_radius_maps is None:
-        emit(active_logger, "info", "No precomputed EEF map provided; falling back to per-source local EEF lookup")
+    if cfg.psfprod is not None:
+        psf_mapper = load_psf_product(cfg.psfprod)
+        emit(active_logger, "info", f"Loaded PSF product from {cfg.psfprod}")
     else:
-        emit(active_logger, "info", f"Loaded precomputed EEF map bundle from {cfg.eefmap}")
-    pixel_scale_arcsec = infer_pixel_scale_arcsec(wcs, psf_context.default_pixel_scale_arcsec)
+        if not isinstance(image, (str, Path)):
+            raise ValueError(
+                "A PSF product is required when the input image is already an array. "
+                "Pass --psfprod or provide an image file path so the pipeline can build an observation mapper."
+            )
+        psf_mapper = build_observation_psf_mapper(
+            image_path=str(image),
+            expmap_path=None if exposure is None or not isinstance(exposure, (str, Path)) else str(exposure),
+            instrument=cfg.instrument,
+            filter_name=cfg.filter_name,
+            emin_keV=cfg.emin_keV,
+            emax_keV=cfg.emax_keV,
+        )
+        emit(active_logger, "info", "Built observation PSF mapper from image metadata.")
+    pixel_scale_arcsec = infer_pixel_scale_arcsec(wcs, 9.6)
     emit(active_logger, "info", f"Using pixel scale = {pixel_scale_arcsec:.4f} arcsec/pixel")
 
     #--- create a coarse candidate source list (``rows``) with wavelet detection
@@ -458,11 +445,8 @@ def fxtsrcdet_pipeline(
         iterstop=cfg.iterstop,
         expthresh=cfg.expthresh,
         ellsigma=cfg.ellsigma,
-        psf_context=psf_context,
         pixel_scale_arcsec=pixel_scale_arcsec,
-        optaxis_x=cfg.optaxis_x,
-        optaxis_y=cfg.optaxis_y,
-        eef_radius_maps=eef_radius_maps,
+        psf_mapper=psf_mapper,
     )
     emit(active_logger, "info", f"Wavelet detection produced {len(rows)} provisional candidate(s) across {len(per_scale)} scale(s)")
     emit(active_logger, "info", f"Source counts: raw wavelet candidates = {len(rows)}")
@@ -487,14 +471,11 @@ def fxtsrcdet_pipeline(
     background_map = create_background_map(
         image_data,
         fit_rows,
-        psf_context=psf_context,
+        psf_mapper=psf_mapper,
         pixel_scale_arcsec=pixel_scale_arcsec,
         exposure_map=exposure_data,
         analysis_mask=analysis_mask_data,
-        optaxis_x=cfg.optaxis_x,
-        optaxis_y=cfg.optaxis_y,
         sigma_grid=cfg.background_sigma_grid,
-        eef_radius_maps=eef_radius_maps,
     )
     valid_background = background_map[np.isfinite(background_map) & (background_map > 0.0)]
     if valid_background.size:
@@ -518,14 +499,11 @@ def fxtsrcdet_pipeline(
         pixel_scale_arcsec=pixel_scale_arcsec,
         min_det_like=cfg.min_det_like,
         min_ext_like=cfg.min_ext_like,
-        psf_context=psf_context,
+        psf_mapper=psf_mapper,
         background_map=background_map,
         exposure_map=exposure_data,
         analysis_mask=analysis_mask_data,
-        optaxis_x=cfg.optaxis_x,
-        optaxis_y=cfg.optaxis_y,
         show_progress=cfg.show_progress,
-        eef_radius_maps=eef_radius_maps,
     )
     type_counts: dict[str, int] = {}
     for row in rows:
@@ -602,7 +580,7 @@ def fxtsrcdet_pipeline(
         "best_sig": best_sig,                       # best smallest significance value seen at each pixel across all scales
         "background_map": background_map,           # source-carved and smoothed background map
         "analysis_mask": analysis_mask_data,        # user-supplied global analysis-validity mask
-        "psf_context": psf_context,                 # mission-specific PSF context
+        "psf_mapper": psf_mapper,                   # stacked/observation PSF product
         "pixel_scale_arcsec": pixel_scale_arcsec,   # arcsec/pixel
     }
 
@@ -633,14 +611,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--expmap", type=Path, default=None, help="Exposure map FITS image")
     p.add_argument("--mask", type=Path, default=None, help="Optional user-supplied boolean analysis mask FITS image; non-zero pixels are treated as globally valid")
     #--- psf-related parameters
-    p.add_argument("--eefmap", type=Path, default=None, help="Optional precomputed EEF-radius map product from ``fxteefmap`` to compute PSF-aware source apertures")
-    p.add_argument("--mission", type=str, default="ep-fxt", help="Mission name to construct spatial-dependent PSF if ``eefmap`` not provided, defaults to ep-fxt")
-    p.add_argument("--instrument", type=str, default=None, help="Mission instrument name to construct spatial-dependent PSF if ``eefmap`` not provided, e.g. fxta or fxtb for EP/FXT")
-    p.add_argument("--filter", type=str, default=None, help="Mission filter name to construct spatial-dependent PSF if ``eefmap`` not provided, e.g. open, medium, thin, hole")
-    p.add_argument("--emin", type=float, default=None, help="Lower image energy bound in keV to construct spatial-dependent PSF if ``eefmap`` not provided")
-    p.add_argument("--emax", type=float, default=None, help="Upper image energy bound in keV to construct spatial-dependent PSF if ``eefmap`` not provided")
-    p.add_argument("--optaxis-x", type=float, default=None, help="Optical-axis X position in 1-based image pixels; defaults to image center")
-    p.add_argument("--optaxis-y", type=float, default=None, help="Optical-axis Y position in 1-based image pixels; defaults to image center")
+    p.add_argument("--psfprod", type=Path, default=None, help="Primary PSF product from fxtpsfgen; for stacked images this should be the stacked PSF bundle")
+    p.add_argument("--mission", type=str, default="ep-fxt", help="Mission name used when building an observation PSF mapper from image metadata")
+    p.add_argument("--instrument", type=str, default=None, help="Mission instrument name used when building an observation PSF mapper from image metadata, e.g. fxta or fxtb for EP/FXT")
+    p.add_argument("--filter", type=str, default=None, help="Mission filter name used when building an observation PSF mapper from image metadata, e.g. open, medium, thin, hole")
+    p.add_argument("--emin", type=float, default=None, help="Lower image energy bound in keV used when building an observation PSF mapper from image metadata")
+    p.add_argument("--emax", type=float, default=None, help="Upper image energy bound in keV used when building an observation PSF mapper from image metadata")
     p.add_argument("--background-sigma-grid", type=str, default="4,8,16,32,64", help="Gaussian smoothing scales in pixels available to the adaptive background model, e.g. '4,8,16,32,64'")
     #--- wavelet detection parameters
     p.add_argument("--scales", type=str, default="1,2,4,8,16", help="Wavelet scales in pixels, e.g. '1,2,4,8,16'")
@@ -695,9 +671,7 @@ def main() -> None:
         min_ext_like=args.min_ext_like,
         ecf=args.ecf,
         show_progress=not args.no_progress,
-        optaxis_x=args.optaxis_x,
-        optaxis_y=args.optaxis_y,
-        eefmap=args.eefmap,
+        psfprod=args.psfprod,
         analysis_mask=args.mask,
         include_background=args.include_background,
         prune_sources=not args.no_prune_sources,

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from astropy.io import fits
 
-from fxtcaldb.metadata import read_spectrum_metadata
+from fxtcaldb.query import read_observation_metadata
 from fxtrspgen.arf import generate_arf
 from fxtrspgen.rmf import generate_rmf
 
@@ -72,10 +72,9 @@ def run_fxtrspgen(
     """
     arf_path = arf_out or _default_response_path(specfile, ".arf")
     rmf_path = rmf_out or _default_response_path(specfile, ".rmf")
-    metadata = read_spectrum_metadata(specfile)
+    metadata = read_observation_metadata(specfile, preferred_ext=1)
     generate_rmf(specfile, rmf_path, metadata, clobber=clobber)
     generate_arf(
-        specfile,
         expfile,
         regionfile,
         arf_path,
