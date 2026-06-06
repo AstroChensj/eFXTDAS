@@ -16,16 +16,16 @@ Unlike eSASS `srctool`, the current implementation does not use catalog flags su
 
 ```{admonition} Warning on current source region
 :class: warning
-`fxtregions` currently writes the source region as a plain aperture without
-source-side exclusion carving.
+`fxtregions` now writes source-side contaminant exclusions into the emitted
+DS9 source region file when the derived exclusion circles overlap the target
+source aperture.
 
-It means that nearby confusing sources around the target could still contaminate
-the extracted source counts when this region is used directly.
+This changes the default extraction geometry used by downstream tools that
+consume the written source region directly.
 ```
 
-`fxtrspgen` can generate the response pair from an external DS9 source region
-that already contains supported exclusion composition, but `fxtregions` itself
-does not currently emit such carved source-region geometry.
+`fxtrspgen` consumes this carved source region directly when it is used as the
+authoritative response aperture definition.
 
 ## Basic Usage
 
@@ -223,8 +223,8 @@ The products mean:
 - `source.reg`
   - DS9/XSELECT-readable source extraction region
   - centered on the adopted target coordinate
-  - in current practice, this is written as a plain source aperture without
-    carved source exclusions
+  - includes contaminating-source exclusion regions when the derived exclusion
+    circles overlap the source aperture
 - `background.reg`
   - DS9/XSELECT-readable background annulus region
   - includes contaminating-source exclusion regions where needed
@@ -261,9 +261,8 @@ where:
 - `background_region`
   - DS9 region expression for the background annulus
 - `source_excludes`
-  - contaminant exclusions derived for the source region logic
-  - currently useful mainly for diagnostics, since the written source region is
-    intentionally kept simple for ARF compatibility
+  - contaminant exclusions applied to the written source region when they
+    overlap the source aperture
 - `background_excludes`
   - contaminant exclusions applied to the background region
 - `source_radius_arcsec`

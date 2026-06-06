@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -418,7 +419,7 @@ def build_regions(
         "target_context": target_ctx,
     }
     if src_regfile is not None:
-        write_region_file(src_regfile, region_info["source_region"], [])
+        write_region_file(src_regfile, region_info["source_region"], region_info["source_excludes"])
     if bkg_regfile is not None:
         write_region_file(bkg_regfile, region_info["background_region"], region_info["background_excludes"])
 

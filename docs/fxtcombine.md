@@ -538,7 +538,7 @@ After the stacked `evt` products are written:
 3. `fxtcombine` calls `fxtsrcdet`
 4. `fxtsrcdet` writes the stacked source catalog and source region file
 5. `fxtcombine` calls `fxtregions`
-6. `fxtregions` writes the source and background extraction region files
+6. `fxtregions` writes the source and background extraction region files, including source-side contaminant exclusions when present
 
 The current `fxtcombine` usage of `fxtregions` is in `manual` mode, with fixed source and background radii:
 
