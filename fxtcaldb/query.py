@@ -484,17 +484,9 @@ def _parse_cbd_entries(text: str) -> dict[str, list[CBDValue]]:
     entries: dict[str, list[CBDValue]] = {}
     if not text or text.strip().upper() == "NONE":
         return entries
-    cursor = 0
-    length = len(text)
-    while cursor < length:
-        start = text.find("(", cursor)
-        if start == -1:
-            break
-        name = _normalize_name(text[cursor:start])
-        end = text.find(")", start)
-        if end == -1:
-            break
-        payload = text[start + 1 : end]
+    for match in re.finditer(r"([A-Z0-9_]+)\(([^()]*)\)", text, flags=re.IGNORECASE):
+        name = _normalize_name(match.group(1))
+        payload = match.group(2)
         for raw_value in payload.split(","):
             raw_value = raw_value.strip()
             if not raw_value:
@@ -503,9 +495,6 @@ def _parse_cbd_entries(text: str) -> dict[str, list[CBDValue]]:
             entries.setdefault(name, []).append(
                 CBDValue(name=name, sval=sval, value_type=vtype, min_val=vmin, max_val=vmax)
             )
-        cursor = end + 1
-        while cursor < length and text[cursor].isspace():
-            cursor += 1
     return entries
 
 
