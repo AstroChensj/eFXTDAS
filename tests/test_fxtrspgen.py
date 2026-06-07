@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import io
+import logging
 import os
 
 import numpy as np
@@ -16,7 +18,7 @@ from fxtcaldb.response import resolve_base_arf
 from fxtcaldb.query import find_calibration_file
 from fxtpsfgen.mapper import ObservationPSFMapper, StackedPSFMapper, build_observation_psf_mapper, build_stacked_psf_mapper
 from fxtrspgen.arf import resolve_source_position
-from fxtrspgen.pipeline import run_fxtrspgen
+from fxtrspgen.pipeline import build_parser, run_fxtrspgen
 from fxtrspgen.regions import UnsupportedRegionError, load_region_set
 from fxtrspgen.rmf import generate_rmf
 
@@ -528,6 +530,68 @@ def test_run_fxtrspgen_writes_factorized_outputs_and_optional_headers(
     with fits.open(specfile) as hdul:
         assert hdul[1].header["ANCRFILE"] == updated_outputs["arf_out"]
         assert hdul[1].header["RESPFILE"] == updated_outputs["rmf_out"]
+
+
+def test_fxtrspgen_emits_stage_logs_and_parser_supports_log_options(
+    tmp_path: Path,
+    fake_caldb: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """fxtrspgen should expose convention-style logging and emit stage timings."""
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "spec.pi",
+            "exp.fits",
+            "src.reg",
+            "--log-level",
+            "DEBUG",
+            "--log-file",
+            str(tmp_path / "fxtrspgen.log"),
+        ]
+    )
+    assert args.log_level == "DEBUG"
+    assert args.log_file == tmp_path / "fxtrspgen.log"
+
+    specfile = _write_spectrum(tmp_path / "src.pi")
+    expfile = _write_exposure(tmp_path / "exp.fits")
+    region_path = tmp_path / "src.reg"
+    region_path.write_text(
+        "# Region file format: DS9 version 4.1\nimage\ncircle(12,50,10)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("fxtrspgen.arf.compute_optical_axis_pixel", lambda *args, **kwargs: (70.5, 50.5))
+
+    logger = logging.getLogger("test.fxtrspgen")
+    logger.handlers.clear()
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+
+    run_fxtrspgen(
+        str(specfile),
+        str(expfile),
+        str(region_path),
+        arf_out=str(tmp_path / "logged.arf"),
+        rmf_out=str(tmp_path / "logged.rmf"),
+        clobber=True,
+        logger=logger,
+    )
+
+    log_text = stream.getvalue()
+    assert "**** Welcome to FXTRSPGEN! ****" in log_text
+    assert "Generating RMF ..." in log_text
+    assert "RMF generation total runtime:" in log_text
+    assert "Generating ARF ..." in log_text
+    assert "PSF mapper build:" in log_text
+    assert "PSF correction progress:" in log_text
+    assert "Total correction progress:" in log_text
+    assert "Total correction:" in log_text
+    assert "ARF generation total runtime:" in log_text
+    assert "FXTRSPGEN total runtime:" in log_text
 
 
 def test_repo_fixture_runs_end_to_end_with_synthetic_caldb(

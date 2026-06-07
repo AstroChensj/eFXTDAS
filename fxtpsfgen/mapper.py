@@ -13,6 +13,7 @@ observation products together with projected theta/weight maps on a common WCS.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 from typing import Any
 
@@ -312,6 +313,95 @@ def _radial_annulus_fractions(
         Pixel-space weight map.
     source_xy : tuple[float, float]
         Source position in zero-based image pixels.
+    subpixels : int, optional
+        Subpixel rasterization factor.
+
+    Returns
+    -------
+    np.ndarray
+        Average weight in each annulus, normalized to full geometric coverage.
+    """
+    weight_array = np.asarray(weight_map, dtype=np.float64)
+    if not np.any(weight_array > 0.0):
+        return np.zeros(len(radius_edges) - 1, dtype=np.float64)
+    cropped_weight_map, cropped_source_xy = _crop_weight_map_centered(
+        radius_edges=np.asarray(radius_edges, dtype=np.float64),
+        weight_map=weight_array,
+        source_xy=source_xy,
+    )
+    return _radial_annulus_fractions_full(
+        radius_edges=np.asarray(radius_edges, dtype=np.float64),
+        weight_map=cropped_weight_map,
+        source_xy=cropped_source_xy,
+        subpixels=subpixels,
+    )
+
+
+def _crop_weight_map_centered(
+    radius_edges: np.ndarray,
+    weight_map: np.ndarray,
+    source_xy: tuple[float, float],
+) -> tuple[np.ndarray, tuple[float, float]]:
+    """Crop a weight map around the source center using the occupied annulus.
+
+    Parameters
+    ----------
+    radius_edges : np.ndarray
+        Radial edges in image pixels. The crop extends to the upper edge of the
+        farthest annulus that still contains nonzero weight support.
+    weight_map : np.ndarray
+        Pixel-space weight map.
+    source_xy : tuple[float, float]
+        Source position in zero-based image pixels.
+
+    Returns
+    -------
+    tuple[np.ndarray, tuple[float, float]]
+        Cropped weight map and crop-local source coordinates.
+    """
+    ny, nx = weight_map.shape
+    source_x = float(source_xy[0])
+    source_y = float(source_xy[1])
+    positive = np.argwhere(weight_map > 0.0)
+    if len(positive) == 0:
+        return weight_map, (source_x, source_y)
+    dy = positive[:, 0].astype(np.float64) - source_y
+    dx = positive[:, 1].astype(np.float64) - source_x
+    pixel_half_diagonal = math.sqrt(0.5)
+    r_support = float(np.max(np.hypot(dx, dy) + pixel_half_diagonal)) if len(positive) else 0.0
+    radius_edges = np.asarray(radius_edges, dtype=np.float64)
+    if len(radius_edges) >= 2:
+        upper_idx = int(np.searchsorted(radius_edges, r_support, side="right"))
+        upper_idx = min(max(upper_idx, 1), len(radius_edges) - 1)
+        r_cover = float(radius_edges[upper_idx])
+    else:
+        r_cover = r_support
+    pad_pix = 1.0
+    half_width = r_cover + pad_pix
+    x_min = max(0, int(math.floor(source_x - half_width)))
+    x_max = min(nx - 1, int(math.ceil(source_x + half_width)))
+    y_min = max(0, int(math.floor(source_y - half_width)))
+    y_max = min(ny - 1, int(math.ceil(source_y + half_width)))
+    cropped = np.asarray(weight_map[y_min:y_max + 1, x_min:x_max + 1], dtype=np.float64)
+    return cropped, (source_x - float(x_min), source_y - float(y_min))
+
+
+def _radial_annulus_fractions_full(
+    radius_edges: np.ndarray,
+    weight_map: np.ndarray,
+    source_xy: tuple[float, float],
+    subpixels: int = 5,
+) -> np.ndarray:
+    """Compute average weights in radial annuli on the supplied working window.
+
+    Parameters
+    ----------
+    radius_edges : np.ndarray
+        Radial edges in image pixels.
+    weight_map : np.ndarray
+        Pixel-space weight map for the already-selected working window.
+    source_xy : tuple[float, float]
+        Source position in zero-based working-window pixels.
     subpixels : int, optional
         Subpixel rasterization factor.
 
