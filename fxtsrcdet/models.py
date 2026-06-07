@@ -54,6 +54,8 @@ class DetectionCandidate(FieldAccessMixin):
     min_significance: float = 1.0
     wavelet_peak_score: float = 0.0
     z_peak: float = 0.0
+    psf_r90_pix: float = float("nan")
+    cluster_link_radius_pix: float = 0.0
     extras: dict[str, Any] = field(default_factory=dict)
 
 

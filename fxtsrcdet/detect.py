@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import math
+import time
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -20,6 +22,7 @@ from fxtsrcdet.config import (
     SINGLE_SCALE_FRAGMENT_MAX_NPIX,
     SINGLE_SCALE_PEAK_SCORE_MARGIN,
 )
+from fxtsrcdet.utils.logger import emit
 from fxtsrcdet.utils.imageops import fft_convolve2d
 from fxtsrcdet.models import DetectionCandidate
 from fxtsrcdet.utils.measure import ellipse_from_pixels
@@ -49,6 +52,7 @@ def detect_sources(
     ellsigma: float = 3.0,
     pixel_scale_arcsec: float | None = None,
     psf_mapper: ObservationPSFMapper | StackedPSFMapper | None = None,
+    logger: logging.Logger | None = None,
 ) -> tuple[list[DetectionCandidate], list[ScaleResult], np.ndarray, np.ndarray]:
     """Run the multi-scale wavelet detection stage on an image.
 
@@ -81,6 +85,8 @@ def detect_sources(
     psf_mapper : ObservationPSFMapper | StackedPSFMapper | None
         PSF mapper product used to evaluate local PSF radii directly on the
         analysis image.
+    logger : logging.Logger | None
+        Optional logger used for timing and progress diagnostics.
 
     Returns
     -------
@@ -163,7 +169,9 @@ def detect_sources(
 
     #--- iterate to detect sources at all scales
     per_scale: list[ScaleResult] = []   # wavelet results for each scale
+    total_start = time.perf_counter()
     for scale in scales:
+        scale_start = time.perf_counter()
         scale = float(scale)
         if scale <= 0:
             raise ValueError("All scales must be > 0.")
@@ -204,8 +212,15 @@ def detect_sources(
                 peak_mask=local_maxima(src, corr),
             )
         )
+        emit(
+            logger,
+            "info",
+            f"Stage 1 scale={scale:g}: {time.perf_counter() - scale_start:.2f}s, "
+            f"source_pixels={int(np.count_nonzero(src))}, peaks={int(np.count_nonzero(per_scale[-1].peak_mask))}",
+        )
 
     #--- condense multi-scale results into final candidates
+    combine_start = time.perf_counter()
     rows, agg_mask, best_sig = combine_scales(
         data,
         per_scale,
@@ -213,7 +228,10 @@ def detect_sources(
         z_thresh,
         pixel_scale_arcsec=pixel_scale_arcsec,
         psf_mapper=psf_mapper,
+        logger=logger,
     )
+    emit(logger, "info", f"Stage 1 combine_scales: {time.perf_counter() - combine_start:.2f}s")
+    emit(logger, "info", f"Stage 1 total detection runtime: {time.perf_counter() - total_start:.2f}s")
     return rows, per_scale, agg_mask, best_sig
 
 
@@ -500,35 +518,46 @@ def cluster_peak_candidates(
     than sharp on-axis PSFs.
     """
     #--- determine cluster radius
-    clusters: list[list[DetectionCandidate]] = []
+    clusters: list[dict[str, object]] = []
     dynamic_radius = psf_mapper is not None
 
     def local_cluster_radius(cand: DetectionCandidate) -> float:
-        if not dynamic_radius:
+        if not dynamic_radius or not np.isfinite(float(cand.psf_r90_pix)):
             return float(radius)
-        local_r90 = psf_mapper.radius_at_position(float(cand.peak_x), float(cand.peak_y), 0.90) # sampled at (emin+emax)/2
         ##--- IMPORTANT: to avoid local_r90 blowing up near the edge of the field of view where PSF is not calibrated, we need to cap the cluster radius with a reasonable maximum value; otherwise, it can lead to over-merging of unrelated candidates into one cluster and thus degrade the detection performance
-        return min(max(CLUSTER_R90_FACTOR * float(local_r90), float(radius)), float(CLUSTER_MAX_RADIUS_PIX))
+        return min(max(CLUSTER_R90_FACTOR * float(cand.psf_r90_pix), float(radius)), float(CLUSTER_MAX_RADIUS_PIX))
 
     #--- for each candidate ...
     for cand in sorted(candidates, key=lambda r: r.z_peak, reverse=True):   # highest-z first
         cand_radius = local_cluster_radius(cand)
+        cand.cluster_link_radius_pix = float(cand_radius)
         ##--- ... we search through existing clusters ...
         for cluster in clusters:
-            cx = float(np.mean([item.peak_x for item in cluster]))
-            cy = float(np.mean([item.peak_y for item in cluster]))
+            members = cluster["members"]
+            cx = float(cluster["center_x"])
+            cy = float(cluster["center_y"])
             dx = cand.peak_x - cx
             dy = cand.peak_y - cy
-            cluster_radius = max(local_cluster_radius(item) for item in cluster)
+            cluster_radius = float(cluster["max_radius"])
             link_radius = max(cand_radius, cluster_radius)
             ###--- ... if it is close enough to any cluster center, we add it to that cluster and stop searching ...
             if dx * dx + dy * dy <= link_radius * link_radius:
-                cluster.append(cand)
+                members.append(cand)
+                cluster["center_x"] = float(np.mean([item.peak_x for item in members]))
+                cluster["center_y"] = float(np.mean([item.peak_y for item in members]))
+                cluster["max_radius"] = float(max(cluster_radius, cand_radius))
                 break
         ##--- ... if this is the first candidate (highest-z), we create a new cluster for it
         else:
-            clusters.append([cand])
-    return clusters
+            clusters.append(
+                {
+                    "members": [cand],
+                    "center_x": float(cand.peak_x),
+                    "center_y": float(cand.peak_y),
+                    "max_radius": float(cand_radius),
+                }
+            )
+    return [list(cluster["members"]) for cluster in clusters]
 
 
 def combine_scales(
@@ -538,6 +567,7 @@ def combine_scales(
     z_thresh: float,
     pixel_scale_arcsec: float | None = None,
     psf_mapper: ObservationPSFMapper | StackedPSFMapper | None = None,
+    logger: logging.Logger | None = None,
 ) -> tuple[list[DetectionCandidate], np.ndarray, np.ndarray]:
     """Merge per-scale wavelet detections into final source candidates.
 
@@ -559,6 +589,8 @@ def combine_scales(
         Pixel scale in arcsec/pixel. Retained for future diagnostics.
     psf_mapper : ObservationPSFMapper | StackedPSFMapper | None
         PSF mapper used to evaluate local PSF radii directly on the analysis image.
+    logger : logging.Logger | None
+        Optional logger used for timing and progress diagnostics.
 
     Returns
     -------
@@ -626,9 +658,11 @@ def combine_scales(
         shape = image.shape
         return [], np.zeros(shape, dtype=bool), np.ones(shape, dtype=np.float64)
 
+    combine_start = time.perf_counter()
     best_sig = np.ones_like(image, dtype=np.float64)    # smaller number means more significant detection
     agg_mask = np.zeros_like(image, dtype=bool)
     candidates: list[DetectionCandidate] = []
+    extraction_start = time.perf_counter()
 
     #--- construct candidate source catalog at each scale
     # with certain heuristics to prevent the source from inheriting artifacts from neighboring structures
@@ -701,14 +735,31 @@ def combine_scales(
                     z_peak=float(local_z),
                 )
             )
+        emit(
+            logger,
+            "debug",
+            f"combine_scales scale={float(result.scale):g}: labels={int(nlab)}, peaks={len(peak_pixels)}, provisional_total={len(candidates)}",
+        )
+    emit(logger, "info", f"combine_scales candidate extraction: {time.perf_counter() - extraction_start:.2f}s")
+    emit(logger, "info", f"combine_scales provisional candidates: {len(candidates)}")
+
+    psf_cache_start = time.perf_counter()
+    if psf_mapper is not None:
+        for cand in candidates:
+            cand.psf_r90_pix = float(psf_mapper.radius_at_position(float(cand.peak_x), float(cand.peak_y), 0.90))
+    emit(logger, "info", f"combine_scales PSF r90 cache: {time.perf_counter() - psf_cache_start:.2f}s")
     
     #--- merge nearby candidates into cluster based on distance (no scale info used yet)
     #--- and keep only clusters detected on multiple scales
+    cluster_start = time.perf_counter()
     clusters = cluster_peak_candidates(
         candidates,
         pixel_scale_arcsec=pixel_scale_arcsec,
         psf_mapper=psf_mapper,
     )
+    emit(logger, "info", f"combine_scales clustering: {time.perf_counter() - cluster_start:.2f}s")
+    emit(logger, "info", f"combine_scales clusters: {len(clusters)}")
+    filter_start = time.perf_counter()
     rows: list[DetectionCandidate] = []
     for cluster in clusters:
         cluster = sorted(cluster, key=lambda row: row.z_peak, reverse=True) # sort by z
@@ -727,9 +778,12 @@ def combine_scales(
             if float(best.wavelet_peak_score) < (z_thresh + SINGLE_SCALE_PEAK_SCORE_MARGIN):
                 continue
         rows.append(best)
+    emit(logger, "info", f"combine_scales final filtering: {time.perf_counter() - filter_start:.2f}s")
+    emit(logger, "info", f"combine_scales retained candidates: {len(rows)}")
 
     #--- sort by wavelet_peak_score and counts, and assign final IDs
     rows.sort(key=lambda row: (row.wavelet_peak_score, row.net_counts, row.counts), reverse=True)
     for idx, row in enumerate(rows, start=1):
         row.id = idx
+    emit(logger, "info", f"combine_scales total runtime: {time.perf_counter() - combine_start:.2f}s")
     return rows, agg_mask, best_sig

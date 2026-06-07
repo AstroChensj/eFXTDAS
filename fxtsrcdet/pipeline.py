@@ -447,6 +447,7 @@ def fxtsrcdet_pipeline(
         ellsigma=cfg.ellsigma,
         pixel_scale_arcsec=pixel_scale_arcsec,
         psf_mapper=psf_mapper,
+        logger=active_logger,
     )
     emit(active_logger, "info", f"Wavelet detection produced {len(rows)} provisional candidate(s) across {len(per_scale)} scale(s)")
     emit(active_logger, "info", f"Source counts: raw wavelet candidates = {len(rows)}")
