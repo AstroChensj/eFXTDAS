@@ -816,6 +816,8 @@ def fxt_extract_spec(
                     f'"{srcpi_path}"',
                     f'"{prod["vexpmap"]}"',
                     f'"{src_reg_fname}"',
+                    "--psfprod",
+                    f'"{prod["psfprod"]}"',
                     "--arf-out",
                     f'"{arf_path}"',
                     "--rmf-out",

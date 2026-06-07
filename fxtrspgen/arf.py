@@ -27,7 +27,7 @@ from fxtcaldb.optics import compute_optical_axis_pixel
 from fxtcaldb.query import ObservationMetadata
 from fxtcaldb.response import read_base_arf_table
 from fxtcaldb.vignetting import resolve_vignetting_table
-from fxtpsfgen.mapper import ObservationPSFMapper, build_observation_psf_mapper
+from fxtpsfgen.mapper import ObservationPSFMapper, build_observation_psf_mapper, load_psf_product
 from fxtrspgen.regions import RegionSet, load_region_set
 from fxtrspgen.utils.logger import emit
 
@@ -471,6 +471,7 @@ def generate_arf(
     regionfile: str,
     outfile: str,
     metadata: ObservationMetadata,
+    psfprod: str | Path | None = None,
     srcx: float | None = None,
     srcy: float | None = None,
     ra: float | None = None,
@@ -490,6 +491,8 @@ def generate_arf(
         Output ARF path.
     metadata : ObservationMetadata
         Observation metadata used for calibration lookup.
+    psfprod : str | Path | None, optional
+        Existing observation PSF product to reuse instead of rebuilding one.
     srcx, srcy : float | None, optional
         Explicit image-coordinate source override.
     ra, dec : float | None, optional
@@ -532,18 +535,26 @@ def generate_arf(
     emit(logger, "info", f"Source-position resolution: {time.perf_counter() - stage_start:.2f}s")
     emit(logger, "debug", f"Resolved source origin={source.origin}, x={source.x:.3f}, y={source.y:.3f}")
 
-    emit(logger, "info", "Building observation PSF mapper ...")
     stage_start = time.perf_counter()
-    psf_mapper = build_observation_psf_mapper(
-        image_path=str(expfile),
-        expmap_path=str(expfile),
-        metadata=metadata,
-        instrument=_mapper_instrument(metadata.detnam),
-        filter_name=_mapper_filter_name(metadata.filt),
-        emin_keV=float(np.min(energy_bins)),
-        emax_keV=float(np.max(energy_bins)),
-    )
-    emit(logger, "info", f"PSF mapper build: {time.perf_counter() - stage_start:.2f}s")
+    if psfprod is not None:
+        emit(logger, "info", f"Loading PSF product from {psfprod} ...")
+        loaded_mapper = load_psf_product(psfprod)
+        if not isinstance(loaded_mapper, ObservationPSFMapper):
+            raise ValueError("fxtrspgen --psfprod currently requires an observation PSF product (PSFTYPE=OBS).")
+        psf_mapper = loaded_mapper
+        emit(logger, "info", f"PSF product load: {time.perf_counter() - stage_start:.2f}s")
+    else:
+        emit(logger, "info", "Building observation PSF mapper ...")
+        psf_mapper = build_observation_psf_mapper(
+            image_path=str(expfile),
+            expmap_path=str(expfile),
+            metadata=metadata,
+            instrument=_mapper_instrument(metadata.detnam),
+            filter_name=_mapper_filter_name(metadata.filt),
+            emin_keV=float(np.min(energy_bins)),
+            emax_keV=float(np.max(energy_bins)),
+        )
+        emit(logger, "info", f"PSF mapper build: {time.perf_counter() - stage_start:.2f}s")
 
     emit(logger, "info", "Preparing optical-axis, theta, and exposure-fraction maps ...")
     stage_start = time.perf_counter()

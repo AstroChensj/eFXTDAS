@@ -38,6 +38,7 @@ def run_fxtrspgen(
     regionfile: str,
     arf_out: str | None = None,
     rmf_out: str | None = None,
+    psfprod: str | None = None,
     srcx: float | None = None,
     srcy: float | None = None,
     ra: float | None = None,
@@ -60,6 +61,8 @@ def run_fxtrspgen(
         Output ARF path. Defaults to ``specfile`` with ``.arf`` suffix.
     rmf_out : str | None, optional
         Output RMF path. Defaults to ``specfile`` with ``.rmf`` suffix.
+    psfprod : str | None, optional
+        Existing observation PSF product to load instead of rebuilding one.
     srcx, srcy : float | None, optional
         Source position override in DS9/FITS image coordinates.
     ra, dec : float | None, optional
@@ -87,6 +90,7 @@ def run_fxtrspgen(
     emit(logger, "info", f"  regionfile = {regionfile}")
     emit(logger, "info", f"  arf_out = {arf_path}")
     emit(logger, "info", f"  rmf_out = {rmf_path}")
+    emit(logger, "info", f"  psfprod = {psfprod}")
     emit(logger, "info", f"  update_pha = {update_pha}")
     emit(logger, "info", f"  clobber = {clobber}")
     emit(logger, "info", "Reading observation metadata ...")
@@ -104,6 +108,7 @@ def run_fxtrspgen(
         regionfile,
         arf_path,
         metadata,
+        psfprod=psfprod,
         srcx=srcx,
         srcy=srcy,
         ra=ra,
@@ -129,6 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("regionfile", help="External DS9 source-region file")
     parser.add_argument("--arf-out", default=None, help="Output ARF path")
     parser.add_argument("--rmf-out", default=None, help="Output RMF path")
+    parser.add_argument("--psfprod", default=None, help="Existing observation PSF product to reuse")
     parser.add_argument("--srcx", type=float, default=None, help="Source X override in DS9/FITS image coordinates")
     parser.add_argument("--srcy", type=float, default=None, help="Source Y override in DS9/FITS image coordinates")
     parser.add_argument("--ra", type=float, default=None, help="Source RA override in degrees")
@@ -160,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
         regionfile=args.regionfile,
         arf_out=args.arf_out,
         rmf_out=args.rmf_out,
+        psfprod=args.psfprod,
         srcx=args.srcx,
         srcy=args.srcy,
         ra=args.ra,
