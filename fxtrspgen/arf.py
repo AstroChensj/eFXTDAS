@@ -13,7 +13,9 @@ multiply back to the total.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
+import time
 
 import numpy as np
 from astropy.io import fits
@@ -27,6 +29,7 @@ from fxtcaldb.response import read_base_arf_table
 from fxtcaldb.vignetting import resolve_vignetting_table
 from fxtpsfgen.mapper import ObservationPSFMapper, build_observation_psf_mapper
 from fxtrspgen.regions import RegionSet, load_region_set
+from fxtrspgen.utils.logger import emit
 
 
 @dataclass(frozen=True)
@@ -140,6 +143,39 @@ def _interp_scalar(energy_points: np.ndarray, values: np.ndarray, energy: float)
     return float(result[0])
 
 
+def _progress_indices(total: int) -> set[int]:
+    """Return coarse 1-based progress checkpoints for one loop length."""
+
+    if total <= 0:
+        return set()
+    if total <= 5:
+        return set(range(1, total + 1))
+    step = max(1, total // 10)
+    checkpoints = set(range(step, total + 1, step))
+    checkpoints.add(1)
+    checkpoints.add(total)
+    return checkpoints
+
+
+def _emit_loop_progress(
+    logger: logging.Logger | None,
+    stage: str,
+    index: int,
+    total: int,
+    energy_keV: float,
+    started_at: float,
+) -> None:
+    """Emit one coarse progress line for an energy-bin loop."""
+
+    percent = 100.0 * float(index) / float(total) if total > 0 else 100.0
+    emit(
+        logger,
+        "info",
+        f"{stage} progress: {index}/{total} bins ({percent:.0f}%), "
+        f"energy={energy_keV:.3f} keV, elapsed={time.perf_counter() - started_at:.2f}s",
+    )
+
+
 def _mapper_instrument(detnam: str) -> str:
     """Convert one detector token into the observation-mapper instrument name.
 
@@ -199,6 +235,8 @@ def _psf_capture_fraction(
     energy_bins: np.ndarray,
     source_xy: tuple[float, float],
     weight_map: np.ndarray,
+    logger: logging.Logger | None = None,
+    stage_name: str = "PSF correction",
 ) -> np.ndarray:
     """Evaluate the active PSF model over an arbitrary image-space weight map.
 
@@ -212,23 +250,33 @@ def _psf_capture_fraction(
         Source position in zero-based image pixels.
     weight_map : np.ndarray
         Pixel-space capture weights to integrate over.
+    logger : logging.Logger | None, optional
+        Optional logger used for coarse progress updates.
+    stage_name : str, optional
+        Human-readable stage name used in progress logs.
     Returns
     -------
     np.ndarray
         PSF capture fraction on the requested energy grid.
     """
-    return np.asarray(
-        [
-            psf_mapper.capture_fraction(
-                source_xy[0] + 1.0,
-                source_xy[1] + 1.0,
-                weight_map,
-                energy_keV=float(energy),
+    energy_values = np.asarray(energy_bins, dtype=np.float64)
+    checkpoints = _progress_indices(len(energy_values))
+    loop_start = time.perf_counter()
+    values: list[float] = []
+    for idx, energy in enumerate(energy_values, start=1):
+        values.append(
+            float(
+                psf_mapper.capture_fraction(
+                    source_xy[0] + 1.0,
+                    source_xy[1] + 1.0,
+                    weight_map,
+                    energy_keV=float(energy),
+                )
             )
-            for energy in np.asarray(energy_bins, dtype=np.float64)
-        ],
-        dtype=np.float64,
-    )
+        )
+        if idx in checkpoints:
+            _emit_loop_progress(logger, stage_name, idx, len(energy_values), float(energy), loop_start)
+    return np.asarray(values, dtype=np.float64)
 
 
 def _compute_psf_correction(
@@ -236,6 +284,7 @@ def _compute_psf_correction(
     energy_bins: np.ndarray,
     source_xy: tuple[float, float],
     region_mask: np.ndarray,
+    logger: logging.Logger | None = None,
 ) -> np.ndarray:
     """Compute the diagnostic full-coverage PSF capture fraction.
 
@@ -249,12 +298,14 @@ def _compute_psf_correction(
         Source position in zero-based image pixels.
     region_mask : np.ndarray
         Rasterized region mask.
+    logger : logging.Logger | None, optional
+        Optional logger used for coarse progress updates.
     Returns
     -------
     np.ndarray
         Diagnostic PSF capture fraction under full coverage and no vignetting.
     """
-    return _psf_capture_fraction(psf_mapper, energy_bins, source_xy, region_mask)
+    return _psf_capture_fraction(psf_mapper, energy_bins, source_xy, region_mask, logger=logger, stage_name="PSF correction")
 
 
 def _compute_total_correction(
@@ -265,6 +316,7 @@ def _compute_total_correction(
     theta_map_arcmin: np.ndarray,
     vign_table: np.recarray,
     energy_bins: np.ndarray,
+    logger: logging.Logger | None = None,
 ) -> np.ndarray:
     """Compute the exact joint correction over coverage, vignetting, and PSF.
 
@@ -284,6 +336,8 @@ def _compute_total_correction(
         Vignetting calibration table.
     energy_bins : np.ndarray
         Output ARF energy grid in keV.
+    logger : logging.Logger | None, optional
+        Optional logger used for coarse progress updates.
 
     Returns
     -------
@@ -293,8 +347,11 @@ def _compute_total_correction(
     vign_energy = np.asarray(vign_table["ENERGY"], dtype=np.float64)
     coef0_values = np.asarray(vign_table["COEF0"], dtype=np.float64)
     coef1_values = np.asarray(vign_table["COEF1"], dtype=np.float64)
+    energy_values = np.asarray(energy_bins, dtype=np.float64)
+    checkpoints = _progress_indices(len(energy_values))
+    loop_start = time.perf_counter()
     samples = []
-    for energy in np.asarray(energy_bins, dtype=np.float64):
+    for idx, energy in enumerate(energy_values, start=1):
         coef0 = _interp_scalar(vign_energy, coef0_values, float(energy))
         coef1 = _interp_scalar(vign_energy, coef1_values, float(energy))
         vign_map = np.clip(vignfunc(theta_map_arcmin, coef0, coef1), 0.0, 1.0)
@@ -309,6 +366,8 @@ def _compute_total_correction(
                 )
             )
         )
+        if idx in checkpoints:
+            _emit_loop_progress(logger, "Total correction", idx, len(energy_values), float(energy), loop_start)
     return np.clip(np.asarray(samples, dtype=np.float64), 0.0, 1.0)
 
 
@@ -417,6 +476,7 @@ def generate_arf(
     ra: float | None = None,
     dec: float | None = None,
     clobber: bool = False,
+    logger: logging.Logger | None = None,
 ) -> ArfProducts:
     """Generate an ARF with exact total correction and diagnostic columns.
 
@@ -436,20 +496,44 @@ def generate_arf(
         Explicit sky-coordinate source override.
     clobber : bool, optional
         Overwrite existing output files.
+    logger : logging.Logger | None, optional
+        Optional logger used for workflow messages.
 
     Returns
     -------
     ArfProducts
         Written ARF path and provenance information.
     """
+    t0 = time.perf_counter()
+    emit(logger, "info", "Loading base ARF calibration ...")
+    stage_start = time.perf_counter()
     energ_lo, energ_hi, base_arf = read_base_arf_table(metadata)
     energy_bins = 0.5 * (energ_lo + energ_hi)
+    emit(logger, "info", f"Base ARF load: {time.perf_counter() - stage_start:.2f}s")
+    emit(logger, "debug", f"ARF energy bins: {len(energy_bins)}")
+
+    emit(logger, "info", "Loading exposure map and WCS ...")
+    stage_start = time.perf_counter()
     with fits.open(expfile) as hdul:
         exp_data = np.asarray(hdul[0].data, dtype=np.float64)
         exp_wcs = WCS(hdul[0].header)
     image_shape = exp_data.shape
+    emit(logger, "info", f"Exposure/WCS load: {time.perf_counter() - stage_start:.2f}s")
+    emit(logger, "debug", f"Exposure image shape: {image_shape}")
+
+    emit(logger, "info", "Rasterizing source region ...")
+    stage_start = time.perf_counter()
     region_set = load_region_set(regionfile, image_shape=image_shape, wcs=exp_wcs, oversample=5)
+    emit(logger, "info", f"Region rasterization: {time.perf_counter() - stage_start:.2f}s")
+
+    emit(logger, "info", "Resolving source position ...")
+    stage_start = time.perf_counter()
     source = resolve_source_position(exp_wcs, region_set, srcx=srcx, srcy=srcy, ra=ra, dec=dec)
+    emit(logger, "info", f"Source-position resolution: {time.perf_counter() - stage_start:.2f}s")
+    emit(logger, "debug", f"Resolved source origin={source.origin}, x={source.x:.3f}, y={source.y:.3f}")
+
+    emit(logger, "info", "Building observation PSF mapper ...")
+    stage_start = time.perf_counter()
     psf_mapper = build_observation_psf_mapper(
         image_path=str(expfile),
         expmap_path=str(expfile),
@@ -459,6 +543,10 @@ def generate_arf(
         emin_keV=float(np.min(energy_bins)),
         emax_keV=float(np.max(energy_bins)),
     )
+    emit(logger, "info", f"PSF mapper build: {time.perf_counter() - stage_start:.2f}s")
+
+    emit(logger, "info", "Preparing optical-axis, theta, and exposure-fraction maps ...")
+    stage_start = time.perf_counter()
     opt_x, opt_y = compute_optical_axis_pixel(metadata, exp_wcs.celestial)
     pixel_scale_deg = float(np.mean(proj_plane_pixel_scales(exp_wcs.celestial)))
     yy, xx = np.indices(image_shape, dtype=np.float64)
@@ -474,9 +562,13 @@ def generate_arf(
         raise ValueError("The DS9 region rasterizes to an empty source mask.")
     regcov_value = float(np.sum(region_mask * exposure_fraction) / region_sum)
     regcov_corr = np.full_like(energy_bins, regcov_value, dtype=np.float64)
+    emit(logger, "info", f"Map preparation: {time.perf_counter() - stage_start:.2f}s")
+    emit(logger, "debug", f"Region-mask sum: {region_sum:.6g}")
 
     weighted_region = region_mask * exposure_fraction
     weight_sum = float(np.sum(weighted_region))
+    emit(logger, "info", "Computing vignetting correction ...")
+    stage_start = time.perf_counter()
     vign_table = resolve_vignetting_table(metadata)
     vign_energy = np.asarray(vign_table["ENERGY"], dtype=np.float64)
     vign_samples = []
@@ -484,13 +576,21 @@ def generate_arf(
         vign_map = np.clip(vignfunc(theta_map_arcmin, float(coef0), float(coef1)), 0.0, 1.0)
         vign_samples.append(float(np.sum(weighted_region * vign_map) / weight_sum) if weight_sum > 0.0 else 0.0)
     vign_corr = np.clip(_interp_correction(vign_energy, np.asarray(vign_samples), energy_bins), 0.0, 1.0)
+    emit(logger, "info", f"Vignetting correction: {time.perf_counter() - stage_start:.2f}s")
 
+    emit(logger, "info", "Computing PSF correction ...")
+    stage_start = time.perf_counter()
     psf_corr = _compute_psf_correction(
         psf_mapper,
         energy_bins,
         (source.x, source.y),
         region_mask,
+        logger=logger,
     )
+    emit(logger, "info", f"PSF correction: {time.perf_counter() - stage_start:.2f}s")
+
+    emit(logger, "info", "Computing total correction ...")
+    stage_start = time.perf_counter()
     total_corr = _compute_total_correction(
         psf_mapper,
         (source.x, source.y),
@@ -499,8 +599,12 @@ def generate_arf(
         theta_map_arcmin,
         vign_table,
         energy_bins,
+        logger=logger,
     )
+    emit(logger, "info", f"Total correction: {time.perf_counter() - stage_start:.2f}s")
     specresp = base_arf * total_corr
+    emit(logger, "info", "Writing ARF output ...")
+    stage_start = time.perf_counter()
     _write_factorized_arf(
         outfile,
         energ_lo,
@@ -513,4 +617,6 @@ def generate_arf(
         total_corr,
         clobber=clobber,
     )
+    emit(logger, "info", f"ARF write: {time.perf_counter() - stage_start:.2f}s")
+    emit(logger, "info", f"ARF generation total runtime: {time.perf_counter() - t0:.2f}s")
     return ArfProducts(arf_out=outfile, region_set=region_set, source_position=source)

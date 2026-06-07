@@ -1,4 +1,4 @@
-"""Logging helpers for FXT source detection."""
+"""Logging helpers for FXT response generation."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ class ColorFormatter(logging.Formatter):
         self.enable_color = enable_color
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format one log record with optional ANSI color."""
         message = super().format(record)
         if not self.enable_color or not os.getenv("TERM") or os.getenv("NO_COLOR"):
             return message
@@ -69,8 +70,8 @@ def _ensure_handler(
 
 
 def _default_logger() -> logging.Logger:
-    """Return a process-local default stream logger for fxtsrcdet."""
-    logger = logging.getLogger("eFXTDAS.fxtsrcdet.default")
+    """Return a process-local default stream logger for fxtrspgen."""
+    logger = logging.getLogger("eFXTDAS.fxtrspgen.default")
     if logger.handlers:
         return logger
     return _ensure_handler(logger, logging.StreamHandler(), level=logging.INFO)
