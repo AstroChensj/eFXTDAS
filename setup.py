@@ -38,6 +38,7 @@ setup(
         "numpy",
         "scipy",
         "astropy",
+        "matplotlib",
         "reproject",
         "regions",
         "tqdm",
@@ -49,6 +50,7 @@ setup(
             "fxtrspgen=fxtrspgen.pipeline:main",
             "fxtpsfgen=fxtpsfgen.pipeline:main",
             "fxtcombine=fxtcombine.pipeline:main",
+            "fxtcombine-quickview=fxtcombine.quickview:main",
             "fxtbkgoptrate=fxtbkgoptrate.pipeline:main",
         ]
     },
