@@ -25,6 +25,8 @@ from matplotlib.colors import ListedColormap
 from matplotlib.patches import Circle
 from cycler import cycler
 from scipy.ndimage import gaussian_filter
+from scipy.interpolate import griddata
+from tqdm.auto import tqdm
 
 from fxtcombine.utils.logger import build_cli_logger, emit
 from fxtpsfgen.mapper import load_psf_product
@@ -81,28 +83,28 @@ def plt_style_setup() -> None:
         {
             "font.family": "serif",
             "font.serif": ["Palatino", "Times New Roman"],
-            "font.size": 28.0,
-            "axes.labelsize": 45,
-            "axes.titlesize": 35,
+            "font.size": 12.0,
+            "axes.labelsize": 16,
+            "axes.titlesize": 30,
             "axes.linewidth": 2.5,
             "axes.labelweight": "light",
-            "xtick.labelsize": 30,
-            "ytick.labelsize": 30,
-            "xtick.major.size": 15,
-            "xtick.major.width": 2,
-            "xtick.minor.size": 10,
+            "xtick.labelsize": 14,
+            "ytick.labelsize": 14,
+            "xtick.major.size": 6,
+            "xtick.major.width": 1.5,
+            "xtick.minor.size": 4,
             "xtick.minor.width": 1,
             "xtick.direction": "in",
             "xtick.top": True,
             "xtick.major.pad": 9,
-            "ytick.major.size": 15,
-            "ytick.major.width": 2,
-            "ytick.minor.size": 10,
-            "ytick.minor.width": 1,
+            "ytick.major.size": 6,
+            "ytick.major.width": 1,
+            "ytick.minor.size": 4,
+            "ytick.minor.width": 1.5,
             "ytick.direction": "in",
             "ytick.right": True,
-            "legend.fontsize": 35,
-            "legend.title_fontsize": 35,
+            "legend.fontsize": 16,
+            "legend.title_fontsize": 16,
             "legend.frameon": False,
             "figure.figsize": [13, 12],
             "figure.dpi": 300,
@@ -110,7 +112,7 @@ def plt_style_setup() -> None:
             "savefig.format": "pdf",
             "savefig.bbox": "tight",
             "grid.linewidth": 1,
-            "lines.linewidth": 3,
+            "lines.linewidth": 1.5,
             "lines.markersize": 3,
             "lines.solid_capstyle": "round",
             "patch.linewidth": 0.5,
@@ -409,6 +411,7 @@ def compute_r90_map(
     psfprod_path: Path,
     shape: tuple[int, int],
     valid_mask: np.ndarray,
+    r90_stride: int = 4,
     logger: logging.Logger | None = None,
 ) -> np.ndarray:
     """Compute a stacked PSF R90 map from the current PSF product.
@@ -421,6 +424,9 @@ def compute_r90_map(
         Output image shape as ``(ny, nx)``.
     valid_mask : np.ndarray
         Boolean mask selecting pixels where R90 should be evaluated.
+    r90_stride : int
+        Pixel stride for coarse-grid R90 sampling. ``1`` evaluates every valid
+        pixel exactly; larger values sample a grid and interpolate.
     logger : logging.Logger | None
         Optional progress logger.
 
@@ -431,13 +437,68 @@ def compute_r90_map(
     """
     mapper = load_psf_product(psfprod_path)
     r90 = np.full(shape, np.nan, dtype=np.float32)
-    valid_pixels = np.argwhere(np.asarray(valid_mask, dtype=bool))
-    emit(logger, "info", f"Computing R90 for {len(valid_pixels)} valid pixel(s) from {psfprod_path}")
-    for y_idx, x_idx in valid_pixels:
+    mask = np.asarray(valid_mask, dtype=bool)
+    valid_pixels = np.argwhere(mask)
+    if len(valid_pixels) == 0:
+        emit(logger, "warning", "No valid pixels were available for R90 calculation.")
+        return r90
+
+    stride = max(int(r90_stride), 1)
+    if stride == 1:
+        sample_pixels = valid_pixels
+    else:
+        sample_mask = mask.copy()
+        yy, xx = np.indices(shape)
+        sample_mask &= (yy % stride == 0) & (xx % stride == 0)
+        sample_pixels = np.argwhere(sample_mask)
+        if len(sample_pixels) < 3:
+            sample_pixels = valid_pixels
+
+    emit(
+        logger,
+        "info",
+        (
+            f"Computing R90 from {len(sample_pixels)} sampled pixel(s) "
+            f"(stride={stride}; valid pixels={len(valid_pixels)}) using {psfprod_path}"
+        ),
+    )
+    sample_values: list[float] = []
+    sample_points: list[tuple[float, float]] = []
+    for y_idx, x_idx in tqdm(sample_pixels, desc="R90 samples", unit="pix"):
         try:
-            r90[y_idx, x_idx] = float(mapper.radius_at_position(float(x_idx) + 1.0, float(y_idx) + 1.0, 0.90))
+            value = float(mapper.radius_at_position(float(x_idx) + 1.0, float(y_idx) + 1.0, 0.90))
         except ValueError:
             continue
+        r90[y_idx, x_idx] = value
+        sample_points.append((float(x_idx), float(y_idx)))
+        sample_values.append(value)
+
+    if stride == 1:
+        return r90
+    if not sample_values:
+        emit(logger, "warning", "No R90 samples had valid PSF support.")
+        return r90
+
+    points = np.asarray(sample_points, dtype=np.float64)
+    values = np.asarray(sample_values, dtype=np.float64)
+    grid_y, grid_x = np.indices(shape, dtype=np.float64)
+    target_points = np.column_stack((grid_x[mask].ravel(), grid_y[mask].ravel()))
+
+    interpolated = None
+    if len(values) >= 3:
+        try:
+            interpolated = griddata(points, values, target_points, method="linear")
+        except Exception as exc:
+            emit(logger, "warning", f"Linear R90 interpolation failed; using nearest interpolation only: {exc}")
+    if interpolated is None:
+        interpolated = np.full(len(target_points), np.nan, dtype=np.float64)
+
+    missing = ~np.isfinite(interpolated)
+    if np.any(missing):
+        nearest = griddata(points, values, target_points[missing], method="nearest")
+        interpolated[missing] = nearest
+
+    r90[mask] = interpolated.astype(np.float32)
     return r90
 
 
@@ -491,6 +552,8 @@ def plot_quickview(
     out_path: Path,
     *,
     smooth_sigma: float = 2.0,
+    r90_stride: int = 4,
+    title: str | None = None,
     dpi: int = 100,
     logger: logging.Logger | None = None,
 ) -> Path:
@@ -504,6 +567,11 @@ def plot_quickview(
         Output figure path.
     smooth_sigma : float
         Gaussian smoothing sigma in image pixels for the rate-map panels.
+    r90_stride : int
+        Pixel stride for panel-6 R90 map sampling. ``1`` uses exact per-pixel
+        evaluation.
+    title : str | None
+        Optional figure title shown above the six-panel layout.
     dpi : int
         Output image DPI.
     logger : logging.Logger | None
@@ -538,6 +606,8 @@ def plot_quickview(
 
     plt_style_setup()
     fig, axes = plt.subplots(2, 3, figsize=(18, 11), constrained_layout=True)
+    if title:
+        fig.suptitle(title, fontsize=30, fontweight="bold")
     ax1, ax2, ax3, ax4, ax5, ax6 = axes.ravel()
     text_pe = [pe.withStroke(linewidth=3, foreground="black")]
 
@@ -558,13 +628,13 @@ def plot_quickview(
         fontsize=16,
         path_effects=text_pe,
     )
-    ax1.set_title("Stacked Rate Map")
+    ax1.set_title(r"$\mathbf{Stacked\ Rate\ Map}$")
     ax1.set_xlabel("X (pix)")
     ax1.set_ylabel("Y (pix)")
 
     emit(logger, "info", "Generating panel 2: stacked background map")
     im2 = ax2.imshow(bkg_map, origin="lower", cmap="inferno", norm=bkg_norm)
-    ax2.set_title("Stacked Background Map")
+    ax2.set_title(r"$\mathbf{Stacked\ Background\ Map}$")
     ax2.set_xlabel("X (pix)")
     ax2.set_ylabel("Y (pix)")
     cb2 = fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
@@ -597,13 +667,13 @@ def plot_quickview(
     zoom_radius_pix += 10.0
     ax3.set_xlim(target_x - zoom_radius_pix, target_x + zoom_radius_pix)
     ax3.set_ylim(target_y - zoom_radius_pix, target_y + zoom_radius_pix)
-    ax3.set_title("Target Zoom + Extraction Regions")
+    ax3.set_title(r"$\mathbf{Target\ Zoom\ +\ Extraction\ Regions}$")
     ax3.set_xlabel("X (pix)")
     ax3.set_ylabel("Y (pix)")
 
     emit(logger, "info", "Generating panel 4: stacked analysis mask")
     im4 = ax4.imshow(valid_mask.astype(float), origin="lower", cmap="gray", vmin=0.0, vmax=1.0)
-    ax4.set_title("Stacked Analysis Mask")
+    ax4.set_title(r"$\mathbf{Stacked\ Analysis\ Mask}$")
     ax4.set_xlabel("X (pix)")
     ax4.set_ylabel("Y (pix)")
     cb4 = fig.colorbar(im4, ax=ax4, fraction=0.046, pad=0.04)
@@ -611,23 +681,31 @@ def plot_quickview(
 
     emit(logger, "info", "Generating panel 5: stacked exposure map")
     im5 = ax5.imshow(exp_map, origin="lower", cmap="viridis", norm=exp_norm)
-    ax5.set_title("Stacked Exposure Map")
+    ax5.set_title(r"$\mathbf{Stacked\ Exposure\ Map}$")
     ax5.set_xlabel("X (pix)")
     ax5.set_ylabel("Y (pix)")
     cb5 = fig.colorbar(im5, ax=ax5, fraction=0.046, pad=0.04)
     cb5.set_label("Exposure (s)")
 
     emit(logger, "info", "Generating panel 6: stacked PSF R90 map")
-    r90_map = compute_r90_map(paths.psfprod, rate_map.shape, valid_mask & np.isfinite(exp_map) & (exp_map > 0.0), logger=logger)
+    r90_map = compute_r90_map(
+        paths.psfprod,
+        rate_map.shape,
+        valid_mask & np.isfinite(exp_map) & (exp_map > 0.0),
+        r90_stride=r90_stride,
+        logger=logger,
+    )
     im6 = ax6.imshow(r90_map, origin="lower", cmap="cividis", norm=_image_norm(r90_map))
-    ax6.set_title("Stacked PSF Map (R90)")
+    ax6.set_title(r"$\mathbf{Stacked\ PSF\ Map\ (R90)}$")
     ax6.set_xlabel("X (pix)")
     ax6.set_ylabel("Y (pix)")
     cb6 = fig.colorbar(im6, ax=ax6, fraction=0.046, pad=0.04)
     cb6.set_label("R90 (pix)")
 
     for ax in axes.ravel():
-        ax.tick_params(axis="both", which="both", length=15, width=2, labelsize=15)
+        ax.tick_params(axis="both", which="both", length=6, width=1, labelsize=14)
+
+    plt.subplots_adjust(wspace=0.05, hspace=0.05)
 
     resolved_out = Path(out_path).expanduser().resolve()
     resolved_out.parent.mkdir(parents=True, exist_ok=True)
@@ -653,6 +731,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("stack_dir", type=Path, help="Directory containing fxtcombine stacked products.")
     parser.add_argument("--out", type=Path, default=None, help="Output figure path. Default: <stack_dir>/quickview.png")
     parser.add_argument("--smooth-sigma", type=float, default=2.0, help="Gaussian smoothing sigma for stacked rate-map panels. Default: 2")
+    parser.add_argument("--r90-stride", type=int, default=4, help="Pixel stride for R90 sampling. Use 1 for exact per-pixel R90. Default: 4")
+    parser.add_argument("--title", default=None, help="Optional title shown above the quick-view figure.")
     parser.add_argument("--dpi", type=int, default=100, help="Output figure DPI. Default: 100")
     parser.add_argument("--rate", type=Path, default=None, help="Override stacked rate FITS path.")
     parser.add_argument("--bkgmap", type=Path, default=None, help="Override stacked background map FITS path.")
@@ -695,7 +775,15 @@ def main(argv: list[str] | None = None) -> None:
     )
     validate_paths(paths)
     out_path = args.out if args.out is not None else paths.stack_dir / "quickview.png"
-    result = plot_quickview(paths, out_path, smooth_sigma=args.smooth_sigma, dpi=args.dpi, logger=logger)
+    result = plot_quickview(
+        paths,
+        out_path,
+        smooth_sigma=args.smooth_sigma,
+        r90_stride=args.r90_stride,
+        title=args.title,
+        dpi=args.dpi,
+        logger=logger,
+    )
     emit(logger, "info", f"Wrote quick-view figure: {result}")
 
 
