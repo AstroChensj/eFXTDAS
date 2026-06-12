@@ -393,7 +393,7 @@ The implementation is intentionally simpler than eSASS and uses local PSF-derive
 
 ## Tunable Parameters and Heuristic Constants
 
-The following constants are defined in [`fxtregions/config.py`](../fxtregions/config.py):
+The following constants are defined in [`fxtregions/config.py`](../src/fxtregions/config.py):
 
 ### Matching
 

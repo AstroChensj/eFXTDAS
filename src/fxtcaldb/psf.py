@@ -42,6 +42,33 @@ class EEFSelection:
     meta: dict[str, str | float]
 
 
+@dataclass(frozen=True)
+class MissionPSFContext:
+    """Calibration context used by mission-level PSF/EFF callers.
+
+    Parameters
+    ----------
+    mission : str
+        Normalized mission identifier.
+    selected_eef : Path | None
+        Selected EEF calibration file, or ``None`` when using mean curves.
+    mean_eef_files : tuple[Path, ...]
+        EEF files used for mean-curve mode.
+    meta : dict[str, str | float]
+        Calibration provenance metadata.
+
+    Returns
+    -------
+    MissionPSFContext
+        Immutable context for local EEF lookups.
+    """
+
+    mission: str
+    selected_eef: Path | None
+    mean_eef_files: tuple[Path, ...]
+    meta: dict[str, str | float]
+
+
 def _read_fits_table_xy(path: Path, xcol: str, ycol: str, ext: int) -> tuple[np.ndarray, np.ndarray]:
     """Read two numeric columns from one FITS binary-table extension.
 
@@ -214,6 +241,72 @@ def select_ep_eef_files(
     )
 
 
+def build_mission_psf_context(
+    mission: str,
+    instrument: str | None,
+    filter_name: str | None,
+    emin_keV: float | None,
+    emax_keV: float | None,
+) -> MissionPSFContext:
+    """Build a reusable mission PSF context from image metadata.
+
+    Parameters
+    ----------
+    mission : str
+        Mission identifier. EP/FXT identifiers such as ``ep`` and ``ep-fxt``
+        are currently supported.
+    instrument : str | None
+        Instrument or detector-arm string such as ``fxta``.
+    filter_name : str | None
+        Filter-family name such as ``thin``.
+    emin_keV : float | None
+        Lower energy bound in keV.
+    emax_keV : float | None
+        Upper energy bound in keV.
+
+    Returns
+    -------
+    MissionPSFContext
+        Context containing selected EEF files and provenance metadata.
+    """
+    mission_key = str(mission or "ep").strip().lower().replace("_", "-")
+    if mission_key not in {"ep", "ep-fxt", "einstein-probe", "einstein-probe-fxt"}:
+        raise ValueError(f"Unsupported mission PSF context: {mission}")
+    selection = select_ep_eef_files(instrument, filter_name, emin_keV, emax_keV)
+    meta = dict(selection.meta)
+    meta["mission"] = "ep"
+    return MissionPSFContext(
+        mission="ep",
+        selected_eef=selection.selected_eef,
+        mean_eef_files=selection.mean_eef_files,
+        meta=meta,
+    )
+
+
+def available_theta_arcmin(context: MissionPSFContext) -> np.ndarray:
+    """Return the available off-axis EEF calibration grid.
+
+    Parameters
+    ----------
+    context : MissionPSFContext
+        Mission PSF context from :func:`build_mission_psf_context`.
+
+    Returns
+    -------
+    np.ndarray
+        Sorted off-axis angles in arcminutes.
+    """
+    files = (context.selected_eef,) if context.selected_eef is not None else context.mean_eef_files
+    theta_values: list[float] = []
+    for path in files:
+        if path is None:
+            continue
+        theta_values.extend(theta for theta, _ext in _eef_theta_extensions(Path(path)))
+    if not theta_values:
+        raise RuntimeError("No off-axis EEF calibration grid is available.")
+    return np.asarray(sorted(set(theta_values)), dtype=np.float64)
+
+
 def load_eef_curve_for_theta(
     eef_file: Path | None,
     theta_arcmin: float,
@@ -280,6 +373,24 @@ def load_eef_curve_for_theta(
         frac_mean = np.clip(np.mean(np.vstack(frac_stack), axis=0), 0.0, 1.0)
         return ref_radius, np.maximum.accumulate(frac_mean)
     return _interpolate_curve(Path(eef_file), float(theta_arcmin))
+
+
+def load_local_eef(context: MissionPSFContext, theta_arcmin: float) -> tuple[np.ndarray, np.ndarray]:
+    """Load the local EEF curve for one mission context and off-axis angle.
+
+    Parameters
+    ----------
+    context : MissionPSFContext
+        Mission PSF context from :func:`build_mission_psf_context`.
+    theta_arcmin : float
+        Requested off-axis angle in arcminutes.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``(radius_pix, eef_fraction)`` for the requested local PSF.
+    """
+    return load_eef_curve_for_theta(context.selected_eef, theta_arcmin, context.mean_eef_files)
 
 
 def resolve_beta_psf_path(detector: str) -> Path:

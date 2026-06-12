@@ -309,11 +309,11 @@ The most relevant top-level directories are:
 
 | Path | Meaning |
 | --- | --- |
-| `fxtcombine/` | multi-OBSID stacking workflow |
-| `fxtsrcdet/` | source detection and catalog construction |
-| `fxtregions/` | source/background region construction |
-| `fxtpsfgen/` | observation and stacked PSF-product generation |
-| `fxtcaldb/` | shared calibration, optics, and PSF / EEF support code |
+| `src/fxtcombine/` | multi-OBSID stacking workflow |
+| `src/fxtsrcdet/` | source detection and catalog construction |
+| `src/fxtregions/` | source/background region construction |
+| `src/fxtpsfgen/` | observation and stacked PSF-product generation |
+| `src/fxtcaldb/` | shared calibration, optics, and PSF / EEF support code |
 | `fxtdas-bin/` | local copies of official FXTDAS task scripts for inspection/reference |
 | `fxtdas-py/` | local Python support code from the FXTDAS environment |
 | `docs/` | detailed package documentation |

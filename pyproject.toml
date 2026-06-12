@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eFXTDAS"
+version = "0.1.0"
+description = "Enhanced data analysis tools for Einstein Probe FXT, extending the official FXTDAS workflow."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Shi-Jiang Chen", email = "JohnnyCsj666@gmail.com" },
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "astropy",
+    "matplotlib",
+    "cycler",
+    "reproject",
+    "regions",
+    "tqdm",
+]
+
+[project.urls]
+Homepage = "https://github.com/AstroChensj/eFXTDAS.git"
+
+[project.scripts]
+fxtsrcdet = "fxtsrcdet.pipeline:main"
+fxtregions = "fxtregions.pipeline:main"
+fxtrspgen = "fxtrspgen.pipeline:main"
+fxtpsfgen = "fxtpsfgen.pipeline:main"
+fxtcombine = "fxtcombine.pipeline:main"
+fxtcombine-quickview = "fxtcombine.quickview:main"
+fxtbkgoptrate = "fxtbkgoptrate.pipeline:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = [
+    "fxtbkgoptrate*",
+    "fxtcaldb*",
+    "fxtcombine*",
+    "fxteefmap*",
+    "fxtpsfgen*",
+    "fxtregions*",
+    "fxtrspgen*",
+    "fxtsrcdet*",
+]

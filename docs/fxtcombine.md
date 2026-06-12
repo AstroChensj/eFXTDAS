@@ -592,7 +592,7 @@ For the `FF`/`fsaevt` flare-screening substep, the dedicated optimizer command l
 
 ## Tunable Parameters and Constants
 
-Important current constants are defined in [`fxtcombine/config.py`](../fxtcombine/config.py):
+Important current constants are defined in [`fxtcombine/config.py`](../src/fxtcombine/config.py):
 
 - `FXT_POSITION_ERR90_ARCSEC = 8.6`
   - representative source-position accuracy at 90% confidence
