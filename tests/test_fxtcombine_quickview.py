@@ -10,6 +10,43 @@ from astropy.io import fits
 from fxtcombine import quickview
 
 
+class _FakePSFMapper:
+    """Minimal PSF mapper used to test R90 sampling.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+        Instances record queried positions in ``calls``.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[float, float]] = []
+
+    def radius_at_position(self, x_ima: float, y_ima: float, frac_value: float) -> float:
+        """Return a deterministic R90-like value.
+
+        Parameters
+        ----------
+        x_ima : float
+            One-based image x coordinate.
+        y_ima : float
+            One-based image y coordinate.
+        frac_value : float
+            Requested EEF fraction.
+
+        Returns
+        -------
+        float
+            Synthetic radius value.
+        """
+        self.calls.append((x_ima, y_ima))
+        return float(x_ima + y_ima + frac_value)
+
+
 def _write_image(path: Path, data: np.ndarray) -> None:
     """Write one small celestial-WCS FITS image.
 
@@ -111,6 +148,54 @@ def test_parse_regions_handles_image_and_fk5_exclusions(tmp_path: Path) -> None:
     assert bkg_excludes[0].radius_arcsec == 20.0
 
 
+def test_compute_r90_map_supports_exact_and_coarse_sampling(tmp_path: Path, monkeypatch) -> None:
+    """R90 calculation should support exact and coarse-grid modes.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary pytest workspace.
+    monkeypatch : pytest.MonkeyPatch
+        Pytest monkeypatch fixture.
+
+    Returns
+    -------
+    None
+    """
+    fake_mapper = _FakePSFMapper()
+    monkeypatch.setattr(quickview, "load_psf_product", lambda path: fake_mapper)
+    valid_mask = np.ones((5, 5), dtype=bool)
+
+    exact = quickview.compute_r90_map(tmp_path / "stack_psfprod.fits", valid_mask.shape, valid_mask, r90_stride=1)
+    assert np.all(np.isfinite(exact))
+    assert len(fake_mapper.calls) == 25
+
+    fake_mapper.calls.clear()
+    coarse = quickview.compute_r90_map(tmp_path / "stack_psfprod.fits", valid_mask.shape, valid_mask, r90_stride=2)
+    assert np.all(np.isfinite(coarse))
+    assert 0 < len(fake_mapper.calls) < 25
+
+
+def test_compute_r90_map_prefers_cached_extension(tmp_path: Path, monkeypatch) -> None:
+    """R90 calculation should read cached PSF-product maps when present."""
+    cached = np.arange(25, dtype=np.float32).reshape(5, 5)
+    r90_hdu = fits.ImageHDU(data=cached, name="R90")
+    r90_hdu.header["BUNIT"] = "pixel"
+    r90_hdu.header["EEF"] = 0.90
+    psfprod = tmp_path / "stack_psfprod.fits"
+    fits.HDUList([fits.PrimaryHDU(header=fits.Header({"PSFTYPE": "STACK"})), r90_hdu]).writeto(psfprod, overwrite=True)
+    monkeypatch.setattr(
+        quickview,
+        "load_psf_product",
+        lambda path: (_ for _ in ()).throw(AssertionError("cached R90 should avoid mapper load")),
+    )
+    valid_mask = np.ones((5, 5), dtype=bool)
+
+    r90 = quickview.compute_r90_map(psfprod, valid_mask.shape, valid_mask, r90_stride=4)
+
+    assert np.allclose(r90, cached)
+
+
 def test_quickview_cli_writes_figure_with_standard_stack_dir(tmp_path: Path, monkeypatch) -> None:
     """The CLI should infer paths from stack_dir and write a quick-view image.
 
@@ -141,7 +226,7 @@ def test_quickview_cli_writes_figure_with_standard_stack_dir(tmp_path: Path, mon
         encoding="utf-8",
     )
 
-    def _fake_r90(psfprod_path, shape, valid_mask, logger=None):
+    def _fake_r90(psfprod_path, shape, valid_mask, r90_stride=4, logger=None):
         """Return a deterministic R90 map for CLI smoke testing.
 
         Parameters
@@ -152,6 +237,8 @@ def test_quickview_cli_writes_figure_with_standard_stack_dir(tmp_path: Path, mon
             Requested output map shape.
         valid_mask : np.ndarray
             Boolean mask selecting valid pixels.
+        r90_stride : int
+            Ignored R90 sampling stride.
         logger : logging.Logger | None
             Ignored logger.
 
@@ -164,6 +251,6 @@ def test_quickview_cli_writes_figure_with_standard_stack_dir(tmp_path: Path, mon
 
     monkeypatch.setattr(quickview, "compute_r90_map", _fake_r90)
     out_path = tmp_path / "quickview.png"
-    quickview.main([str(tmp_path), "--out", str(out_path), "--log-level", "ERROR"])
+    quickview.main([str(tmp_path), "--out", str(out_path), "--title", "Quick View Test", "--log-level", "ERROR"])
     assert out_path.exists()
     assert out_path.stat().st_size > 0

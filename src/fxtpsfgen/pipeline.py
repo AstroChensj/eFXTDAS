@@ -7,7 +7,7 @@ from pathlib import Path
 
 from astropy.io import fits
 
-from fxtpsfgen.mapper import build_observation_psf_mapper, build_stacked_psf_mapper
+from fxtpsfgen.mapper import DEFAULT_RADIUS_MAP_EEFS, build_observation_psf_mapper, build_stacked_psf_mapper
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     stack_parser.add_argument("--weightmap", type=Path, action="append", required=True, help="Matching vignetted weight/exposure map; repeat once per component")
     stack_parser.add_argument("--ref-image", type=Path, required=True, help="Reference stacked image FITS path")
     stack_parser.add_argument("--out", type=Path, required=True, help="Output stacked PSF product FITS path")
+    stack_parser.add_argument("--eef-map", type=float, action="append", default=None, help="Additional cached radius-map EEF fraction; repeat for multiple values")
+    stack_parser.add_argument("--block-rows", type=int, default=64, help="Rows per block for stacked radius-map generation")
+    stack_parser.add_argument("--jobs", type=int, default=1, help="Thread workers for stacked radius-map generation")
     return parser
 
 
@@ -66,7 +69,10 @@ def main(argv: list[str] | None = None) -> int:
     with fits.open(args.ref_image) as hdul:
         ref_header = hdul[0].header.copy()
     mapper = build_stacked_psf_mapper(args.obs_psf, args.weightmap, ref_header)
-    mapper.write(args.out)
+    eef_maps = list(DEFAULT_RADIUS_MAP_EEFS)
+    if args.eef_map is not None:
+        eef_maps.extend(args.eef_map)
+    mapper.write(args.out, eef_maps=eef_maps, block_rows=args.block_rows, nworkers=args.jobs)
     return 0
 
 

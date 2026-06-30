@@ -33,6 +33,7 @@ fxtpsfgen = "fxtpsfgen.pipeline:main"
 fxtcombine = "fxtcombine.pipeline:main"
 fxtcombine-quickview = "fxtcombine.quickview:main"
 fxtbkgoptrate = "fxtbkgoptrate.pipeline:main"
+fxtsensmap = "fxtsensmap.pipeline:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -47,5 +48,6 @@ include = [
     "fxtpsfgen*",
     "fxtregions*",
     "fxtrspgen*",
+    "fxtsensmap*",
     "fxtsrcdet*",
 ]

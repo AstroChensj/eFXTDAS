@@ -29,7 +29,7 @@ from scipy.interpolate import griddata
 from tqdm.auto import tqdm
 
 from fxtcombine.utils.logger import build_cli_logger, emit
-from fxtpsfgen.mapper import load_psf_product
+from fxtpsfgen.mapper import load_psf_product, radius_extension_name
 
 
 @dataclass(frozen=True)
@@ -435,7 +435,6 @@ def compute_r90_map(
     np.ndarray
         R90 map in image pixels, with invalid pixels set to ``NaN``.
     """
-    mapper = load_psf_product(psfprod_path)
     r90 = np.full(shape, np.nan, dtype=np.float32)
     mask = np.asarray(valid_mask, dtype=bool)
     valid_pixels = np.argwhere(mask)
@@ -443,6 +442,13 @@ def compute_r90_map(
         emit(logger, "warning", "No valid pixels were available for R90 calculation.")
         return r90
 
+    cached = _load_cached_radius_map(psfprod_path, 0.90, shape)
+    if cached is not None:
+        emit(logger, "info", f"Using cached R90 map from {psfprod_path}")
+        r90[mask] = cached[mask].astype(np.float32)
+        return r90
+
+    mapper = load_psf_product(psfprod_path)
     stride = max(int(r90_stride), 1)
     if stride == 1:
         sample_pixels = valid_pixels
@@ -500,6 +506,42 @@ def compute_r90_map(
 
     r90[mask] = interpolated.astype(np.float32)
     return r90
+
+
+def _load_cached_radius_map(psfprod_path: Path, frac_value: float, shape: tuple[int, int]) -> np.ndarray | None:
+    """Load a cached radius-at-EEF map from a PSF product when present.
+
+    Parameters
+    ----------
+    psfprod_path : Path
+        PSF product path.
+    frac_value : float
+        Requested EEF fraction.
+    shape : tuple[int, int]
+        Expected output image shape.
+
+    Returns
+    -------
+    np.ndarray | None
+        Cached radius map in pixels, or ``None`` when unavailable.
+    """
+    path = Path(psfprod_path)
+    if not path.exists():
+        return None
+    extname = radius_extension_name(frac_value)
+    try:
+        with fits.open(path) as hdul:
+            if extname not in hdul:
+                return None
+            data = np.asarray(hdul[extname].data, dtype=np.float64)
+            if data.shape != tuple(shape):
+                return None
+            unit = str(hdul[extname].header.get("BUNIT", "pixel")).strip().lower()
+            if unit not in {"pixel", "pixels", "pix"}:
+                return None
+            return data
+    except Exception:
+        return None
 
 
 def _add_circle(ax: Any, x: float, y: float, radius: float, **kwargs: Any) -> None:

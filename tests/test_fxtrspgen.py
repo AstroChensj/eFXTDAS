@@ -17,6 +17,7 @@ from fxtcaldb.query import read_observation_metadata
 from fxtcaldb.response import resolve_base_arf
 from fxtcaldb.query import find_calibration_file
 from fxtpsfgen.mapper import ObservationPSFMapper, StackedPSFMapper, build_observation_psf_mapper, build_stacked_psf_mapper
+from fxtpsfgen.pipeline import build_parser as build_psfgen_parser
 from fxtrspgen.arf import resolve_source_position
 from fxtrspgen.pipeline import build_parser, run_fxtrspgen
 from fxtrspgen.regions import UnsupportedRegionError, load_region_set
@@ -493,6 +494,9 @@ def test_run_fxtrspgen_writes_factorized_outputs_and_optional_headers(
     """The new task should write diagnostic ARF columns and leave PHA untouched by default."""
     specfile = _write_spectrum(tmp_path / "src.pi")
     expfile = _write_exposure(tmp_path / "exp.fits")
+    with fits.open(expfile, mode="update") as hdul:
+        hdul[0].header["FILTER"] = "01"
+        hdul[0].header["PA_PNT"] = 0.0
     region_path = tmp_path / "src.reg"
     region_path.write_text(
         "# Region file format: DS9 version 4.1\nimage\ncircle(12,50,10)\n-circle(12,50,3)\n",
@@ -544,6 +548,8 @@ def test_fxtrspgen_emits_stage_logs_and_parser_supports_log_options(
             "spec.pi",
             "exp.fits",
             "src.reg",
+            "--psfprod",
+            "obs.psfprod.fits",
             "--log-level",
             "DEBUG",
             "--log-file",
@@ -552,6 +558,7 @@ def test_fxtrspgen_emits_stage_logs_and_parser_supports_log_options(
     )
     assert args.log_level == "DEBUG"
     assert args.log_file == tmp_path / "fxtrspgen.log"
+    assert args.psfprod == "obs.psfprod.fits"
 
     specfile = _write_spectrum(tmp_path / "src.pi")
     expfile = _write_exposure(tmp_path / "exp.fits")
@@ -592,6 +599,100 @@ def test_fxtrspgen_emits_stage_logs_and_parser_supports_log_options(
     assert "Total correction:" in log_text
     assert "ARF generation total runtime:" in log_text
     assert "FXTRSPGEN total runtime:" in log_text
+
+
+def test_run_fxtrspgen_reuses_existing_observation_psfprod(
+    tmp_path: Path,
+    fake_caldb: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """fxtrspgen should load an existing OBS PSF product instead of rebuilding it."""
+    specfile = _write_spectrum(tmp_path / "src.pi")
+    expfile = _write_exposure(tmp_path / "exp.fits")
+    with fits.open(expfile, mode="update") as hdul:
+        hdul[0].header["FILTER"] = "01"
+        hdul[0].header["PA_PNT"] = 0.0
+    region_path = tmp_path / "src.reg"
+    region_path.write_text(
+        "# Region file format: DS9 version 4.1\nimage\ncircle(12,50,10)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("fxtrspgen.arf.compute_optical_axis_pixel", lambda *args, **kwargs: (70.5, 50.5))
+    mapper = build_observation_psf_mapper(
+        expfile,
+        instrument="fxta",
+        filter_name="thin",
+        emin_keV=0.3,
+        emax_keV=10.0,
+    )
+    psfprod_path = tmp_path / "obs.psfprod.fits"
+    mapper.write(psfprod_path)
+    monkeypatch.setattr(
+        "fxtrspgen.arf.build_observation_psf_mapper",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected PSF rebuild")),
+    )
+
+    outputs = run_fxtrspgen(
+        str(specfile),
+        str(expfile),
+        str(region_path),
+        arf_out=str(tmp_path / "reuse.arf"),
+        rmf_out=str(tmp_path / "reuse.rmf"),
+        psfprod=str(psfprod_path),
+        clobber=True,
+    )
+
+    assert Path(outputs["arf_out"]).exists()
+    assert Path(outputs["rmf_out"]).exists()
+
+
+def test_run_fxtrspgen_rejects_stacked_psfprod(
+    tmp_path: Path,
+    fake_caldb: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """fxtrspgen should reject stacked PSF products passed through ``--psfprod``."""
+    specfile = _write_spectrum(tmp_path / "src.pi")
+    expfile = _write_exposure(tmp_path / "exp.fits")
+    region_path = tmp_path / "src.reg"
+    region_path.write_text(
+        "# Region file format: DS9 version 4.1\nimage\ncircle(12,50,10)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("fxtrspgen.arf.compute_optical_axis_pixel", lambda *args, **kwargs: (70.5, 50.5))
+
+    image_a = _write_exposure(tmp_path / "image_a.fits")
+    image_b = _write_exposure(tmp_path / "image_b.fits")
+    for path, ra_pnt in ((image_a, 10.0), (image_b, 10.05)):
+        with fits.open(path, mode="update") as hdul:
+            hdul[0].header["FILTER"] = "01"
+            hdul[0].header["PA_PNT"] = 0.0
+            hdul[0].header["RA_PNT"] = ra_pnt
+    obs_a = build_observation_psf_mapper(image_a, instrument="fxta", filter_name="thin", emin_keV=0.3, emax_keV=10.0)
+    obs_b = build_observation_psf_mapper(image_b, instrument="fxta", filter_name="thin", emin_keV=0.3, emax_keV=10.0)
+    obs_a_path = tmp_path / "obs_a.psfprod.fits"
+    obs_b_path = tmp_path / "obs_b.psfprod.fits"
+    obs_a.write(obs_a_path)
+    obs_b.write(obs_b_path)
+    weight_a = tmp_path / "weight_a.fits"
+    weight_b = tmp_path / "weight_b.fits"
+    fits.PrimaryHDU(data=np.ones((100, 100), dtype=np.float32), header=fits.getheader(image_a)).writeto(weight_a, overwrite=True)
+    fits.PrimaryHDU(data=np.full((100, 100), 0.5, dtype=np.float32), header=fits.getheader(image_b)).writeto(weight_b, overwrite=True)
+    ref_header = fits.getheader(image_a)
+    stacked = build_stacked_psf_mapper([obs_a_path, obs_b_path], [weight_a, weight_b], ref_header)
+    stacked_path = tmp_path / "stack.psfprod.fits"
+    stacked.write(stacked_path)
+
+    with pytest.raises(ValueError, match="PSFTYPE=OBS"):
+        run_fxtrspgen(
+            str(specfile),
+            str(expfile),
+            str(region_path),
+            arf_out=str(tmp_path / "stack.arf"),
+            rmf_out=str(tmp_path / "stack.rmf"),
+            psfprod=str(stacked_path),
+            clobber=True,
+        )
 
 
 def test_repo_fixture_runs_end_to_end_with_synthetic_caldb(
@@ -686,3 +787,40 @@ def test_stacked_psf_mapper_builds_and_answers_weighted_queries(fake_caldb: Path
     assert np.all(np.diff(frac) >= -1e-8)
     assert loaded.radius_at_position(50.0, 50.0, 0.90) > 0.0
     assert loaded.kernel_at_position(50.0, 50.0).sum() == pytest.approx(1.0)
+    serial_maps = loaded.radius_maps((0.50, 0.90), block_rows=11, nworkers=1)
+    threaded_maps = loaded.radius_maps((0.50, 0.90), block_rows=11, nworkers=2)
+    assert np.allclose(serial_maps[0.50], threaded_maps[0.50], equal_nan=True)
+    assert np.allclose(serial_maps[0.90], threaded_maps[0.90], equal_nan=True)
+    assert serial_maps[0.90][49, 49] == pytest.approx(loaded.radius_at_position(50.0, 50.0, 0.90), rel=1e-5)
+    with fits.open(stacked_path) as hdul:
+        assert "R50" in hdul
+        assert "R90" in hdul
+        assert hdul["R90"].header["BUNIT"] == "pixel"
+        assert hdul["R90"].header["EEF"] == pytest.approx(0.90)
+        assert hdul["R90"].data.shape == (100, 100)
+
+
+def test_fxtpsfgen_stack_parser_accepts_radius_map_options() -> None:
+    """Stack parser should expose cached-radius-map controls."""
+    args = build_psfgen_parser().parse_args(
+        [
+            "stack",
+            "--obs-psf",
+            "obs.psfprod.fits",
+            "--weightmap",
+            "weight.fits",
+            "--ref-image",
+            "ref.fits",
+            "--out",
+            "stack.psfprod.fits",
+            "--eef-map",
+            "0.68",
+            "--block-rows",
+            "8",
+            "--jobs",
+            "2",
+        ]
+    )
+    assert args.eef_map == [0.68]
+    assert args.block_rows == 8
+    assert args.jobs == 2

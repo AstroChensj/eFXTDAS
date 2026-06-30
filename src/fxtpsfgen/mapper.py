@@ -12,6 +12,7 @@ observation products together with projected theta/weight maps on a common WCS.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import math
 from pathlib import Path
@@ -30,6 +31,7 @@ from fxtcaldb.query import ObservationMetadata, read_observation_metadata
 
 
 BETA_EEF_THETA_MAX_ARCMIN = 3.0
+DEFAULT_RADIUS_MAP_EEFS = (0.50, 0.75, 0.80, 0.90)
 EP_LINE_ENERGY_KEV = {
     "C_K": 0.277,
     "Ag_L": 2.98,
@@ -56,6 +58,80 @@ FILTER_NAME_MAP = {
     "medium": "medium",
     "hole": "hole",
 }
+
+
+def radius_extension_name(frac_value: float) -> str:
+    """Return the standard FITS extension name for an EEF radius map.
+
+    Parameters
+    ----------
+    frac_value : float
+        Encircled-energy fraction in ``[0, 1]``.
+
+    Returns
+    -------
+    str
+        Short extension name such as ``R90``.
+    """
+    percent = float(frac_value) * 100.0
+    rounded = int(round(percent))
+    if abs(percent - rounded) < 1.0e-6:
+        return f"R{rounded:02d}"
+    token = f"{percent:.2f}".rstrip("0").rstrip(".").replace(".", "P")
+    return f"R{token}"
+
+
+def normalize_eef_fractions(frac_values: list[float] | tuple[float, ...] | None) -> tuple[float, ...]:
+    """Validate, deduplicate, and sort requested EEF fractions.
+
+    Parameters
+    ----------
+    frac_values : list[float] | tuple[float, ...] | None
+        User-supplied EEF fractions.
+
+    Returns
+    -------
+    tuple[float, ...]
+        Sorted unique fractions.
+    """
+    values = DEFAULT_RADIUS_MAP_EEFS if frac_values is None else tuple(frac_values)
+    out: dict[str, float] = {}
+    for value in values:
+        frac = float(value)
+        if not 0.0 < frac <= 1.0:
+            raise ValueError(f"EEF fraction must be in (0, 1], got {value!r}")
+        out[radius_extension_name(frac)] = frac
+    return tuple(out[name] for name in sorted(out, key=lambda key: out[key]))
+
+
+def _radius_image_hdu(data: np.ndarray, header: fits.Header, frac_value: float, method: str) -> fits.ImageHDU:
+    """Build one image HDU carrying a radius-at-EEF map.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Radius map in image pixels.
+    header : fits.Header
+        Reference image header.
+    frac_value : float
+        Encircled-energy fraction represented by the map.
+    method : str
+        Method identifier for provenance.
+
+    Returns
+    -------
+    fits.ImageHDU
+        Radius-map extension.
+    """
+    hdu_header = header.copy()
+    hdu_header["BUNIT"] = ("pixel", "Radius unit")
+    hdu_header["EEF"] = (float(frac_value), "Encircled-energy fraction")
+    hdu_header["METHOD"] = (str(method), "Radius-map construction method")
+    return fits.ImageHDU(
+        data=np.asarray(data, dtype=np.float32),
+        header=hdu_header,
+        name=radius_extension_name(frac_value),
+    )
 
 
 def _instrument_from_detector(detnam: str) -> str:
@@ -295,6 +371,131 @@ def _build_eef_cube(instrument: str, filter_name: str) -> tuple[np.ndarray, np.n
             interp = np.interp(radius_grid, radius_pix, frac, left=0.0, right=float(frac[-1]))
             cube[energy_idx, theta_idx] = np.maximum.accumulate(np.clip(interp, 0.0, 1.0))
     return energy_grid, theta_grid, radius_grid, cube
+
+
+def _component_energy_curves(
+    mapper: "ObservationPSFMapper",
+    radius_grid: np.ndarray,
+    energy_keV: float,
+) -> np.ndarray:
+    """Evaluate one observation mapper EEF table at a requested energy.
+
+    Parameters
+    ----------
+    mapper : ObservationPSFMapper
+        Observation PSF mapper.
+    radius_grid : np.ndarray
+        Common radius grid in image pixels.
+    energy_keV : float
+        Requested energy in keV.
+
+    Returns
+    -------
+    np.ndarray
+        EEF curves shaped ``(ntheta, nradius)``.
+    """
+    curves = np.vstack(
+        [
+            _interp_curve(mapper.energy_grid, mapper.eef_cube[:, theta_idx, :], float(energy_keV))
+            for theta_idx in range(mapper.eef_cube.shape[1])
+        ]
+    )
+    if mapper.radius_grid.shape != radius_grid.shape or not np.allclose(mapper.radius_grid, radius_grid):
+        curves = np.vstack(
+            [
+                np.interp(
+                    np.asarray(radius_grid, dtype=np.float64),
+                    mapper.radius_grid,
+                    curve,
+                    left=0.0,
+                    right=float(curve[-1]),
+                )
+                for curve in curves
+            ]
+        )
+    return np.maximum.accumulate(np.clip(curves, 0.0, 1.0), axis=1)
+
+
+def _component_eef_block(
+    mapper: "ObservationPSFMapper",
+    theta_block: np.ndarray,
+    radius_grid: np.ndarray,
+    energy_keV: float,
+) -> np.ndarray:
+    """Evaluate one component's local EEF curves over a theta block.
+
+    Parameters
+    ----------
+    mapper : ObservationPSFMapper
+        Observation PSF mapper.
+    theta_block : np.ndarray
+        Block of off-axis angles in arcminutes.
+    radius_grid : np.ndarray
+        Common radius grid in image pixels.
+    energy_keV : float
+        Requested energy in keV.
+
+    Returns
+    -------
+    np.ndarray
+        EEF curves shaped ``theta_block.shape + (nradius,)``.
+    """
+    theta_grid = np.asarray(mapper.theta_grid, dtype=np.float64)
+    radius_grid = np.asarray(radius_grid, dtype=np.float64)
+    energy_curves = _component_energy_curves(mapper, radius_grid, energy_keV)
+    theta = np.asarray(theta_block, dtype=np.float64)
+    clipped = np.clip(theta, float(theta_grid[0]), float(theta_grid[-1]))
+    idx_hi = np.searchsorted(theta_grid, clipped, side="left")
+    idx_hi = np.clip(idx_hi, 0, len(theta_grid) - 1)
+    idx_lo = np.clip(idx_hi - 1, 0, len(theta_grid) - 1)
+    theta_lo = theta_grid[idx_lo]
+    theta_hi = theta_grid[idx_hi]
+    denom = np.maximum(theta_hi - theta_lo, 1.0e-12)
+    frac_hi = np.where(idx_hi == idx_lo, 0.0, (clipped - theta_lo) / denom)
+    frac_lo = 1.0 - frac_hi
+    curves = frac_lo[..., None] * energy_curves[idx_lo] + frac_hi[..., None] * energy_curves[idx_hi]
+
+    near_axis = theta < BETA_EEF_THETA_MAX_ARCMIN
+    if np.any(near_axis):
+        beta_curve = _beta_eef_curve(radius_grid, mapper.beta_table, energy_keV)
+        curves[near_axis] = beta_curve
+    return np.maximum.accumulate(np.clip(curves, 0.0, 1.0), axis=-1)
+
+
+def _invert_eef_curve_map(radius_grid: np.ndarray, curves: np.ndarray, frac_value: float) -> np.ndarray:
+    """Invert a cube of monotonic EEF curves into a radius map.
+
+    Parameters
+    ----------
+    radius_grid : np.ndarray
+        Radius grid in image pixels.
+    curves : np.ndarray
+        EEF curves shaped ``(..., nradius)``.
+    frac_value : float
+        Requested encircled-energy fraction.
+
+    Returns
+    -------
+    np.ndarray
+        Radius map shaped like ``curves.shape[:-1]``.
+    """
+    radius = np.asarray(radius_grid, dtype=np.float64)
+    frac = float(np.clip(frac_value, 0.0, 1.0))
+    valid_curve = np.all(np.isfinite(curves), axis=-1)
+    crossed = curves >= frac
+    hit = valid_curve & np.any(crossed, axis=-1)
+    idx_hi = np.argmax(crossed, axis=-1)
+    idx_lo = np.clip(idx_hi - 1, 0, len(radius) - 1)
+
+    f_hi = np.take_along_axis(curves, idx_hi[..., None], axis=-1)[..., 0]
+    f_lo = np.take_along_axis(curves, idx_lo[..., None], axis=-1)[..., 0]
+    r_hi = radius[idx_hi]
+    r_lo = radius[idx_lo]
+    denom = np.maximum(f_hi - f_lo, 1.0e-12)
+    alpha = np.clip((frac - f_lo) / denom, 0.0, 1.0)
+    out = r_lo + alpha * (r_hi - r_lo)
+    out = np.where(hit, out, np.nan)
+    return out.astype(np.float32)
 
 
 def _radial_annulus_fractions(
@@ -745,14 +946,8 @@ class ObservationPSFMapper:
                 name="BETA",
             )
         )
-        for frac_value, extname in ((0.50, "R50"), (0.75, "R75"), (0.80, "R80"), (0.90, "R90")):
-            hdus.append(
-                fits.ImageHDU(
-                    data=np.asarray(self.radius_map(frac_value), dtype=np.float32),
-                    header=self.header.copy(),
-                    name=extname,
-                )
-            )
+        for frac_value in DEFAULT_RADIUS_MAP_EEFS:
+            hdus.append(_radius_image_hdu(self.radius_map(frac_value), self.header, frac_value, "OBS_EEF"))
         fits.HDUList(hdus).writeto(path, overwrite=True)
         return str(path)
 
@@ -807,6 +1002,24 @@ class StackedPSFMapper:
     header: fits.Header
     components: tuple[dict[str, Any], ...]
 
+    def image_shape(self) -> tuple[int, int]:
+        """Return the stacked image shape as ``(ny, nx)``.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        tuple[int, int]
+            Image shape.
+        """
+        if "NAXIS2" in self.header and "NAXIS1" in self.header:
+            return int(self.header["NAXIS2"]), int(self.header["NAXIS1"])
+        if self.components:
+            return tuple(int(value) for value in self.components[0]["theta_map"].shape)
+        raise ValueError("Cannot infer stacked PSF image shape.")
+
     def local_eef_curve(self, x_ima: float, y_ima: float, energy_keV: float | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Return the weighted-average local EEF curve at one stacked-image pixel.
 
@@ -839,7 +1052,7 @@ class StackedPSFMapper:
             mapper: ObservationPSFMapper = component["mapper"]
             theta_arcmin = float(theta_map[y_idx, x_idx])
             _, frac = mapper.eef_curve(theta_arcmin, energy_keV=energy_keV)
-            if not np.allclose(mapper.radius_grid, self.radius_grid):
+            if mapper.radius_grid.shape != self.radius_grid.shape or not np.allclose(mapper.radius_grid, self.radius_grid):
                 frac = np.interp(self.radius_grid, mapper.radius_grid, frac, left=0.0, right=float(frac[-1]))
             curves.append(np.maximum.accumulate(np.clip(frac, 0.0, 1.0)))
             weights.append(weight)
@@ -894,6 +1107,137 @@ class StackedPSFMapper:
         radius_grid, frac = self.local_eef_curve(x_ima, y_ima, energy_keV=energy_keV)
         return float(np.interp(float(np.clip(frac_value, 0.0, 1.0)), frac, radius_grid))
 
+    def _radius_maps_block(
+        self,
+        y_start: int,
+        y_stop: int,
+        frac_values: tuple[float, ...],
+        energy_keV: float,
+    ) -> tuple[int, dict[float, np.ndarray]]:
+        """Compute stacked radius maps for one row block.
+
+        Parameters
+        ----------
+        y_start : int
+            First row in the block, inclusive.
+        y_stop : int
+            Last row in the block, exclusive.
+        frac_values : tuple[float, ...]
+            Requested EEF fractions.
+        energy_keV : float
+            Requested energy in keV.
+
+        Returns
+        -------
+        tuple[int, dict[float, np.ndarray]]
+            Starting row and radius maps for this block.
+        """
+        ny_block = int(y_stop) - int(y_start)
+        _ny, nx = self.image_shape()
+        nradius = len(self.radius_grid)
+        numerator = np.zeros((ny_block, nx, nradius), dtype=np.float64)
+        denominator = np.zeros((ny_block, nx), dtype=np.float64)
+        for component in self.components:
+            theta = np.asarray(component["theta_map"][y_start:y_stop], dtype=np.float64)
+            weight = np.asarray(component["weight_map"][y_start:y_stop], dtype=np.float64)
+            valid = np.isfinite(theta) & np.isfinite(weight) & (weight > 0.0)
+            if not np.any(valid):
+                continue
+            mapper: ObservationPSFMapper = component["mapper"]
+            curves = _component_eef_block(mapper, theta, self.radius_grid, energy_keV)
+            clean_weight = np.where(valid, weight, 0.0)
+            numerator += clean_weight[..., None] * curves
+            denominator += clean_weight
+        stacked = np.divide(
+            numerator,
+            np.maximum(denominator[..., None], 1.0e-12),
+            out=np.full_like(numerator, np.nan),
+            where=denominator[..., None] > 0.0,
+        )
+        stacked = np.maximum.accumulate(np.clip(stacked, 0.0, 1.0), axis=-1)
+        maps = {
+            frac: np.where(
+                denominator > 0.0,
+                _invert_eef_curve_map(self.radius_grid, stacked, frac),
+                np.nan,
+            ).astype(np.float32)
+            for frac in frac_values
+        }
+        return int(y_start), maps
+
+    def radius_maps(
+        self,
+        frac_values: list[float] | tuple[float, ...] | None = None,
+        energy_keV: float | None = None,
+        block_rows: int = 64,
+        nworkers: int = 1,
+    ) -> dict[float, np.ndarray]:
+        """Compute exact stacked radius-at-EEF maps.
+
+        Parameters
+        ----------
+        frac_values : list[float] | tuple[float, ...] | None, optional
+            Requested EEF fractions. Defaults to standard R50/R75/R80/R90.
+        energy_keV : float | None, optional
+            Requested energy in keV.
+        block_rows : int, optional
+            Number of image rows processed per memory block.
+        nworkers : int, optional
+            Number of thread workers. ``1`` runs serially.
+
+        Returns
+        -------
+        dict[float, np.ndarray]
+            Mapping from EEF fraction to radius map in image pixels.
+        """
+        fractions = normalize_eef_fractions(frac_values)
+        energy = self.default_energy_keV if energy_keV is None else float(energy_keV)
+        ny, nx = self.image_shape()
+        rows_per_block = max(int(block_rows), 1)
+        blocks = [(start, min(start + rows_per_block, ny)) for start in range(0, ny, rows_per_block)]
+        out = {frac: np.full((ny, nx), np.nan, dtype=np.float32) for frac in fractions}
+
+        def run_block(block: tuple[int, int]) -> tuple[int, dict[float, np.ndarray]]:
+            return self._radius_maps_block(block[0], block[1], fractions, energy)
+
+        if int(nworkers) <= 1 or len(blocks) <= 1:
+            results = [run_block(block) for block in blocks]
+        else:
+            with ThreadPoolExecutor(max_workers=max(int(nworkers), 1)) as executor:
+                results = list(executor.map(run_block, blocks))
+        for y_start, block_maps in results:
+            for frac, block_map in block_maps.items():
+                out[frac][y_start:y_start + block_map.shape[0]] = block_map
+        return out
+
+    def radius_map(
+        self,
+        frac_value: float,
+        energy_keV: float | None = None,
+        block_rows: int = 64,
+        nworkers: int = 1,
+    ) -> np.ndarray:
+        """Compute one exact stacked radius-at-EEF map.
+
+        Parameters
+        ----------
+        frac_value : float
+            Requested EEF fraction.
+        energy_keV : float | None, optional
+            Requested energy in keV.
+        block_rows : int, optional
+            Number of image rows processed per block.
+        nworkers : int, optional
+            Number of thread workers.
+
+        Returns
+        -------
+        np.ndarray
+            Radius map in image pixels.
+        """
+        maps = self.radius_maps((float(frac_value),), energy_keV=energy_keV, block_rows=block_rows, nworkers=nworkers)
+        return maps[normalize_eef_fractions((float(frac_value),))[0]]
+
     def kernel_at_position(self, x_ima: float, y_ima: float, energy_keV: float | None = None, size: int | None = None) -> np.ndarray:
         """Build the weighted local PSF kernel at one stacked-image position.
 
@@ -916,13 +1260,25 @@ class StackedPSFMapper:
         radius_grid, frac = self.local_eef_curve(x_ima, y_ima, energy_keV=energy_keV)
         return build_psf_kernel(radius_grid, frac, size=size)
 
-    def write(self, path: str | Path) -> str:
+    def write(
+        self,
+        path: str | Path,
+        eef_maps: list[float] | tuple[float, ...] | None = None,
+        block_rows: int = 64,
+        nworkers: int = 1,
+    ) -> str:
         """Write the stacked mapper product to FITS.
 
         Parameters
         ----------
         path : str | Path
             Output FITS path.
+        eef_maps : list[float] | tuple[float, ...] | None, optional
+            EEF fractions for cached radius maps.
+        block_rows : int, optional
+            Number of image rows processed per radius-map block.
+        nworkers : int, optional
+            Number of thread workers for cached radius-map creation.
 
         Returns
         -------
@@ -976,6 +1332,9 @@ class StackedPSFMapper:
                     float(mapper.default_energy_keV),
                 )
             )
+        radius_maps = self.radius_maps(eef_maps, block_rows=block_rows, nworkers=nworkers)
+        for frac_value, radius_map in radius_maps.items():
+            hdus.append(_radius_image_hdu(radius_map, self.header, frac_value, "STACK_EEF"))
         hdus.append(
             fits.BinTableHDU.from_columns(
                 [
