@@ -33,6 +33,7 @@ from fxtcombine.utils.fxtprep import get_input_files
 from fxtcombine.utils.image import reproject_events_xy_to_refwcs
 from fxtcombine.utils.spectrum import stack_instbkg_spectra
 from fxtpsfgen.mapper import build_stacked_psf_mapper
+from fxtsensmap import DEFAULT_ECF
 
 
 def _run_stage1_obsid(
@@ -83,12 +84,54 @@ def _run_stage1_obsid(
 	return obsid, obsid_prod_dict
 
 
+def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, jobs=1):
+	"""Build the command used for stacked sensitivity-map generation.
+
+	Parameters
+	----------
+	bkgmap : str
+		Stacked background-map FITS path.
+	expmap : str
+		Stacked exposure-map FITS path.
+	psfprod : str
+		Stacked ``fxtpsfgen`` PSF product path.
+	out : str
+		Output sensitivity-map FITS path.
+	eef : float
+		Encircled-energy fraction passed to ``fxtsensmap``.
+	ecf : float
+		Count-rate to flux conversion passed to ``fxtsensmap``.
+	likemin : float
+		Detection likelihood threshold passed to ``fxtsensmap``.
+	jobs : int, optional
+		Thread workers forwarded to ``fxtsensmap`` if it must compute a radius
+		map from the PSF product.
+
+	Returns
+	-------
+	str
+		Shell command string.
+	"""
+	return " ".join([
+		"fxtsensmap",
+		"--bkgmap", f'"{bkgmap}"',
+		"--expmap", f'"{expmap}"',
+		"--psfprod", f'"{psfprod}"',
+		"--eef", f"{float(eef)}",
+		"--ecf", f"{float(ecf)}",
+		"--likemin", f"{float(likemin)}",
+		"--jobs", f"{max(int(jobs), 1)}",
+		"--out", f'"{out}"',
+	])
+
+
 def fxtcombine_pipeline(
 		src_dir,ra=None,dec=None,obsid_lst=None,
 		out_dir="./",stack_dir=None,module="a,b",datamode="ff",grade="0-12",expr="DEFAULT",
 		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
 		flare_screen=True,flare_threshold_method="robust_iqr",flare_energy_range="0.5:10.0",flare_binsize=20.0,flare_min_time_ratio=0.05,
 		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",
+		make_sensmap=True,sens_eef=0.90,sens_ecf=DEFAULT_ECF,sens_likemin=6.0,
 		summary_json=None,srcpi_filelist=None,skip_existing=False,
 		logger: logging.Logger | None = None,
 	):
@@ -149,6 +192,15 @@ def fxtcombine_pipeline(
 	srcdet_background_sigma_grid : str | list[float], optional
 		Gaussian smoothing scales in pixels forwarded to ``fxtsrcdet`` for its
 		adaptive background model.
+	make_sensmap : bool, optional
+		Whether to generate ``stack_sensmap.fits`` after spectral stacking.
+	sens_eef : float, optional
+		Encircled-energy fraction used by ``fxtsensmap``. Default is ``0.90``.
+	sens_ecf : float, optional
+		Count-rate to flux conversion in ``ct s^-1 / (erg cm^-2 s^-1)`` passed
+		to ``fxtsensmap``.
+	sens_likemin : float, optional
+		Detection likelihood threshold passed to ``fxtsensmap``.
 	summary_json : str | None, optional
 		Path of the summary JSON file. When omitted,
 		``<stack_dir>/all_obsid.json`` is used.
@@ -212,6 +264,11 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Stage 1 parallel workers are: {jobs}")
 	emit(main_logger, "info", f"fxtsrcdet wavelet scales are: {srcdet_scales}")
 	emit(main_logger, "info", f"fxtsrcdet background sigma grid is: {srcdet_background_sigma_grid}")
+	emit(main_logger, "info", f"Stacked sensitivity-map generation enabled: {make_sensmap}")
+	if make_sensmap:
+		emit(main_logger, "info", f"fxtsensmap EEF is: {sens_eef}")
+		emit(main_logger, "info", f"fxtsensmap ECF is: {sens_ecf}")
+		emit(main_logger, "info", f"fxtsensmap likemin is: {sens_likemin}")
 
 
 	#--- get obsid list
@@ -633,6 +690,29 @@ def fxtcombine_pipeline(
 		emit(main_logger, "warning", "No per-OBSID instrumental background spectra were found to stack.")
 	
 
+	#===============================
+	#--- sensitivity-map generation
+	#===============================
+	stack_sensmap_fname = os.path.join(stack_dir, "stack_sensmap.fits")
+	if make_sensmap:
+		emit(main_logger, "info", "**** Stage 6: sensitivity map generation ****")
+		fxtsensmap_log = os.path.join(stack_dir, "fxtsensmap.log")
+		fxtsensmap_cmd = _build_fxtsensmap_command(
+			srcdet_bkg_fname,
+			stack_expmap_default_fname,
+			stack_psfprod_default_fname,
+			stack_sensmap_fname,
+			sens_eef,
+			sens_ecf,
+			sens_likemin,
+			jobs=jobs,
+		)
+		run_cmd(fxtsensmap_cmd, logger=main_logger, logname=fxtsensmap_log)
+		emit(main_logger, "info", f"Stacked sensitivity map written to {stack_sensmap_fname}")
+	else:
+		emit(main_logger, "info", "Skipping stacked sensitivity-map generation.")
+
+
 	#--- dump output to json file
 	summary_fname = summary_json
 	with open(summary_fname,"w") as f:
@@ -647,6 +727,8 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"Stacked ARF: {os.path.join(stack_dir, 'stack_arf.fits')}")
 	if instbkg_paths:
 		emit(main_logger, "info", f"Stacked instrumental background PI: {os.path.join(stack_dir, 'stack_instbkgpi.fits')}")
+	if make_sensmap:
+		emit(main_logger, "info", f"Stacked sensitivity map: {stack_sensmap_fname}")
 	emit(main_logger, "info", f"Please check each OBSID product dir for grade plot, and light curve, for sanity check!")
 	emit(main_logger, "info", f"Summary of generated files (per OBSID) saved to {summary_fname}")
 	emit(main_logger, "info", f"{all_prod_dict}")
@@ -742,6 +824,30 @@ def build_parser() -> argparse.ArgumentParser:
 		default="4,8,16,32,64",
 		help="Gaussian smoothing scales in pixels forwarded to fxtsrcdet for adaptive background modeling. Default: '4,8,16,32,64'",
 	)
+	parser.add_argument(
+		"--disable-sensmap",
+		action="store_true",
+		default=False,
+		help="Disable automatic stacked sensitivity-map generation after spectral stacking.",
+	)
+	parser.add_argument(
+		"--sens-eef",
+		type=float,
+		default=0.90,
+		help="Encircled-energy fraction passed to fxtsensmap. Default: 0.90",
+	)
+	parser.add_argument(
+		"--sens-ecf",
+		type=float,
+		default=DEFAULT_ECF,
+		help=f"Count-rate to flux conversion passed to fxtsensmap in ct/s per erg/cm2/s. Default: {DEFAULT_ECF:.5g}",
+	)
+	parser.add_argument(
+		"--sens-likemin",
+		type=float,
+		default=6.0,
+		help="Detection likelihood threshold passed to fxtsensmap. Default: 6.0",
+	)
 	parser.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level for CLI and output log file")
 	parser.add_argument("--log-file", type=Path, default=None, help="Optional main log file path; defaults to <out-dir>/log/fxtcombine.log")
 	parser.add_argument(
@@ -787,6 +893,10 @@ def main() -> None:
 		jobs=args.jobs,
 		srcdet_scales=args.srcdet_scales,
 		srcdet_background_sigma_grid=args.srcdet_background_sigma_grid,
+		make_sensmap=not args.disable_sensmap,
+		sens_eef=args.sens_eef,
+		sens_ecf=args.sens_ecf,
+		sens_likemin=args.sens_likemin,
 		skip_existing=args.skip_existing,
 		logger=cli_logger,
 	)
