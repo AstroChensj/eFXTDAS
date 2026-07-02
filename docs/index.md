@@ -14,11 +14,20 @@ fxtsrcdet
 fxtregions
 fxtrspgen
 fxtpsfgen
+fxtsensmap
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Legacy/Internal
+:hidden:
+
+fxteefmap
 ```
 
 ## Scope
 
- The current toolkit contains six user-facing tasks:
+The current toolkit contains seven user-facing tasks:
 
 - `fxtcombine`: multi-epoch stacking and spectral combination
 - `fxtbkgoptrate`: optimum-threshold flare/background screening on one light curve
@@ -26,6 +35,7 @@ fxtpsfgen
 - `fxtregions`: source/background region construction for downstream analysis
 - `fxtrspgen`: standalone ARF/RMF generation from external DS9 source regions
 - `fxtpsfgen`: observation and stacked PSF-product generation
+- `fxtsensmap`: aperture-mode flux-limit map generation from background, exposure, and PSF products
 
 ## Notes for Further Expansion
 

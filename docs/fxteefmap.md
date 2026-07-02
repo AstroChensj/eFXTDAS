@@ -2,8 +2,8 @@
 
 ```{admonition} Legacy Internal Task
 :class: note
-`fxteefmap` is no longer part of the main installed public CLI surface
-documented in `README.md` and `docs/index.md`.
+`fxteefmap` is no longer part of the main installed public CLI surface or the
+main user-facing task list.
 
 For supported public PSF-product workflows, use `fxtpsfgen` instead.
 ```

@@ -55,6 +55,7 @@ def test_fxtcombine_parser_enables_sensmap_by_default() -> None:
     assert args.disable_quickview is False
     assert args.quickview_out is None
     assert args.quickview_dpi == 100
+    assert args.quickview_title is None
 
 
 def test_fxtcombine_parser_accepts_sensmap_overrides() -> None:
@@ -117,12 +118,15 @@ def test_fxtcombine_parser_accepts_quickview_overrides(tmp_path) -> None:
             str(quickview_out),
             "--quickview-dpi",
             "180",
+            "--quickview-title",
+            "My Target",
         ]
     )
 
     assert args.disable_quickview is True
     assert args.quickview_out == str(quickview_out)
     assert args.quickview_dpi == 180
+    assert args.quickview_title == "My Target"
 
 
 def test_fxtcombine_parser_rejects_sensmap_threshold_conflict() -> None:
@@ -189,6 +193,7 @@ def test_main_forwards_sensmap_options(monkeypatch, tmp_path) -> None:
     assert captured["make_quickview"] is True
     assert captured["quickview_out"] is None
     assert captured["quickview_dpi"] == 100
+    assert captured["quickview_title"] is None
 
 
 def test_main_forwards_sensmap_sigma(monkeypatch, tmp_path) -> None:
@@ -274,6 +279,8 @@ def test_main_forwards_quickview_options(monkeypatch, tmp_path) -> None:
             str(quickview_out),
             "--quickview-dpi",
             "180",
+            "--quickview-title",
+            "My Target",
         ],
     )
 
@@ -282,6 +289,7 @@ def test_main_forwards_quickview_options(monkeypatch, tmp_path) -> None:
     assert captured["make_quickview"] is False
     assert captured["quickview_out"] == str(quickview_out)
     assert captured["quickview_dpi"] == 180
+    assert captured["quickview_title"] == "My Target"
 
 
 def test_build_fxtsensmap_command() -> None:
@@ -328,13 +336,15 @@ def test_build_quickview_command() -> None:
         "/tmp/stack dir/quickview.png",
         dpi=180,
         log_file="/tmp/stack dir/quickview.log",
+        title="My Target",
     )
 
     assert cmd == (
         'fxtcombine-quickview "/tmp/stack dir" '
         '--out "/tmp/stack dir/quickview.png" '
         "--dpi 180 "
-        '--log-file "/tmp/stack dir/quickview.log"'
+        '--log-file "/tmp/stack dir/quickview.log" '
+        "--title 'My Target'"
     )
     assert "--r90-stride" not in cmd
 

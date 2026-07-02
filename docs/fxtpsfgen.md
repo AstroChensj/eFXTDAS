@@ -13,8 +13,8 @@ It has two public modes:
   - combine multiple per-observation PSF products onto one stacked reference
     image using matching weight maps
 
-These PSF products are the preferred public inputs for `fxtsrcdet` and the
-stacked-imaging stages of `fxtcombine`.
+These PSF products are the preferred public inputs for `fxtsrcdet`,
+`fxtsensmap`, and the stacked-imaging stages of `fxtcombine`.
 
 ## Basic Usage
 
@@ -96,10 +96,13 @@ with the first `--weightmap`, and so on.
   behavior across that observation footprint
 - stack mode writes one stacked `*.psfprod.fits` product on the chosen stacked
   image frame
+- current products also cache standard radius-at-EEF maps such as `R50`,
+  `R75`, `R80`, and `R90`
 
 These products are consumed directly by:
 
 - `fxtsrcdet --psfprod`
+- `fxtsensmap --psfprod`
 - `fxtcombine` stacked source-detection stages
 - any downstream workflow that needs a local PSF/EEF description on one image
   footprint
@@ -108,5 +111,8 @@ These products are consumed directly by:
 
 - `fxtcombine` uses `fxtpsfgen build-obs` per observation and then combines the
   resulting products into `stack_psfprod.fits`.
+- `fxtsensmap` uses the cached radius maps directly when the requested EEF is
+  present, and otherwise computes the requested radius map from the stored
+  PSF/EEF information.
 - `fxtpsfgen` replaces the need to expose EEF-map bundles as the main public
   PSF-analysis interface.

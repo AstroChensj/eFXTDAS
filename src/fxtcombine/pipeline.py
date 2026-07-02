@@ -9,6 +9,7 @@ import logging
 import numpy as np
 import os
 from pathlib import Path
+import shlex
 import warnings
 
 from astropy.io import fits
@@ -162,7 +163,7 @@ def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin=No
 	return " ".join(parts)
 
 
-def _build_quickview_command(stack_dir, out, dpi=100, log_file=None):
+def _build_quickview_command(stack_dir, out, dpi=100, log_file=None, title=None):
 	"""Build the command used for final quick-view QA generation.
 
 	Parameters
@@ -175,6 +176,8 @@ def _build_quickview_command(stack_dir, out, dpi=100, log_file=None):
 		Output figure DPI passed to ``fxtcombine-quickview``.
 	log_file : str | None, optional
 		Optional quick-view log file path.
+	title : str | None, optional
+		Optional quick-view figure title.
 
 	Returns
 	-------
@@ -189,10 +192,12 @@ def _build_quickview_command(stack_dir, out, dpi=100, log_file=None):
 	]
 	if log_file is not None:
 		parts.extend(["--log-file", f'"{log_file}"'])
+	if title is not None:
+		parts.extend(["--title", shlex.quote(str(title))])
 	return " ".join(parts)
 
 
-def _run_quickview_stage(stack_dir, out, dpi=100, logger=None):
+def _run_quickview_stage(stack_dir, out, dpi=100, title=None, logger=None):
 	"""Run the final quick-view QA command and report success.
 
 	Parameters
@@ -203,6 +208,8 @@ def _run_quickview_stage(stack_dir, out, dpi=100, logger=None):
 		Output quick-view figure path.
 	dpi : int, optional
 		Output figure DPI.
+	title : str | None, optional
+		Optional quick-view figure title.
 	logger : logging.Logger | None, optional
 		Logger used for workflow messages.
 
@@ -217,6 +224,7 @@ def _run_quickview_stage(stack_dir, out, dpi=100, logger=None):
 		out,
 		dpi=dpi,
 		log_file=quickview_log,
+		title=title,
 	)
 	try:
 		run_cmd(quickview_cmd, logger=logger)
@@ -234,7 +242,7 @@ def fxtcombine_pipeline(
 		flare_screen=True,flare_threshold_method="robust_iqr",flare_energy_range="0.5:10.0",flare_binsize=20.0,flare_min_time_ratio=0.05,
 		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",
 		make_sensmap=True,sens_eef=0.90,sens_ecf=DEFAULT_ECF,sens_likemin=None,sens_sigma=None,
-		make_quickview=True,quickview_out=None,quickview_dpi=100,
+		make_quickview=True,quickview_out=None,quickview_dpi=100,quickview_title=None,
 		summary_json=None,srcpi_filelist=None,skip_existing=False,
 		logger: logging.Logger | None = None,
 	):
@@ -314,6 +322,8 @@ def fxtcombine_pipeline(
 		Output quick-view figure path. Defaults to ``<stack_dir>/quickview.png``.
 	quickview_dpi : int, optional
 		Output quick-view figure DPI.
+	quickview_title : str | None, optional
+		Optional quick-view figure title.
 	summary_json : str | None, optional
 		Path of the summary JSON file. When omitted,
 		``<stack_dir>/all_obsid.json`` is used.
@@ -383,6 +393,8 @@ def fxtcombine_pipeline(
 	if make_quickview:
 		emit(main_logger, "info", f"Quick-view output path is: {quickview_out}")
 		emit(main_logger, "info", f"Quick-view DPI is: {quickview_dpi}")
+		if quickview_title is not None:
+			emit(main_logger, "info", f"Quick-view title is: {quickview_title}")
 	sens_likemin_resolved = _resolve_sensmap_likemin(sens_likemin, sens_sigma) if make_sensmap else None
 	if make_sensmap:
 		emit(main_logger, "info", f"fxtsensmap EEF is: {sens_eef}")
@@ -846,6 +858,7 @@ def fxtcombine_pipeline(
 			stack_dir,
 			quickview_out,
 			dpi=quickview_dpi,
+			title=quickview_title,
 			logger=main_logger,
 		)
 	else:
@@ -1017,6 +1030,11 @@ def build_parser() -> argparse.ArgumentParser:
 		default=100,
 		help="Quick-view output figure DPI. Default: 100",
 	)
+	parser.add_argument(
+		"--quickview-title",
+		default=None,
+		help="Optional title shown above the quick-view QA figure.",
+	)
 	parser.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level for CLI and output log file")
 	parser.add_argument("--log-file", type=Path, default=None, help="Optional main log file path; defaults to <out-dir>/log/fxtcombine.log")
 	parser.add_argument(
@@ -1070,6 +1088,7 @@ def main() -> None:
 		make_quickview=not args.disable_quickview,
 		quickview_out=args.quickview_out,
 		quickview_dpi=args.quickview_dpi,
+		quickview_title=args.quickview_title,
 		skip_existing=args.skip_existing,
 		logger=cli_logger,
 	)

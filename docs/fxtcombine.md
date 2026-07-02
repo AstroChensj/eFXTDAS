@@ -17,6 +17,8 @@ The current workflow:
 - re-enters each OBSID to extract source/background spectra and response products from `evt`
 - calls external `runXstack` to build the final stacked source spectrum, background spectrum, RMF, and ARF
 - sums per-OBSID `fsaevt` instrumental-background spectra into a stacked `stack_instbkgpi.fits`
+- unless disabled, calls `fxtsensmap` to generate `stack_sensmap.fits`
+- unless disabled, calls `fxtcombine-quickview` to generate the final QA figure
 
 This makes `fxtcombine` the top-level orchestration task in the current `eFXTDAS` toolkit.
 
@@ -145,7 +147,7 @@ fxtcombine_pipeline(
       adaptive background model
     - default: `4,8,16,32,64`
   - `--disable-sensmap`
-    - skip automatic `stack_sensmap.fits` generation
+    - skip automatic `stack_sensmap.fits` generation; see [`fxtsensmap`](fxtsensmap.md)
   - `--sens-eef`
     - encircled-energy fraction passed to `fxtsensmap`
   - `--sens-ecf`
@@ -160,6 +162,8 @@ fxtcombine_pipeline(
     - optional quick-view figure path
   - `--quickview-dpi`
     - quick-view output figure DPI
+  - `--quickview-title`
+    - optional title shown above the quick-view QA figure
   - `--summary-json`
     - optional summary JSON path
     - default: `<stack_dir>/all_obsid.json`
@@ -383,6 +387,10 @@ The most useful logs for debugging are:
   - stacked `fxtregions` output
 - `stack_dir/stack_runXstack.log`
   - `runXstack` log for stacked spectral combination
+- `stack_dir/fxtsensmap.log`
+  - stacked sensitivity-map generation log
+- `stack_dir/quickview.log`
+  - final quick-view QA figure log
 
 Recommended debugging order:
 
@@ -597,6 +605,18 @@ So this stage can produce:
 - the final stacked source spectrum and associated response products from `evt`
 - the final stacked instrumental-background spectrum from `fsaevt`
 
+### 6. Sensitivity Map and Quick View
+
+After spectral stacking, `fxtcombine` can generate optional final stacked QA products:
+
+- `stack_sensmap.fits`
+  - built by calling `fxtsensmap` with the stacked background map, stacked exposure map, stacked mask, and `stack_psfprod.fits`
+  - controlled by `--disable-sensmap`, `--sens-eef`, `--sens-ecf`, `--sens-likemin`, and `--sens-sigma`
+- `quickview.png`
+  - built by calling `fxtcombine-quickview`
+  - shows the stacked counts/rate, background, target extraction regions, exposure, PSF R90, and sensitivity map panels
+  - controlled by `--disable-quickview`, `--quickview-out`, `--quickview-dpi`, and `--quickview-title`
+
 ## Logging and Output Layout
 
 The default main log file is:
@@ -648,6 +668,7 @@ The main user-facing pipeline controls are:
 - `--disable-quickview`
 - `--quickview-out`
 - `--quickview-dpi`
+- `--quickview-title`
 - `--skip-existing`
 
 ## FAQ

@@ -8,8 +8,9 @@ The official FXTDAS tasks handle the basic event calibration chain. `eFXTDAS` ad
 - wavelet-style source detection as seeding (inspired from `CIAO`-`wavdetect`, tailored now to FXT), followed by PSF fitting + extended source testing (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html))
 - automated source/background extraction/exclusion-region generation (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html) `AUTO` mode) that optimizes SNR and avoid nearby neighbor contamination
 - observation and stacked PSF-product generation for PSF-aware workflows
+- aperture-mode sensitivity-map generation from background, exposure, and PSF products
 
-The repository currently provides six user-facing tasks:
+The repository currently provides seven user-facing tasks:
 
 - `fxtcombine`: top-level multi-epoch stacking and spectral combination that calls `fxtsrcdet` and `fxtregions`
 - `fxtbkgoptrate`: optimum-threshold flare/background screening on one light curve
@@ -17,6 +18,7 @@ The repository currently provides six user-facing tasks:
 - `fxtregions`: source/background region generation from a source catalog
 - `fxtrspgen`: standalone ARF/RMF generation from an external DS9 source region
 - `fxtpsfgen`: observation and stacked PSF-product generation
+- `fxtsensmap`: aperture-mode flux-limit map generation
 
 ![eFXTDAS summary figure](docs/figs/readme_summary_2x3.png)
 
@@ -54,11 +56,13 @@ python -m pip install -e .
 This installs the Python packages and CLI entry points:
 
 - `fxtcombine`
+- `fxtcombine-quickview`
 - `fxtbkgoptrate`
 - `fxtsrcdet`
 - `fxtregions`
 - `fxtrspgen`
 - `fxtpsfgen`
+- `fxtsensmap`
 
 Because `fxtcombine` will stack spectra and responses from multiple observations, [Xstack](https://github.com/AstroChensj/Xstack) software is also needed:
 
@@ -79,6 +83,7 @@ python -m pip install -e .
 | build extraction regions for one target | `fxtregions` | counts image, source catalog, target RA/Dec | `source.reg`, `background.reg` |
 | build ARF/RMF from one extracted spectrum and DS9 region | `fxtrspgen` | source PHA, exposure map, DS9 source region | `*.arf`, `*.rmf`, optional PHA header updates |
 | build observation or stacked PSF products | `fxtpsfgen` | counts image or observation `psfprod` list plus weight maps | `*.psfprod.fits`, `stack_psfprod.fits` |
+| build a flux-limit map | `fxtsensmap` | background map, exposure map, PSF product or PSF map | sensitivity FITS map |
 
 Recommended rule:
 
@@ -87,6 +92,7 @@ Recommended rule:
 - use `fxtsrcdet` and `fxtregions` directly when tuning detection or extraction on a single stacked image
 - use `fxtrspgen` when you already have the extracted source PHA and need a response pair from a DS9 source region
 - use `fxtpsfgen` when you need standalone PSF support products
+- use `fxtsensmap` when you need a standalone flux-limit map from existing background, exposure, and PSF products
 
 ## Typical Workflow
 
@@ -98,6 +104,7 @@ For most science use cases, the intended sequence is:
    - `stack_bkgmap.fits`
    - `stack_mask.fits`
    - `stack_src.fits` / `stack_src.reg`
+   - `stack_sensmap.fits`
    - `target_src.reg` / `target_bkg.reg`
 3. If the stacked source detection or extraction regions need tuning, rerun:
    - `fxtsrcdet` directly on the stacked counts image
@@ -304,6 +311,31 @@ Key parameters:
 
 See: [docs/fxtpsfgen.md](docs/fxtpsfgen.md)
 
+### 7. `fxtsensmap`
+
+Use this when you need a standalone flux-limit map from an existing background map, exposure map, and PSF product.
+
+```bash
+fxtsensmap \
+  --bkgmap stack_bkgmap.fits \
+  --expmap stack_expmap.fits \
+  --mask stack_mask.fits \
+  --psfprod stack_psfprod.fits \
+  --eef 0.90 \
+  --out stack_sensmap.fits
+```
+
+Key parameters:
+
+- `--bkgmap`: expected background counts per pixel
+- `--expmap`: exposure map in seconds
+- `--mask`: optional analysis mask; non-zero finite pixels are valid
+- `--psfprod` or `--psfmap`: local aperture-radius source
+- `--likemin` or `--sigma`: false-alarm threshold definition
+- `--ecf`: count-rate to flux conversion
+
+See: [docs/fxtsensmap.md](docs/fxtsensmap.md)
+
 ## Repo Layout
 
 The most relevant top-level directories are:
@@ -314,6 +346,7 @@ The most relevant top-level directories are:
 | `src/fxtsrcdet/` | source detection and catalog construction |
 | `src/fxtregions/` | source/background region construction |
 | `src/fxtpsfgen/` | observation and stacked PSF-product generation |
+| `src/fxtsensmap/` | aperture-mode sensitivity-map generation |
 | `src/fxtcaldb/` | shared calibration, optics, and PSF / EEF support code |
 | `fxtdas-bin/` | local copies of official FXTDAS task scripts for inspection/reference |
 | `fxtdas-py/` | local Python support code from the FXTDAS environment |
@@ -328,6 +361,7 @@ If a user asks for help with this repo:
 - start from `fxtsrcdet` when the request is about source counts maps, background maps, or source catalogs
 - start from `fxtregions` when the request is about extraction-region geometry
 - start from `fxtpsfgen` when the request is about PSF products or local PSF support
+- start from `fxtsensmap` when the request is about flux-limit or sensitivity maps
 
 Most useful diagnostics to inspect first:
 
@@ -335,6 +369,7 @@ Most useful diagnostics to inspect first:
 - `stack_bkgmap.fits`
 - `stack_mask.fits`
 - `stack_src.fits` / `stack_src.reg`
+- `stack_sensmap.fits`
 - `target_src.reg` / `target_bkg.reg`
 - `stack_pi.fits`, `stack_bkgpi.fits`, `stack_arf.fits`, `stack_rmf.fits`
 
@@ -343,3 +378,4 @@ Detailed package references:
 - [docs/fxtcombine.md](docs/fxtcombine.md)
 - [docs/fxtsrcdet.md](docs/fxtsrcdet.md)
 - [docs/fxtregions.md](docs/fxtregions.md)
+- [docs/fxtsensmap.md](docs/fxtsensmap.md)
