@@ -137,22 +137,24 @@ def test_build_fxtsensmap_command() -> None:
     """
     cmd = pipeline._build_fxtsensmap_command(
         "/tmp/stack bkg.fits",
-        "/tmp/stack exp.fits",
+        "/tmp/stack expmap.fits",
         "/tmp/stack psfprod.fits",
         "/tmp/stack sensmap.fits",
         0.9,
         DEFAULT_ECF,
         6.0,
         jobs=4,
+        mask="/tmp/stack mask.fits",
     )
 
     assert cmd == (
         'fxtsensmap --bkgmap "/tmp/stack bkg.fits" '
-        '--expmap "/tmp/stack exp.fits" '
+        '--expmap "/tmp/stack expmap.fits" '
         '--psfprod "/tmp/stack psfprod.fits" '
         "--eef 0.9 "
         f"--ecf {float(DEFAULT_ECF)} "
         "--likemin 6.0 "
         "--jobs 4 "
+        '--mask "/tmp/stack mask.fits" '
         '--out "/tmp/stack sensmap.fits"'
     )

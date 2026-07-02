@@ -42,6 +42,7 @@ def write_sensitivity_map(
     ecf: float,
     likemin: float,
     mode: str,
+    mask_path: Path | None = None,
 ) -> None:
     """Write a sensitivity map to FITS.
 
@@ -61,6 +62,8 @@ def write_sensitivity_map(
         Detection likelihood threshold.
     mode : str
         Sensitivity algorithm mode.
+    mask_path : Path | None, optional
+        Analysis-mask FITS path used to restrict valid pixels.
 
     Returns
     -------
@@ -72,6 +75,9 @@ def write_sensitivity_map(
     out_header["EEF"] = (float(eef), "Aperture encircled-energy fraction")
     out_header["ECF"] = (float(ecf), "ct/s per erg/cm2/s")
     out_header["LIKEMIN"] = (float(likemin), "Detection likelihood threshold")
+    out_header["MASKED"] = (mask_path is not None, "Analysis mask applied")
+    if mask_path is not None:
+        out_header["MASKFILE"] = (str(mask_path), "Analysis mask file")
     fits.writeto(path, np.asarray(sensitivity, dtype=np.float32), out_header, overwrite=True)
 
 
@@ -86,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate EP-FXT APER-mode sensitivity maps.")
     parser.add_argument("--bkgmap", type=Path, required=True, help="Background map FITS image in expected counts per pixel")
     parser.add_argument("--expmap", type=Path, required=True, help="Exposure map FITS image in seconds")
+    parser.add_argument("--mask", type=Path, default=None, help="Optional analysis mask FITS image; non-zero finite pixels are valid")
     psf_group = parser.add_mutually_exclusive_group(required=True)
     psf_group.add_argument("--psfprod", type=Path, default=None, help="fxtpsfgen PSF product")
     psf_group.add_argument("--psfmap", type=Path, default=None, help="Official fxtpsfmap radius image")
@@ -108,6 +115,7 @@ def run_fxtsensmap(
     eef: float,
     psfprod: Path | None = None,
     psfmap: Path | None = None,
+    mask_path: Path | None = None,
     ecf: float = DEFAULT_ECF,
     likemin: float = 6.0,
     mode: str = "aper",
@@ -131,6 +139,8 @@ def run_fxtsensmap(
         ``fxtpsfgen`` PSF product path.
     psfmap : Path | None, optional
         Official ``fxtpsfmap`` radius image path.
+    mask_path : Path | None, optional
+        Analysis-mask FITS path. Non-zero finite pixels are valid.
     ecf : float, optional
         Count-rate to flux conversion.
     likemin : float, optional
@@ -155,6 +165,13 @@ def run_fxtsensmap(
     expmap, _exp_header = load_image(expmap_path)
     if bkgmap.shape != expmap.shape:
         raise ValueError(f"Background map shape {bkgmap.shape} does not match exposure map shape {expmap.shape}.")
+    if mask_path is not None:
+        mask_data, _mask_header = load_image(mask_path)
+        if mask_data.shape != bkgmap.shape:
+            raise ValueError(f"Mask shape {mask_data.shape} does not match background map shape {bkgmap.shape}.")
+        valid_mask = np.isfinite(mask_data) & (mask_data != 0.0)
+    else:
+        valid_mask = None
     radius_map = load_radius_map(
         psfprod=psfprod,
         psfmap=psfmap,
@@ -172,8 +189,9 @@ def run_fxtsensmap(
         eef=eef,
         ecf=ecf,
         likemin=likemin,
+        valid_mask=valid_mask,
     )
-    write_sensitivity_map(out_path, sensitivity, bkg_header, eef=eef, ecf=ecf, likemin=likemin, mode=mode)
+    write_sensitivity_map(out_path, sensitivity, bkg_header, eef=eef, ecf=ecf, likemin=likemin, mode=mode, mask_path=mask_path)
     return out_path
 
 
@@ -198,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         eef=args.eef,
         psfprod=args.psfprod,
         psfmap=args.psfmap,
+        mask_path=args.mask,
         ecf=args.ecf,
         likemin=args.likemin,
         mode=args.mode,

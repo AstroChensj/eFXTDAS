@@ -92,7 +92,7 @@ def test_resolve_paths_uses_current_stack_names(tmp_path: Path) -> None:
     assert paths.rate == (tmp_path / "stack_rate.fits").resolve()
     assert paths.bkgmap == (tmp_path / "stack_bkgmap.fits").resolve()
     assert paths.mask == (tmp_path / "stack_mask.fits").resolve()
-    assert paths.expmap == (tmp_path / "stack_exp.fits").resolve()
+    assert paths.expmap == (tmp_path / "stack_expmap.fits").resolve()
     assert paths.psfprod == (tmp_path / "stack_psfprod.fits").resolve()
     assert paths.src_reg == (tmp_path / "stack_src.reg").resolve()
     assert paths.target_src_reg == (tmp_path / "target_src.reg").resolve()
@@ -214,7 +214,7 @@ def test_quickview_cli_writes_figure_with_standard_stack_dir(tmp_path: Path, mon
     _write_image(tmp_path / "stack_rate.fits", np.arange(100, dtype=float).reshape(shape))
     _write_image(tmp_path / "stack_bkgmap.fits", np.ones(shape))
     _write_image(tmp_path / "stack_mask.fits", np.ones(shape))
-    _write_image(tmp_path / "stack_exp.fits", np.full(shape, 100.0))
+    _write_image(tmp_path / "stack_expmap.fits", np.full(shape, 100.0))
     fits.writeto(tmp_path / "stack_psfprod.fits", np.zeros((1, 1), dtype=np.float32), overwrite=True)
     (tmp_path / "stack_src.reg").write_text("image\ncircle(5,5,2)\n", encoding="utf-8")
     (tmp_path / "target_src.reg").write_text(

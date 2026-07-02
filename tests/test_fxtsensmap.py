@@ -64,6 +64,23 @@ def test_compute_sensitivity_map_improves_with_exposure() -> None:
     assert sens[2, 3] < sens[2, 1]
 
 
+def test_compute_sensitivity_map_applies_valid_mask() -> None:
+    """Masked center pixels should stay NaN and aperture sums should use valid pixels."""
+    bkg = np.ones((5, 5), dtype=np.float64)
+    exp = np.full((5, 5), 100.0, dtype=np.float64)
+    radius = np.full((5, 5), 1.5, dtype=np.float64)
+    valid_mask = np.ones((5, 5), dtype=bool)
+    valid_mask[2, 2] = False
+    valid_mask[0, :] = False
+    valid_mask[:, 0] = False
+
+    sens = compute_sensitivity_map(bkg, exp, radius, eef=0.90, ecf=1.0e11, likemin=6.0, valid_mask=valid_mask)
+
+    assert np.isnan(sens[2, 2])
+    assert np.isnan(sens[0, 3])
+    assert np.isfinite(sens[3, 3])
+
+
 def test_fxtsensmap_uses_cached_psfprod_radius_map(tmp_path: Path) -> None:
     """CLI workflow should read cached R90 from fxtpsfgen products."""
     shape = (5, 5)
@@ -106,6 +123,65 @@ def test_official_psfmap_arcsec_units_convert_to_pixels(tmp_path: Path) -> None:
     assert np.allclose(radius, 2.0)
     with pytest.raises(ValueError, match="does not match requested EEF"):
         load_official_psfmap_radius_map(psfmap, eef=0.80, target_header=header, target_shape=shape)
+
+
+def test_fxtsensmap_cli_applies_mask(tmp_path: Path) -> None:
+    """The console entry point should write NaN outside the supplied mask."""
+    shape = (5, 5)
+    header = _header(shape)
+    bkg = _write_image(tmp_path / "bkg.fits", np.ones(shape), header)
+    exp = _write_image(tmp_path / "exp.fits", np.full(shape, 100.0), header)
+    mask_data = np.ones(shape, dtype=np.float32)
+    mask_data[2, 2] = 0.0
+    mask = _write_image(tmp_path / "mask.fits", mask_data, header)
+    psfprod = _write_cached_psfprod(tmp_path / "stack_psfprod.fits", np.full(shape, 1.5, dtype=np.float32))
+    out = tmp_path / "sens_masked.fits"
+
+    status = fxtsensmap_main(
+        [
+            "--bkgmap",
+            str(bkg),
+            "--expmap",
+            str(exp),
+            "--mask",
+            str(mask),
+            "--psfprod",
+            str(psfprod),
+            "--eef",
+            "0.90",
+            "--ecf",
+            "1e11",
+            "--out",
+            str(out),
+        ]
+    )
+
+    assert status == 0
+    with fits.open(out) as hdul:
+        assert np.isnan(hdul[0].data[2, 2])
+        assert np.isfinite(hdul[0].data[2, 3])
+        assert hdul[0].header["MASKED"]
+        assert hdul[0].header["MASKFILE"] == str(mask)
+
+
+def test_fxtsensmap_rejects_mask_shape_mismatch(tmp_path: Path) -> None:
+    """Mask shape must match the science maps."""
+    header = _header((5, 5))
+    bkg = _write_image(tmp_path / "bkg.fits", np.ones((5, 5)), header)
+    exp = _write_image(tmp_path / "exp.fits", np.full((5, 5), 100.0), header)
+    mask = _write_image(tmp_path / "mask.fits", np.ones((4, 5)), _header((4, 5)))
+    psfprod = _write_cached_psfprod(tmp_path / "stack_psfprod.fits", np.full((5, 5), 1.5, dtype=np.float32))
+
+    with pytest.raises(ValueError, match="Mask shape"):
+        run_fxtsensmap(
+            bkgmap_path=bkg,
+            expmap_path=exp,
+            mask_path=mask,
+            out_path=tmp_path / "sens_bad_mask.fits",
+            eef=0.90,
+            psfprod=psfprod,
+            ecf=1.0e11,
+        )
 
 
 def test_fxtsensmap_cli_writes_output(tmp_path: Path) -> None:

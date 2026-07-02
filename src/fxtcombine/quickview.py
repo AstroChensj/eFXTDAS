@@ -164,7 +164,7 @@ def resolve_paths(
         rate=(rate or root / "stack_rate.fits").expanduser().resolve(),
         bkgmap=(bkgmap or root / "stack_bkgmap.fits").expanduser().resolve(),
         mask=(mask or root / "stack_mask.fits").expanduser().resolve(),
-        expmap=(expmap or root / "stack_exp.fits").expanduser().resolve(),
+        expmap=(expmap or root / "stack_expmap.fits").expanduser().resolve(),
         psfprod=(psfprod or root / "stack_psfprod.fits").expanduser().resolve(),
         src_reg=(src_reg or root / "stack_src.reg").expanduser().resolve(),
         target_src_reg=(target_src_reg or root / "target_src.reg").expanduser().resolve(),

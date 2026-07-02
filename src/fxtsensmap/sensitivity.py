@@ -74,6 +74,7 @@ def compute_sensitivity_map(
     eef: float,
     ecf: float = DEFAULT_ECF,
     likemin: float = 6.0,
+    valid_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """Compute a full APER-mode flux sensitivity map.
 
@@ -92,6 +93,8 @@ def compute_sensitivity_map(
         ``ct s^-1 / (erg cm^-2 s^-1)``.
     likemin : float, optional
         Detection likelihood threshold.
+    valid_mask : np.ndarray | None, optional
+        Optional boolean mask selecting valid analysis pixels.
 
     Returns
     -------
@@ -103,6 +106,8 @@ def compute_sensitivity_map(
     radius = np.asarray(radius_pix_map, dtype=np.float64)
     if bkg.shape != exp.shape or bkg.shape != radius.shape:
         raise ValueError("bkgmap, expmap, and radius_pix_map must have identical shapes.")
+    if valid_mask is not None and np.asarray(valid_mask).shape != bkg.shape:
+        raise ValueError("valid_mask must match the bkgmap shape.")
     if not 0.0 < float(eef) <= 1.0:
         raise ValueError("eef must be in (0, 1].")
     if float(ecf) <= 0.0:
@@ -111,10 +116,19 @@ def compute_sensitivity_map(
     sensitivity = np.full(bkg.shape, np.nan, dtype=np.float64)
     valid = np.isfinite(bkg) & (bkg >= 0.0) & np.isfinite(exp) & (exp > 0.0)
     valid &= np.isfinite(radius) & (radius > 0.0)
+    if valid_mask is not None:
+        mask = np.asarray(valid_mask, dtype=bool)
+        valid &= mask
+    else:
+        mask = None
     for y_idx, x_idx in np.argwhere(valid):
         pixels = aperture_pixels(bkg.shape, float(x_idx), float(y_idx), float(radius[y_idx, x_idx]))
         if len(pixels) == 0:
             continue
+        if mask is not None:
+            pixels = pixels[mask[pixels[:, 0], pixels[:, 1]]]
+            if len(pixels) == 0:
+                continue
         aperture_bkg = float(np.nansum(bkg[pixels[:, 0], pixels[:, 1]]))
         source_ap_counts = poisson_source_counts_for_likelihood(aperture_bkg, likemin)
         denom = float(exp[y_idx, x_idx]) * float(ecf) * float(eef)

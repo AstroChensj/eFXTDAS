@@ -78,6 +78,8 @@ def test_fxt_extract_spec_uses_fxtrspgen_and_preserves_product_contract(
     vexpmap_path = obsid_out_dir / "evt_vexp.fits"
     fits.HDUList([fits.PrimaryHDU()]).writeto(evt_path, overwrite=True)
     fits.HDUList([fits.PrimaryHDU()]).writeto(vexpmap_path, overwrite=True)
+    psfprod_path = obsid_out_dir / "obs.psfprod.fits"
+    fits.HDUList([fits.PrimaryHDU(header=fits.Header({"PSFTYPE": "OBS"}))]).writeto(psfprod_path, overwrite=True)
 
     prod = {
         "module": "a",
@@ -88,6 +90,7 @@ def test_fxt_extract_spec_uses_fxtrspgen_and_preserves_product_contract(
         "version": "v01",
         "evt_clevt": str(evt_path),
         "vexpmap": str(vexpmap_path),
+        "psfprod": str(psfprod_path),
         "image": str(obsid_out_dir / "default_image.fits"),
         "images": {"band0": str(obsid_out_dir / "default_image.fits")},
         "image_band_channels": {"band0": (0, 1023)},
@@ -153,10 +156,14 @@ def test_fxt_extract_spec_uses_fxtrspgen_and_preserves_product_contract(
     assert len(fxtrspgen_calls) == 1
     assert "--arf-out" in str(fxtrspgen_calls[0]["cmd"])
     assert "--rmf-out" in str(fxtrspgen_calls[0]["cmd"])
+    assert "--psfprod" in str(fxtrspgen_calls[0]["cmd"])
+    assert str(psfprod_path) in str(fxtrspgen_calls[0]["cmd"])
     assert "--update-pha" in str(fxtrspgen_calls[0]["cmd"])
+    assert "--log-file" in str(fxtrspgen_calls[0]["cmd"])
+    assert "fxtrspgen.log" in str(fxtrspgen_calls[0]["cmd"])
     assert not any("fxtarfgen" in str(entry["cmd"]) for entry in commands)
     assert not any("fxtrmfgen" in str(entry["cmd"]) for entry in commands)
-    assert str(fxtrspgen_calls[0]["logname"]).endswith("fxtrspgen.log")
+    assert fxtrspgen_calls[0]["logname"] is None
 
     with fits.open(srcpi_path) as hdul:
         assert hdul[1].header["BACKFILE"] == bkgpi_path.name

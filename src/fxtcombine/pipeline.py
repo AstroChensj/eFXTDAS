@@ -84,7 +84,7 @@ def _run_stage1_obsid(
 	return obsid, obsid_prod_dict
 
 
-def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, jobs=1):
+def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, jobs=1, mask=None):
 	"""Build the command used for stacked sensitivity-map generation.
 
 	Parameters
@@ -106,13 +106,15 @@ def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, j
 	jobs : int, optional
 		Thread workers forwarded to ``fxtsensmap`` if it must compute a radius
 		map from the PSF product.
+	mask : str | None, optional
+		Optional analysis-mask FITS path.
 
 	Returns
 	-------
 	str
 		Shell command string.
 	"""
-	return " ".join([
+	parts = [
 		"fxtsensmap",
 		"--bkgmap", f'"{bkgmap}"',
 		"--expmap", f'"{expmap}"',
@@ -121,8 +123,11 @@ def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, j
 		"--ecf", f"{float(ecf)}",
 		"--likemin", f"{float(likemin)}",
 		"--jobs", f"{max(int(jobs), 1)}",
-		"--out", f'"{out}"',
-	])
+	]
+	if mask is not None:
+		parts.extend(["--mask", f'"{mask}"'])
+	parts.extend(["--out", f'"{out}"'])
+	return " ".join(parts)
 
 
 def fxtcombine_pipeline(
@@ -485,7 +490,7 @@ def fxtcombine_pipeline(
 		###--- footprint is 0..1 overlap fraction; use it to ignore empty pixels
 		m = np.isfinite(data_i_reproj) & (footprint_i > 0)
 		exp_sum[m] += data_i_reproj[m]
-	exp_sum_fname = os.path.join(stack_dir,"stack_exp.fits")
+	exp_sum_fname = os.path.join(stack_dir,"stack_expmap.fits")
 	fits.writeto(exp_sum_fname,exp_sum,refexp.header,overwrite=True)
 	emit(main_logger, "info", f"Stacked exposure map written to {exp_sum_fname}")
 	
@@ -706,6 +711,7 @@ def fxtcombine_pipeline(
 			sens_ecf,
 			sens_likemin,
 			jobs=jobs,
+			mask=stack_mask_fname,
 		)
 		run_cmd(fxtsensmap_cmd, logger=main_logger, logname=fxtsensmap_log)
 		emit(main_logger, "info", f"Stacked sensitivity map written to {stack_sensmap_fname}")

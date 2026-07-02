@@ -824,9 +824,10 @@ def fxt_extract_spec(
                     f'"{rmf_path}"',
                     "--update-pha",
                     "--clobber",
+                    "--log-file",
+                    f'"{os.path.join(sub_log_dir, "fxtrspgen.log")}"',
                 ]),
                 logger=obsid_logger,
-                logname=os.path.join(sub_log_dir, "fxtrspgen.log"),
                 cwd=sub_log_dir,
             )
 

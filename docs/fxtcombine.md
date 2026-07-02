@@ -301,7 +301,7 @@ then the layout is conceptually:
 <stack_dir>/
 |-- all_obsid.filelist
 |-- all_obsid.json
-|   |-- stack_exp.fits
+|   |-- stack_expmap.fits
 |   |-- stack_cts.fits
 |   |-- stack_rate.fits
 |   |-- stack_psfprod.fits
