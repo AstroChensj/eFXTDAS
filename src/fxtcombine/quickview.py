@@ -21,7 +21,7 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 from matplotlib import patheffects as pe
 from matplotlib import pyplot as plt
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, LogNorm
 from matplotlib.patches import Circle
 from cycler import cycler
 from scipy.ndimage import gaussian_filter
@@ -42,6 +42,7 @@ class QuickViewPaths:
     mask: Path
     expmap: Path
     psfprod: Path
+    sensmap: Path
     src_reg: Path
     target_src_reg: Path
     target_bkg_reg: Path
@@ -140,6 +141,7 @@ def resolve_paths(
     mask: Path | None = None,
     expmap: Path | None = None,
     psfprod: Path | None = None,
+    sensmap: Path | None = None,
     src_reg: Path | None = None,
     target_src_reg: Path | None = None,
     target_bkg_reg: Path | None = None,
@@ -150,7 +152,7 @@ def resolve_paths(
     ----------
     stack_dir : Path
         Directory containing current ``fxtcombine`` stacked products.
-    rate, bkgmap, mask, expmap, psfprod, src_reg, target_src_reg, target_bkg_reg : Path | None
+    rate, bkgmap, mask, expmap, psfprod, sensmap, src_reg, target_src_reg, target_bkg_reg : Path | None
         Optional overrides for nonstandard product locations.
 
     Returns
@@ -166,6 +168,7 @@ def resolve_paths(
         mask=(mask or root / "stack_mask.fits").expanduser().resolve(),
         expmap=(expmap or root / "stack_expmap.fits").expanduser().resolve(),
         psfprod=(psfprod or root / "stack_psfprod.fits").expanduser().resolve(),
+        sensmap=(sensmap or root / "stack_sensmap.fits").expanduser().resolve(),
         src_reg=(src_reg or root / "stack_src.reg").expanduser().resolve(),
         target_src_reg=(target_src_reg or root / "target_src.reg").expanduser().resolve(),
         target_bkg_reg=(target_bkg_reg or root / "target_bkg.reg").expanduser().resolve(),
@@ -366,6 +369,37 @@ def _image_norm(data: np.ndarray, percentile: float = 99.5) -> ImageNormalize | 
         if vmax <= vmin:
             vmax = vmin + 1.0
     return ImageNormalize(vmin=vmin, vmax=vmax)
+
+
+def _positive_log_norm(data: np.ndarray, percentile: float = 99.5) -> LogNorm | None:
+    """Build a logarithmic normalization from finite positive values.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Image data.
+    percentile : float
+        Percentile interval width.
+
+    Returns
+    -------
+    LogNorm | None
+        Matplotlib log normalization, or ``None`` when no positive values exist.
+    """
+    finite = np.asarray(data, dtype=np.float64)
+    positive = finite[np.isfinite(finite) & (finite > 0.0)]
+    if positive.size == 0:
+        return None
+    min_positive = float(np.nanmin(positive))
+    max_positive = float(np.nanmax(positive))
+    vmin, vmax = PercentileInterval(percentile).get_limits(positive)
+    if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
+        vmin = min_positive
+        vmax = max_positive
+    vmin = max(float(vmin), min_positive)
+    if not np.isfinite(vmax) or vmax <= vmin:
+        vmax = max(float(max_positive), vmin * 1.01)
+    return LogNorm(vmin=vmin, vmax=float(vmax))
 
 
 def _shade_invalid_mask(ax: Any, valid_mask: np.ndarray, alpha: float = 0.5) -> None:
@@ -629,6 +663,11 @@ def plot_quickview(
     bkg_map, _ = _load_image(paths.bkgmap)
     mask_map, _ = _load_image(paths.mask)
     exp_map, _ = _load_image(paths.expmap)
+    sens_map: np.ndarray | None = None
+    if paths.sensmap.exists():
+        sens_map, _ = _load_image(paths.sensmap)
+        if sens_map.shape != rate_map.shape:
+            raise ValueError(f"{paths.sensmap} shape {sens_map.shape} does not match rate-map shape {rate_map.shape}.")
     valid_mask = np.asarray(mask_map, dtype=np.float64) > 0.0
     rate_wcs = WCS(rate_header)
     pixel_scale = _pixel_scale_arcsec(rate_wcs)
@@ -713,23 +752,15 @@ def plot_quickview(
     ax3.set_xlabel("X (pix)")
     ax3.set_ylabel("Y (pix)")
 
-    emit(logger, "info", "Generating panel 4: stacked analysis mask")
-    im4 = ax4.imshow(valid_mask.astype(float), origin="lower", cmap="gray", vmin=0.0, vmax=1.0)
-    ax4.set_title(r"$\mathbf{Stacked\ Analysis\ Mask}$")
+    emit(logger, "info", "Generating panel 4: stacked exposure map")
+    im4 = ax4.imshow(exp_map, origin="lower", cmap="viridis", norm=exp_norm)
+    ax4.set_title(r"$\mathbf{Stacked\ Exposure\ Map}$")
     ax4.set_xlabel("X (pix)")
     ax4.set_ylabel("Y (pix)")
     cb4 = fig.colorbar(im4, ax=ax4, fraction=0.046, pad=0.04)
-    cb4.set_label("Valid pixel")
+    cb4.set_label("Exposure (s)")
 
-    emit(logger, "info", "Generating panel 5: stacked exposure map")
-    im5 = ax5.imshow(exp_map, origin="lower", cmap="viridis", norm=exp_norm)
-    ax5.set_title(r"$\mathbf{Stacked\ Exposure\ Map}$")
-    ax5.set_xlabel("X (pix)")
-    ax5.set_ylabel("Y (pix)")
-    cb5 = fig.colorbar(im5, ax=ax5, fraction=0.046, pad=0.04)
-    cb5.set_label("Exposure (s)")
-
-    emit(logger, "info", "Generating panel 6: stacked PSF R90 map")
+    emit(logger, "info", "Generating panel 5: stacked PSF R90 map")
     r90_map = compute_r90_map(
         paths.psfprod,
         rate_map.shape,
@@ -737,12 +768,35 @@ def plot_quickview(
         r90_stride=r90_stride,
         logger=logger,
     )
-    im6 = ax6.imshow(r90_map, origin="lower", cmap="cividis", norm=_image_norm(r90_map))
-    ax6.set_title(r"$\mathbf{Stacked\ PSF\ Map\ (R90)}$")
+    im5 = ax5.imshow(r90_map, origin="lower", cmap="cividis", norm=_image_norm(r90_map))
+    ax5.set_title(r"$\mathbf{Stacked\ PSF\ Map\ (R90)}$")
+    ax5.set_xlabel("X (pix)")
+    ax5.set_ylabel("Y (pix)")
+    cb5 = fig.colorbar(im5, ax=ax5, fraction=0.046, pad=0.04)
+    cb5.set_label("R90 (pix)")
+
+    emit(logger, "info", "Generating panel 6: stacked sensitivity map")
+    ax6.set_title(r"$\mathbf{Stacked\ Sensitivity\ Map}$")
     ax6.set_xlabel("X (pix)")
     ax6.set_ylabel("Y (pix)")
-    cb6 = fig.colorbar(im6, ax=ax6, fraction=0.046, pad=0.04)
-    cb6.set_label("R90 (pix)")
+    if sens_map is None:
+        ax6.set_facecolor("0.92")
+        ax6.text(
+            0.5,
+            0.5,
+            "stack_sensmap.fits not found",
+            transform=ax6.transAxes,
+            ha="center",
+            va="center",
+            color="0.25",
+            fontsize=16,
+        )
+    else:
+        sens_plot = np.where(valid_mask & np.isfinite(sens_map) & (sens_map > 0.0), sens_map, np.nan)
+        im6 = ax6.imshow(sens_plot, origin="lower", cmap="magma", norm=_positive_log_norm(sens_plot))
+        _shade_invalid_mask(ax6, valid_mask, alpha=0.35)
+        cb6 = fig.colorbar(im6, ax=ax6, fraction=0.046, pad=0.04)
+        cb6.set_label(r"Flux limit (erg cm$^{-2}$ s$^{-1}$)")
 
     for ax in axes.ravel():
         ax.tick_params(axis="both", which="both", length=6, width=1, labelsize=14)
@@ -781,6 +835,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mask", type=Path, default=None, help="Override stacked analysis mask FITS path.")
     parser.add_argument("--expmap", type=Path, default=None, help="Override stacked exposure map FITS path.")
     parser.add_argument("--psfprod", type=Path, default=None, help="Override stacked PSF product FITS path.")
+    parser.add_argument("--sensmap", type=Path, default=None, help="Override stacked sensitivity map FITS path.")
     parser.add_argument("--src-reg", type=Path, default=None, help="Override detected-source image region path.")
     parser.add_argument("--target-src-reg", type=Path, default=None, help="Override target source FK5 region path.")
     parser.add_argument("--target-bkg-reg", type=Path, default=None, help="Override target background FK5 region path.")
@@ -811,6 +866,7 @@ def main(argv: list[str] | None = None) -> None:
         mask=args.mask,
         expmap=args.expmap,
         psfprod=args.psfprod,
+        sensmap=args.sensmap,
         src_reg=args.src_reg,
         target_src_reg=args.target_src_reg,
         target_bkg_reg=args.target_bkg_reg,

@@ -20,14 +20,15 @@ The repository currently provides six user-facing tasks:
 
 ![eFXTDAS summary figure](docs/figs/readme_summary_2x3.png)
 
-Example stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked analysis mask, stacked exposure map, and stacked PSF support products.
+Example stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked exposure map, stacked PSF R90 map, and stacked sensitivity map.
 - The stacked counts image is labeled with detected sources (out to `75%` EEF radius). 
   - By default the catalog generated with `fxtsrcdet` keeps only sources with detection likelihood over `6` (as per [eROSITA simulation](https://ui.adsabs.harvard.edu/abs/2022A%26A...665A..78S/abstract), this roughly corresponds to a false detection rate of 14\%).
   - Note that we have grayed out the masked region with insufficient exposure near the image edge; sources in those regions are dropped. This is a conservative approach, and is because the EP-FXT *vignetting correction is not perfect*, so the rate near the edge will be erroneously high and thus leading to many false positives.
 - The stacked background map is created after carving out wavelet-detected sources from the image. Per-pixel smoothing is adopted.
 - The target zoom-in shows the target region (cyan), background region (crimson), and nearby contamination sources (white) to be carved out. This is inspired from `eSASS`-`srctool`.
-- The mask map is defined so that invalid pixels are those with stacked exposure smaller than `30%` of maximum exposure. 
+- The mask map is defined so that invalid pixels are those with stacked exposure smaller than `30%` of maximum exposure, and quick-view panels gray out those invalid pixels where relevant.
 - The stacked PSF product carries the local PSF/EEF support used by `fxtsrcdet` for source fitting and by downstream region/response workflows.
+- The stacked sensitivity map shows the flux limit from `fxtsensmap` when that optional product is present.
 
 For full information on the packages, please check the [docs](https://efxtdas.readthedocs.io/en/latest/).
 

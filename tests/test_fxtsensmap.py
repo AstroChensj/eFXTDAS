@@ -9,9 +9,9 @@ import pytest
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from fxtsensmap.pipeline import main as fxtsensmap_main, run_fxtsensmap
+from fxtsensmap.pipeline import build_parser, main as fxtsensmap_main, resolve_likemin, run_fxtsensmap
 from fxtsensmap.psf import load_official_psfmap_radius_map
-from fxtsensmap.sensitivity import compute_sensitivity_map, poisson_source_counts_for_likelihood
+from fxtsensmap.sensitivity import compute_sensitivity_map, poisson_source_counts_for_likelihood, sigma_to_likemin
 
 
 def _header(shape: tuple[int, int] = (5, 5), pixel_scale_arcsec: float = 1.0) -> fits.Header:
@@ -51,6 +51,17 @@ def test_poisson_threshold_increases_with_background() -> None:
     high = poisson_source_counts_for_likelihood(20.0, 6.0)
     assert low > 0.0
     assert high > low
+
+
+def test_sigma_to_likemin_uses_one_sided_gaussian_tail() -> None:
+    """A three-sigma threshold should resolve to the expected one-sided likelihood."""
+    assert sigma_to_likemin(3.0) == pytest.approx(6.607726221510351)
+    assert resolve_likemin(sigma=3.0) == pytest.approx(6.607726221510351)
+    assert resolve_likemin() == pytest.approx(6.0)
+    with pytest.raises(ValueError, match="sigma must be"):
+        sigma_to_likemin(0.0)
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        resolve_likemin(likemin=6.0, sigma=3.0)
 
 
 def test_compute_sensitivity_map_improves_with_exposure() -> None:
@@ -162,6 +173,64 @@ def test_fxtsensmap_cli_applies_mask(tmp_path: Path) -> None:
         assert np.isfinite(hdul[0].data[2, 3])
         assert hdul[0].header["MASKED"]
         assert hdul[0].header["MASKFILE"] == str(mask)
+
+
+def test_fxtsensmap_cli_accepts_sigma_threshold(tmp_path: Path) -> None:
+    """The CLI should convert --sigma to LIKEMIN and preserve sigma metadata."""
+    shape = (5, 5)
+    header = _header(shape)
+    bkg = _write_image(tmp_path / "bkg.fits", np.ones(shape), header)
+    exp = _write_image(tmp_path / "exp.fits", np.full(shape, 100.0), header)
+    psfprod = _write_cached_psfprod(tmp_path / "stack_psfprod.fits", np.full(shape, 1.5, dtype=np.float32))
+    out = tmp_path / "sens_sigma.fits"
+
+    status = fxtsensmap_main(
+        [
+            "--bkgmap",
+            str(bkg),
+            "--expmap",
+            str(exp),
+            "--psfprod",
+            str(psfprod),
+            "--eef",
+            "0.90",
+            "--ecf",
+            "1e11",
+            "--sigma",
+            "3.0",
+            "--out",
+            str(out),
+        ]
+    )
+
+    assert status == 0
+    with fits.open(out) as hdul:
+        assert hdul[0].header["LIKEMIN"] == pytest.approx(sigma_to_likemin(3.0))
+        assert hdul[0].header["SIGMA"] == pytest.approx(3.0)
+        assert hdul[0].header["SIGDEF"] == "ONE-SIDED"
+
+
+def test_fxtsensmap_parser_rejects_likemin_sigma_conflict(tmp_path: Path) -> None:
+    """The native likelihood and Gaussian sigma threshold options are exclusive."""
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "--bkgmap",
+                str(tmp_path / "bkg.fits"),
+                "--expmap",
+                str(tmp_path / "exp.fits"),
+                "--psfprod",
+                str(tmp_path / "stack_psfprod.fits"),
+                "--eef",
+                "0.90",
+                "--likemin",
+                "6.0",
+                "--sigma",
+                "3.0",
+                "--out",
+                str(tmp_path / "sens.fits"),
+            ]
+        )
 
 
 def test_fxtsensmap_rejects_mask_shape_mismatch(tmp_path: Path) -> None:

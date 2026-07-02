@@ -33,7 +33,7 @@ from fxtcombine.utils.fxtprep import get_input_files
 from fxtcombine.utils.image import reproject_events_xy_to_refwcs
 from fxtcombine.utils.spectrum import stack_instbkg_spectra
 from fxtpsfgen.mapper import build_stacked_psf_mapper
-from fxtsensmap import DEFAULT_ECF
+from fxtsensmap import DEFAULT_ECF, sigma_to_likemin
 
 
 def _run_stage1_obsid(
@@ -84,7 +84,32 @@ def _run_stage1_obsid(
 	return obsid, obsid_prod_dict
 
 
-def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, jobs=1, mask=None):
+def _resolve_sensmap_likemin(likemin=None, sigma=None):
+	"""Resolve fxtcombine sensitivity-threshold inputs.
+
+	Parameters
+	----------
+	likemin : float | None, optional
+		Native detection likelihood threshold.
+	sigma : float | None, optional
+		One-sided Gaussian-equivalent false-alarm threshold.
+
+	Returns
+	-------
+	float
+		Positive finite detection likelihood threshold.
+	"""
+	if likemin is not None and sigma is not None:
+		raise ValueError("sens_likemin and sens_sigma are mutually exclusive.")
+	if sigma is not None:
+		return sigma_to_likemin(float(sigma))
+	value = 6.0 if likemin is None else float(likemin)
+	if not np.isfinite(value) or value <= 0.0:
+		raise ValueError("sens_likemin must be a finite positive value.")
+	return float(value)
+
+
+def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin=None, jobs=1, mask=None, sigma=None):
 	"""Build the command used for stacked sensitivity-map generation.
 
 	Parameters
@@ -101,13 +126,15 @@ def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, j
 		Encircled-energy fraction passed to ``fxtsensmap``.
 	ecf : float
 		Count-rate to flux conversion passed to ``fxtsensmap``.
-	likemin : float
+	likemin : float | None, optional
 		Detection likelihood threshold passed to ``fxtsensmap``.
 	jobs : int, optional
 		Thread workers forwarded to ``fxtsensmap`` if it must compute a radius
 		map from the PSF product.
 	mask : str | None, optional
 		Optional analysis-mask FITS path.
+	sigma : float | None, optional
+		One-sided Gaussian-equivalent threshold passed to ``fxtsensmap``.
 
 	Returns
 	-------
@@ -121,13 +148,83 @@ def _build_fxtsensmap_command(bkgmap, expmap, psfprod, out, eef, ecf, likemin, j
 		"--psfprod", f'"{psfprod}"',
 		"--eef", f"{float(eef)}",
 		"--ecf", f"{float(ecf)}",
-		"--likemin", f"{float(likemin)}",
-		"--jobs", f"{max(int(jobs), 1)}",
 	]
+	if sigma is not None:
+		if likemin is not None:
+			raise ValueError("likemin and sigma are mutually exclusive.")
+		parts.extend(["--sigma", f"{float(sigma)}"])
+	else:
+		parts.extend(["--likemin", f"{_resolve_sensmap_likemin(likemin, sigma=None)}"])
+	parts.extend(["--jobs", f"{max(int(jobs), 1)}"])
 	if mask is not None:
 		parts.extend(["--mask", f'"{mask}"'])
 	parts.extend(["--out", f'"{out}"'])
 	return " ".join(parts)
+
+
+def _build_quickview_command(stack_dir, out, dpi=100, log_file=None):
+	"""Build the command used for final quick-view QA generation.
+
+	Parameters
+	----------
+	stack_dir : str
+		Stacked-product directory.
+	out : str
+		Output quick-view figure path.
+	dpi : int, optional
+		Output figure DPI passed to ``fxtcombine-quickview``.
+	log_file : str | None, optional
+		Optional quick-view log file path.
+
+	Returns
+	-------
+	str
+		Shell command string.
+	"""
+	parts = [
+		"fxtcombine-quickview",
+		f'"{stack_dir}"',
+		"--out", f'"{out}"',
+		"--dpi", f"{int(dpi)}",
+	]
+	if log_file is not None:
+		parts.extend(["--log-file", f'"{log_file}"'])
+	return " ".join(parts)
+
+
+def _run_quickview_stage(stack_dir, out, dpi=100, logger=None):
+	"""Run the final quick-view QA command and report success.
+
+	Parameters
+	----------
+	stack_dir : str
+		Stacked-product directory.
+	out : str
+		Output quick-view figure path.
+	dpi : int, optional
+		Output figure DPI.
+	logger : logging.Logger | None, optional
+		Logger used for workflow messages.
+
+	Returns
+	-------
+	bool
+		``True`` when quick-view generation succeeds, otherwise ``False``.
+	"""
+	quickview_log = os.path.join(stack_dir, "quickview.log")
+	quickview_cmd = _build_quickview_command(
+		stack_dir,
+		out,
+		dpi=dpi,
+		log_file=quickview_log,
+	)
+	try:
+		run_cmd(quickview_cmd, logger=logger)
+	except Exception as exc:
+		emit(logger, "warning", f"Quick-view generation failed after science products were written: {exc}")
+		return False
+	emit(logger, "info", f"Quick-view figure written to {out}")
+	return True
 
 
 def fxtcombine_pipeline(
@@ -136,7 +233,8 @@ def fxtcombine_pipeline(
 		image_energy_ranges="0.3:10.0",lightcurve_energy_ranges="0.1:12.0",
 		flare_screen=True,flare_threshold_method="robust_iqr",flare_energy_range="0.5:10.0",flare_binsize=20.0,flare_min_time_ratio=0.05,
 		mask_expfrac=0.3,jobs=1,srcdet_scales="1,2,4,8,16",srcdet_background_sigma_grid="4,8,16,32,64",
-		make_sensmap=True,sens_eef=0.90,sens_ecf=DEFAULT_ECF,sens_likemin=6.0,
+		make_sensmap=True,sens_eef=0.90,sens_ecf=DEFAULT_ECF,sens_likemin=None,sens_sigma=None,
+		make_quickview=True,quickview_out=None,quickview_dpi=100,
 		summary_json=None,srcpi_filelist=None,skip_existing=False,
 		logger: logging.Logger | None = None,
 	):
@@ -204,8 +302,18 @@ def fxtcombine_pipeline(
 	sens_ecf : float, optional
 		Count-rate to flux conversion in ``ct s^-1 / (erg cm^-2 s^-1)`` passed
 		to ``fxtsensmap``.
-	sens_likemin : float, optional
-		Detection likelihood threshold passed to ``fxtsensmap``.
+	sens_likemin : float | None, optional
+		Detection likelihood threshold passed to ``fxtsensmap``. Defaults to
+		``6.0`` when neither ``sens_likemin`` nor ``sens_sigma`` is supplied.
+	sens_sigma : float | None, optional
+		One-sided Gaussian-equivalent false-alarm threshold passed to
+		``fxtsensmap`` as ``--sigma``.
+	make_quickview : bool, optional
+		Whether to generate ``quickview.png`` as a final QA product.
+	quickview_out : str | None, optional
+		Output quick-view figure path. Defaults to ``<stack_dir>/quickview.png``.
+	quickview_dpi : int, optional
+		Output quick-view figure DPI.
 	summary_json : str | None, optional
 		Path of the summary JSON file. When omitted,
 		``<stack_dir>/all_obsid.json`` is used.
@@ -230,6 +338,7 @@ def fxtcombine_pipeline(
 	stack_dir = os.path.abspath(stack_dir) if stack_dir is not None else os.path.join(out_dir, "stack")
 	summary_json = os.path.abspath(summary_json) if summary_json is not None else os.path.join(stack_dir, "all_obsid.json")
 	srcpi_filelist = os.path.abspath(srcpi_filelist) if srcpi_filelist is not None else os.path.join(stack_dir, "all_obsid.filelist")
+	quickview_out = os.path.abspath(quickview_out) if quickview_out is not None else os.path.join(stack_dir, "quickview.png")
 	if isinstance(image_energy_ranges, str):
 		image_energy_ranges = parse_energy_ranges(image_energy_ranges, default=[(0.3, 10.0)])
 	else:
@@ -270,10 +379,18 @@ def fxtcombine_pipeline(
 	emit(main_logger, "info", f"fxtsrcdet wavelet scales are: {srcdet_scales}")
 	emit(main_logger, "info", f"fxtsrcdet background sigma grid is: {srcdet_background_sigma_grid}")
 	emit(main_logger, "info", f"Stacked sensitivity-map generation enabled: {make_sensmap}")
+	emit(main_logger, "info", f"Quick-view generation enabled: {make_quickview}")
+	if make_quickview:
+		emit(main_logger, "info", f"Quick-view output path is: {quickview_out}")
+		emit(main_logger, "info", f"Quick-view DPI is: {quickview_dpi}")
+	sens_likemin_resolved = _resolve_sensmap_likemin(sens_likemin, sens_sigma) if make_sensmap else None
 	if make_sensmap:
 		emit(main_logger, "info", f"fxtsensmap EEF is: {sens_eef}")
 		emit(main_logger, "info", f"fxtsensmap ECF is: {sens_ecf}")
-		emit(main_logger, "info", f"fxtsensmap likemin is: {sens_likemin}")
+		if sens_sigma is not None:
+			emit(main_logger, "info", f"fxtsensmap sigma is: {sens_sigma} (one-sided Gaussian equivalent; likemin={sens_likemin_resolved})")
+		else:
+			emit(main_logger, "info", f"fxtsensmap likemin is: {sens_likemin_resolved}")
 
 
 	#--- get obsid list
@@ -709,14 +826,30 @@ def fxtcombine_pipeline(
 			stack_sensmap_fname,
 			sens_eef,
 			sens_ecf,
-			sens_likemin,
+			sens_likemin_resolved if sens_sigma is None else None,
 			jobs=jobs,
 			mask=stack_mask_fname,
+			sigma=sens_sigma,
 		)
 		run_cmd(fxtsensmap_cmd, logger=main_logger, logname=fxtsensmap_log)
 		emit(main_logger, "info", f"Stacked sensitivity map written to {stack_sensmap_fname}")
 	else:
 		emit(main_logger, "info", "Skipping stacked sensitivity-map generation.")
+
+	#===============================
+	#--- quick-view QA generation
+	#===============================
+	quickview_success = False
+	if make_quickview:
+		emit(main_logger, "info", "**** Stage 7: quick-view QA generation ****")
+		quickview_success = _run_quickview_stage(
+			stack_dir,
+			quickview_out,
+			dpi=quickview_dpi,
+			logger=main_logger,
+		)
+	else:
+		emit(main_logger, "info", "Skipping quick-view QA generation.")
 
 
 	#--- dump output to json file
@@ -735,6 +868,12 @@ def fxtcombine_pipeline(
 		emit(main_logger, "info", f"Stacked instrumental background PI: {os.path.join(stack_dir, 'stack_instbkgpi.fits')}")
 	if make_sensmap:
 		emit(main_logger, "info", f"Stacked sensitivity map: {stack_sensmap_fname}")
+	if quickview_success:
+		emit(main_logger, "info", f"Quickview figure: {quickview_out}")
+	elif make_quickview:
+		emit(main_logger, "warning", f"Quickview figure was not generated successfully: {quickview_out}")
+	else:
+		emit(main_logger, "info", "Quickview figure generation disabled.")
 	emit(main_logger, "info", f"Please check each OBSID product dir for grade plot, and light curve, for sanity check!")
 	emit(main_logger, "info", f"Summary of generated files (per OBSID) saved to {summary_fname}")
 	emit(main_logger, "info", f"{all_prod_dict}")
@@ -848,11 +987,35 @@ def build_parser() -> argparse.ArgumentParser:
 		default=DEFAULT_ECF,
 		help=f"Count-rate to flux conversion passed to fxtsensmap in ct/s per erg/cm2/s. Default: {DEFAULT_ECF:.5g}",
 	)
-	parser.add_argument(
+	sens_threshold_group = parser.add_mutually_exclusive_group()
+	sens_threshold_group.add_argument(
 		"--sens-likemin",
 		type=float,
-		default=6.0,
+		default=None,
 		help="Detection likelihood threshold passed to fxtsensmap. Default: 6.0",
+	)
+	sens_threshold_group.add_argument(
+		"--sens-sigma",
+		type=float,
+		default=None,
+		help="One-sided Gaussian-equivalent false-alarm threshold passed to fxtsensmap as --sigma.",
+	)
+	parser.add_argument(
+		"--disable-quickview",
+		action="store_true",
+		default=False,
+		help="Disable automatic quick-view QA figure generation after stacked products are written.",
+	)
+	parser.add_argument(
+		"--quickview-out",
+		default=None,
+		help="Optional quick-view figure path. Default: <stack-dir>/quickview.png",
+	)
+	parser.add_argument(
+		"--quickview-dpi",
+		type=int,
+		default=100,
+		help="Quick-view output figure DPI. Default: 100",
 	)
 	parser.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level for CLI and output log file")
 	parser.add_argument("--log-file", type=Path, default=None, help="Optional main log file path; defaults to <out-dir>/log/fxtcombine.log")
@@ -903,6 +1066,10 @@ def main() -> None:
 		sens_eef=args.sens_eef,
 		sens_ecf=args.sens_ecf,
 		sens_likemin=args.sens_likemin,
+		sens_sigma=args.sens_sigma,
+		make_quickview=not args.disable_quickview,
+		quickview_out=args.quickview_out,
+		quickview_dpi=args.quickview_dpi,
 		skip_existing=args.skip_existing,
 		logger=cli_logger,
 	)

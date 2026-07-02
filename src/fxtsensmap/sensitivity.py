@@ -12,6 +12,28 @@ from fxtsrcdet.utils.measure import aperture_pixels
 DEFAULT_ECF = 1.3787e11
 
 
+def sigma_to_likemin(sigma: float) -> float:
+    """Convert a one-sided Gaussian sigma threshold to ``likemin``.
+
+    Parameters
+    ----------
+    sigma : float
+        One-sided Gaussian-equivalent false-alarm threshold.
+
+    Returns
+    -------
+    float
+        Detection likelihood threshold ``-ln(norm.sf(sigma))``.
+    """
+    value = float(sigma)
+    if not math.isfinite(value) or value <= 0.0:
+        raise ValueError("sigma must be a finite positive value.")
+    log_tail = float(special.log_ndtr(-value))
+    if not math.isfinite(log_tail):
+        raise ValueError("sigma is too large to convert to a finite likelihood threshold.")
+    return -log_tail
+
+
 def poisson_tail_probability(observed_counts: int, background_counts: float) -> float:
     """Evaluate the Poisson probability of observing at least ``n`` counts.
 

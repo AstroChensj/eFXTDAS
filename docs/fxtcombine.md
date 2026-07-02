@@ -140,10 +140,26 @@ fxtcombine_pipeline(
     - wavelet scales in pixels forwarded to `fxtsrcdet` for stacked source
       detection
     - default: `1,2,4,8,16`
-- `--srcdet-background-sigma-grid`
+  - `--srcdet-background-sigma-grid`
     - Gaussian smoothing scales in pixels forwarded to `fxtsrcdet` for its
       adaptive background model
     - default: `4,8,16,32,64`
+  - `--disable-sensmap`
+    - skip automatic `stack_sensmap.fits` generation
+  - `--sens-eef`
+    - encircled-energy fraction passed to `fxtsensmap`
+  - `--sens-ecf`
+    - count-rate to flux conversion passed to `fxtsensmap`
+  - `--sens-likemin`
+    - native detection likelihood threshold passed to `fxtsensmap`
+  - `--sens-sigma`
+    - one-sided Gaussian-equivalent false-alarm threshold passed to `fxtsensmap`; mutually exclusive with `--sens-likemin`
+  - `--disable-quickview`
+    - skip automatic final quick-view QA figure generation
+  - `--quickview-out`
+    - optional quick-view figure path
+  - `--quickview-dpi`
+    - quick-view output figure DPI
   - `--summary-json`
     - optional summary JSON path
     - default: `<stack_dir>/all_obsid.json`
@@ -306,6 +322,7 @@ then the layout is conceptually:
 |   |-- stack_rate.fits
 |   |-- stack_psfprod.fits
 |   |-- stack_mask.fits
+|   |-- stack_sensmap.fits
 |   |-- e00300_10000_stack_cts.fits
 |   |-- e00300_10000_stack_rate.fits
 |   |-- e01000_03000_stack_cts.fits
@@ -323,6 +340,8 @@ then the layout is conceptually:
 |   |-- stack_arf.fits
 |   |-- stack_instbkgpi.fits
 |   |-- stack_runXstack.log
+|   |-- quickview.png
+|   |-- quickview.log
 ```
 
 ### Meaning of the Tree
@@ -402,6 +421,10 @@ For stacking:
   - `stack_mask.fits`
 - one default stacked PSF product is also written for source detection and fitting:
   - `stack_psfprod.fits`
+- unless disabled, one stacked sensitivity map is written after spectral stacking:
+  - `stack_sensmap.fits`
+- unless disabled, one quick-view QA figure is written as the final step:
+  - `quickview.png`
 
 ### The Summary JSON Structure
 
@@ -617,6 +640,14 @@ The main user-facing pipeline controls are:
 - `--jobs`
 - `--srcdet-scales`
 - `--srcdet-background-sigma-grid`
+- `--disable-sensmap`
+- `--sens-eef`
+- `--sens-ecf`
+- `--sens-likemin`
+- `--sens-sigma`
+- `--disable-quickview`
+- `--quickview-out`
+- `--quickview-dpi`
 - `--skip-existing`
 
 ## FAQ

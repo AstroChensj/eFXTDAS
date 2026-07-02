@@ -9,7 +9,9 @@ import numpy as np
 from astropy.io import fits
 
 from fxtsensmap.psf import load_radius_map
-from fxtsensmap.sensitivity import DEFAULT_ECF, compute_sensitivity_map
+from fxtsensmap.sensitivity import DEFAULT_ECF, compute_sensitivity_map, sigma_to_likemin
+
+DEFAULT_LIKEMIN = 6.0
 
 
 def load_image(path: Path) -> tuple[np.ndarray, fits.Header]:
@@ -43,6 +45,7 @@ def write_sensitivity_map(
     likemin: float,
     mode: str,
     mask_path: Path | None = None,
+    sigma: float | None = None,
 ) -> None:
     """Write a sensitivity map to FITS.
 
@@ -64,6 +67,8 @@ def write_sensitivity_map(
         Sensitivity algorithm mode.
     mask_path : Path | None, optional
         Analysis-mask FITS path used to restrict valid pixels.
+    sigma : float | None, optional
+        One-sided Gaussian-equivalent threshold, when used to set ``likemin``.
 
     Returns
     -------
@@ -75,6 +80,9 @@ def write_sensitivity_map(
     out_header["EEF"] = (float(eef), "Aperture encircled-energy fraction")
     out_header["ECF"] = (float(ecf), "ct/s per erg/cm2/s")
     out_header["LIKEMIN"] = (float(likemin), "Detection likelihood threshold")
+    if sigma is not None:
+        out_header["SIGMA"] = (float(sigma), "One-sided Gaussian-equivalent threshold")
+        out_header["SIGDEF"] = ("ONE-SIDED", "Sigma false-alarm convention")
     out_header["MASKED"] = (mask_path is not None, "Analysis mask applied")
     if mask_path is not None:
         out_header["MASKFILE"] = (str(mask_path), "Analysis mask file")
@@ -99,12 +107,44 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, required=True, help="Output sensitivity-map FITS path")
     parser.add_argument("--eef", type=float, required=True, help="Encircled-energy fraction used for the aperture")
     parser.add_argument("--ecf", type=float, default=DEFAULT_ECF, help=f"ECF in ct/s per erg/cm2/s. Default: {DEFAULT_ECF:.5g}")
-    parser.add_argument("--likemin", type=float, default=6.0, help="Detection likelihood threshold")
+    threshold_group = parser.add_mutually_exclusive_group()
+    threshold_group.add_argument("--likemin", type=float, default=None, help=f"Detection likelihood threshold. Default: {DEFAULT_LIKEMIN}")
+    threshold_group.add_argument(
+        "--sigma",
+        type=float,
+        default=None,
+        help="One-sided Gaussian-equivalent false-alarm threshold; converted to likemin as -ln(norm.sf(sigma)).",
+    )
     parser.add_argument("--mode", choices=("aper",), default="aper", help="Sensitivity calculation mode")
     parser.add_argument("--energy-kev", type=float, default=None, help="Optional PSF energy for computed fxtpsfgen radius maps")
     parser.add_argument("--block-rows", type=int, default=64, help="Rows per block for stacked psfprod radius-map computation")
     parser.add_argument("--jobs", type=int, default=1, help="Thread workers for stacked psfprod radius-map computation")
     return parser
+
+
+def resolve_likemin(likemin: float | None = None, sigma: float | None = None) -> float:
+    """Resolve CLI threshold inputs to a detection likelihood.
+
+    Parameters
+    ----------
+    likemin : float | None, optional
+        Native detection likelihood threshold.
+    sigma : float | None, optional
+        One-sided Gaussian-equivalent false-alarm threshold.
+
+    Returns
+    -------
+    float
+        Positive finite detection likelihood threshold.
+    """
+    if likemin is not None and sigma is not None:
+        raise ValueError("likemin and sigma are mutually exclusive.")
+    if sigma is not None:
+        return sigma_to_likemin(float(sigma))
+    value = DEFAULT_LIKEMIN if likemin is None else float(likemin)
+    if not np.isfinite(value) or value <= 0.0:
+        raise ValueError("likemin must be a finite positive value.")
+    return float(value)
 
 
 def run_fxtsensmap(
@@ -117,7 +157,8 @@ def run_fxtsensmap(
     psfmap: Path | None = None,
     mask_path: Path | None = None,
     ecf: float = DEFAULT_ECF,
-    likemin: float = 6.0,
+    likemin: float | None = None,
+    sigma: float | None = None,
     mode: str = "aper",
     energy_keV: float | None = None,
     block_rows: int = 64,
@@ -143,8 +184,11 @@ def run_fxtsensmap(
         Analysis-mask FITS path. Non-zero finite pixels are valid.
     ecf : float, optional
         Count-rate to flux conversion.
-    likemin : float, optional
-        Detection likelihood threshold.
+    likemin : float | None, optional
+        Detection likelihood threshold. Defaults to ``6.0`` when neither
+        ``likemin`` nor ``sigma`` is supplied.
+    sigma : float | None, optional
+        One-sided Gaussian-equivalent threshold used to define ``likemin``.
     mode : str, optional
         Sensitivity mode. Only ``aper`` is implemented.
     energy_keV : float | None, optional
@@ -159,6 +203,7 @@ def run_fxtsensmap(
     Path
         Output path.
     """
+    likemin = resolve_likemin(likemin, sigma)
     if mode.lower() != "aper":
         raise ValueError("Only mode='aper' is implemented.")
     bkgmap, bkg_header = load_image(bkgmap_path)
@@ -191,7 +236,7 @@ def run_fxtsensmap(
         likemin=likemin,
         valid_mask=valid_mask,
     )
-    write_sensitivity_map(out_path, sensitivity, bkg_header, eef=eef, ecf=ecf, likemin=likemin, mode=mode, mask_path=mask_path)
+    write_sensitivity_map(out_path, sensitivity, bkg_header, eef=eef, ecf=ecf, likemin=likemin, mode=mode, mask_path=mask_path, sigma=sigma)
     return out_path
 
 
@@ -219,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
         mask_path=args.mask,
         ecf=args.ecf,
         likemin=args.likemin,
+        sigma=args.sigma,
         mode=args.mode,
         energy_keV=args.energy_kev,
         block_rows=args.block_rows,

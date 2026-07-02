@@ -76,6 +76,39 @@ def _write_image(path: Path, data: np.ndarray) -> None:
     fits.writeto(path, np.asarray(data, dtype=np.float32), header, overwrite=True)
 
 
+def _write_minimal_quickview_stack(stack_dir: Path, *, include_sensmap: bool = True) -> None:
+    """Write a small synthetic stack directory for quick-view smoke tests.
+
+    Parameters
+    ----------
+    stack_dir : Path
+        Temporary stack directory.
+    include_sensmap : bool
+        Whether to include the optional sensitivity-map product.
+
+    Returns
+    -------
+    None
+    """
+    shape = (10, 10)
+    _write_image(stack_dir / "stack_rate.fits", np.arange(100, dtype=float).reshape(shape))
+    _write_image(stack_dir / "stack_bkgmap.fits", np.ones(shape))
+    _write_image(stack_dir / "stack_mask.fits", np.ones(shape))
+    _write_image(stack_dir / "stack_expmap.fits", np.full(shape, 100.0))
+    if include_sensmap:
+        _write_image(stack_dir / "stack_sensmap.fits", np.geomspace(1.0e-15, 1.0e-13, num=100).reshape(shape))
+    fits.writeto(stack_dir / "stack_psfprod.fits", np.zeros((1, 1), dtype=np.float32), overwrite=True)
+    (stack_dir / "stack_src.reg").write_text("image\ncircle(5,5,2)\n", encoding="utf-8")
+    (stack_dir / "target_src.reg").write_text(
+        "fk5\ncircle(10.0,20.0,20.000\")\n-circle(10.001,20.001,5.000\")\n",
+        encoding="utf-8",
+    )
+    (stack_dir / "target_bkg.reg").write_text(
+        "fk5\nannulus(10.0,20.0,30.000\",80.000\")\n-circle(9.999,20.001,6.000\")\n",
+        encoding="utf-8",
+    )
+
+
 def test_resolve_paths_uses_current_stack_names(tmp_path: Path) -> None:
     """Standard path resolution should derive current fxtcombine names.
 
@@ -94,6 +127,7 @@ def test_resolve_paths_uses_current_stack_names(tmp_path: Path) -> None:
     assert paths.mask == (tmp_path / "stack_mask.fits").resolve()
     assert paths.expmap == (tmp_path / "stack_expmap.fits").resolve()
     assert paths.psfprod == (tmp_path / "stack_psfprod.fits").resolve()
+    assert paths.sensmap == (tmp_path / "stack_sensmap.fits").resolve()
     assert paths.src_reg == (tmp_path / "stack_src.reg").resolve()
     assert paths.target_src_reg == (tmp_path / "target_src.reg").resolve()
     assert paths.target_bkg_reg == (tmp_path / "target_bkg.reg").resolve()
@@ -210,21 +244,7 @@ def test_quickview_cli_writes_figure_with_standard_stack_dir(tmp_path: Path, mon
     -------
     None
     """
-    shape = (10, 10)
-    _write_image(tmp_path / "stack_rate.fits", np.arange(100, dtype=float).reshape(shape))
-    _write_image(tmp_path / "stack_bkgmap.fits", np.ones(shape))
-    _write_image(tmp_path / "stack_mask.fits", np.ones(shape))
-    _write_image(tmp_path / "stack_expmap.fits", np.full(shape, 100.0))
-    fits.writeto(tmp_path / "stack_psfprod.fits", np.zeros((1, 1), dtype=np.float32), overwrite=True)
-    (tmp_path / "stack_src.reg").write_text("image\ncircle(5,5,2)\n", encoding="utf-8")
-    (tmp_path / "target_src.reg").write_text(
-        "fk5\ncircle(10.0,20.0,20.000\")\n-circle(10.001,20.001,5.000\")\n",
-        encoding="utf-8",
-    )
-    (tmp_path / "target_bkg.reg").write_text(
-        "fk5\nannulus(10.0,20.0,30.000\",80.000\")\n-circle(9.999,20.001,6.000\")\n",
-        encoding="utf-8",
-    )
+    _write_minimal_quickview_stack(tmp_path)
 
     def _fake_r90(psfprod_path, shape, valid_mask, r90_stride=4, logger=None):
         """Return a deterministic R90 map for CLI smoke testing.
@@ -252,5 +272,51 @@ def test_quickview_cli_writes_figure_with_standard_stack_dir(tmp_path: Path, mon
     monkeypatch.setattr(quickview, "compute_r90_map", _fake_r90)
     out_path = tmp_path / "quickview.png"
     quickview.main([str(tmp_path), "--out", str(out_path), "--title", "Quick View Test", "--log-level", "ERROR"])
+    assert out_path.exists()
+    assert out_path.stat().st_size > 0
+
+
+def test_quickview_cli_skips_missing_sensmap(tmp_path: Path, monkeypatch) -> None:
+    """The CLI should keep writing a figure when the optional sensmap is absent.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary pytest workspace.
+    monkeypatch : pytest.MonkeyPatch
+        Pytest monkeypatch fixture.
+
+    Returns
+    -------
+    None
+    """
+    _write_minimal_quickview_stack(tmp_path, include_sensmap=False)
+
+    def _fake_r90(psfprod_path, shape, valid_mask, r90_stride=4, logger=None):
+        """Return a deterministic R90 map for missing-sensitivity smoke testing.
+
+        Parameters
+        ----------
+        psfprod_path : Path
+            Ignored synthetic PSF product path.
+        shape : tuple[int, int]
+            Requested output map shape.
+        valid_mask : np.ndarray
+            Boolean mask selecting valid pixels.
+        r90_stride : int
+            Ignored R90 sampling stride.
+        logger : logging.Logger | None
+            Ignored logger.
+
+        Returns
+        -------
+        np.ndarray
+            Synthetic R90 map.
+        """
+        return np.where(valid_mask, 4.0, np.nan).astype(np.float32)
+
+    monkeypatch.setattr(quickview, "compute_r90_map", _fake_r90)
+    out_path = tmp_path / "quickview-missing-sensmap.png"
+    quickview.main([str(tmp_path), "--out", str(out_path), "--log-level", "ERROR"])
     assert out_path.exists()
     assert out_path.stat().st_size > 0
