@@ -19,6 +19,13 @@ fxtsensmap
 
 ```{toctree}
 :maxdepth: 1
+:caption: Project
+
+acknowledgements
+```
+
+```{toctree}
+:maxdepth: 1
 :caption: Legacy/Internal
 :hidden:
 
