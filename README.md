@@ -2,27 +2,18 @@
 
 `eFXTDAS` is a small analysis toolkit that extends the official [FXTDAS](https://epfxt.ihep.ac.cn/analysis) workflow for Einstein Probe FXT data.
 
-The official FXTDAS tasks handle the basic event calibration chain. `eFXTDAS` adds the analysis steps that are usually still missing for science work:
+The official FXTDAS tasks provide the core mission pipeline: event calibration, screening, coordinate correction, exposure-map generation, and standard low-level products. For science analysis, users still commonly need extra workflow glue: multi-OBSID stacking, source detection, source/background region construction, PSF-aware diagnostics, (correct) response generation, sensitivity maps, and compact QA figures. That is where `eFXTDAS` helps.
 
-- stacked multi-OBSID imaging and spectral combination (improved version of `FXTDAS`-`fxtpipeline`)
-- wavelet-style source detection as seeding (inspired from `CIAO`-`wavdetect`, tailored now to FXT), followed by PSF fitting + extended source testing (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html))
-- automated source/background extraction/exclusion-region generation (inspired from [`eSASS`-`srctool`](https://erosita.mpe.mpg.de/dr1/eSASS4DR1/eSASS4DR1_tasks/srctool_doc.html) `AUTO` mode) that optimizes SNR and avoid nearby neighbor contamination
-- observation and stacked PSF-product generation for PSF-aware workflows
-- aperture-mode sensitivity-map generation from background, exposure, and PSF products
+For normal multi-OBSID science analysis, start with `fxtcombine`: it is the top-level task that orchestrates screening, stacking, PSF products, source detection, region generation, response generation, sensitivity maps, and the final quick-view figure.
 
-The repository currently provides seven user-facing tasks:
+The lower-level command-line tools are exposed so individual stages can be inspected, tuned, or rerun manually.
 
-- `fxtcombine`: top-level multi-epoch stacking and spectral combination that calls `fxtsrcdet` and `fxtregions`
-- `fxtbkgoptrate`: optimum-threshold flare/background screening on one light curve
-- `fxtsrcdet`: source detection and source catalog construction on one image
-- `fxtregions`: source/background region generation from a source catalog
-- `fxtrspgen`: standalone ARF/RMF generation from an external DS9 source region
-- `fxtpsfgen`: observation and stacked PSF-product generation
-- `fxtsensmap`: aperture-mode flux-limit map generation
+## What You Get from `fxtcombine`
 
 ![eFXTDAS summary figure](docs/figs/readme_summary_2x3.png)
 
-Example stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked exposure map, stacked PSF R90 map, and stacked sensitivity map.
+The six-panel quick-view figure summarizes the main stacked products from `fxtcombine`: smoothed stacked counts, stacked background map, target zoom with source/background extraction regions, stacked exposure map, stacked PSF R90 map, and stacked sensitivity map.
+
 - The stacked counts image is labeled with detected sources (out to `75%` EEF radius). 
   - By default the catalog generated with `fxtsrcdet` keeps only sources with detection likelihood over `6` (as per [eROSITA simulation](https://ui.adsabs.harvard.edu/abs/2022A%26A...665A..78S/abstract), this roughly corresponds to a false detection rate of 14\%).
   - Note that we have grayed out the masked region with insufficient exposure near the image edge; sources in those regions are dropped. This is a conservative approach, and is because the EP-FXT *vignetting correction is not perfect*, so the rate near the edge will be erroneously high and thus leading to many false positives.
@@ -31,6 +22,72 @@ Example stacked products from `fxtcombine`: smoothed stacked counts, stacked bac
 - The mask map is defined so that invalid pixels are those with stacked exposure smaller than `30%` of maximum exposure, and quick-view panels gray out those invalid pixels where relevant.
 - The stacked PSF product carries the local PSF/EEF support used by `fxtsrcdet` for source fitting and by downstream region/response workflows.
 - The stacked sensitivity map shows the flux limit from `fxtsensmap` when that optional product is present.
+
+`fxtcombine` also writes stacked spectra, responses, masks, source catalogs, regions, sensitivity maps, logs, and machine-readable summaries.
+
+## Quick Start: Top-Level Workflow
+
+Use `fxtcombine` for the full multi-OBSID workflow.
+
+```bash
+cd /path/to/your/observations
+fxtcombine ./ \
+  --obsid-lst obsids.txt \
+  --ra 9.25937 \
+  --dec 9.16681 \
+  --image-energy-ranges "0.3:10.0,10.0:12.0" \
+  --lightcurve-energy-ranges "0.1:12.0,10.0:12.0" \
+  --jobs 4 \
+  --out-dir combine_out \
+  --stack-dir combine_stack
+```
+
+The source directory should contain one subdirectory per OBSID. `obsids.txt`
+lists the OBSID directories to process:
+
+```text
+/path/to/your/observations/
+|-- obsids.txt
+|-- 02001234567/
+|   |-- ... original FXT archive content ...
+|-- 02001234568/
+|   |-- ... original FXT archive content ...
+|-- 02001234569/
+|   |-- ... original FXT archive content ...
+```
+
+Example `obsids.txt`:
+
+```text
+02001234567
+02001234568
+02001234569
+```
+
+Key parameters:
+
+- `/path/to/your/observations`: Source directory containing OBSID subdirectories.
+- `--obsid-lst`: comma-separated OBSIDs or a file with one OBSID per line
+- `--image-energy-ranges`: stacked detection defaults to the first image band
+- `--lightcurve-energy-ranges`: whole-field diagnostic light curves
+- `--disable-flare-screen`: disable the default `FF`-mode FSA-based flare screening
+- `--flare-threshold-method`: FSA flare-threshold method, default `robust_iqr`
+- `--jobs`: Stage-1 OBSID parallelism
+- `--stack-dir`: where stacked science products go
+
+Most useful outputs:
+
+- `quickview.png`
+- `stack_cts.fits`
+- `stack_bkgmap.fits`
+- `stack_mask.fits`
+- `stack_psfprod.fits`
+- `stack_sensmap.fits`
+- `stack_src.fits` / `stack_src.reg`
+- `target_src.reg` / `target_bkg.reg`
+- `stack_pi.fits`, `stack_bkgpi.fits`, `stack_arf.fits`, `stack_rmf.fits`
+
+See: [docs/fxtcombine.md](docs/fxtcombine.md)
 
 For full information on the packages, please check the [docs](https://efxtdas.readthedocs.io/en/latest/).
 
@@ -73,43 +130,42 @@ cd Xstack
 python -m pip install -e .
 ```
 
-## Which Task Should I Use?
+## Task Hierarchy
 
-| If you want to... | Start with | Main inputs | Main outputs |
+For normal analysis, start with `fxtcombine`. The other commands are exposed so individual stages can be inspected, tuned, or rerun manually.
+
+| Workflow order | Task | Role in `fxtcombine` | Use directly when... |
 | --- | --- | --- | --- |
-| combine multiple OBSIDs of the same target | `fxtcombine` | FXT archive tree, target RA/Dec, OBSID list | stacked images, mask, background map, regions, stacked spectrum |
-| optimize a flare/background threshold on one LC | `fxtbkgoptrate` | FITS light curve, optional base GTI | optimum rate cut, diagnostic FITS, flare/screened GTIs |
-| detect sources on one counts image | `fxtsrcdet` | counts image, optional exposure/mask/psfprod | source catalog, DS9 regions, background map |
-| build extraction regions for one target | `fxtregions` | counts image, source catalog, target RA/Dec | `source.reg`, `background.reg` |
-| build ARF/RMF from one extracted spectrum and DS9 region | `fxtrspgen` | source PHA, exposure map, DS9 source region | `*.arf`, `*.rmf`, optional PHA header updates |
-| build observation or stacked PSF products | `fxtpsfgen` | counts image or observation `psfprod` list plus weight maps | `*.psfprod.fits`, `stack_psfprod.fits` |
-| build a flux-limit map | `fxtsensmap` | background map, exposure map, PSF product or PSF map | sensitivity FITS map |
+| Top level | `fxtcombine` | orchestrates the full multi-OBSID workflow | this is the default starting point |
+| 1 | `fxtbkgoptrate` | optimizes FSA flare/background screening in `FF` mode | tuning one light curve or flare threshold |
+| 2 | `fxtpsfgen` | builds per-OBSID and stacked PSF products | checking or rebuilding PSF support products |
+| 3 | `fxtsrcdet` | detects sources and builds the stacked background map | tuning source detection/background modeling |
+| 4 | `fxtregions` | builds target source/background extraction regions | adjusting extraction geometry |
+| 5 | `fxtrspgen` | builds per-OBSID ARF/RMF products for extracted spectra | manually generating responses |
+| 6 | `fxtsensmap` | builds the final stacked sensitivity/flux-limit map | generating standalone sensitivity maps |
+| 7 | `fxtcombine-quickview` | builds the final six-panel QA figure | regenerating the summary plot |
 
-Recommended rule:
-
-- use `fxtcombine` first for the normal multi-OBSID science workflow
-- use `fxtbkgoptrate` directly when you want to inspect or tune a flare-screening threshold outside `fxtcombine`
-- use `fxtsrcdet` and `fxtregions` directly when tuning detection or extraction on a single stacked image
-- use `fxtrspgen` when you already have the extracted source PHA and need a response pair from a DS9 source region
-- use `fxtpsfgen` when you need standalone PSF support products
-- use `fxtsensmap` when you need a standalone flux-limit map from existing background, exposure, and PSF products
-
-## Typical Workflow
+## How the Workflow Fits Together
 
 For most science use cases, the intended sequence is:
 
 1. Run `fxtcombine` on all OBSIDs of the same target field.
 2. Inspect the stacked diagnostics:
+   - `quickview.png`
    - `stack_cts.fits`
    - `stack_bkgmap.fits`
    - `stack_mask.fits`
+   - `stack_psfprod.fits`
    - `stack_src.fits` / `stack_src.reg`
    - `stack_sensmap.fits`
    - `target_src.reg` / `target_bkg.reg`
-3. If the stacked source detection or extraction regions need tuning, rerun:
+   - `stack_pi.fits`, `stack_bkgpi.fits`, `stack_arf.fits`, `stack_rmf.fits`
+3. In most cases the default settings should be enough. However, in case you find source detection or extraction regions need tuning, rerun the relevant lower-level task:
    - `fxtsrcdet` directly on the stacked counts image
-   - then `fxtregions` on that updated source catalog
-4. Use the final stacked spectra, regions, and response products for downstream spectroscopy.
+   - `fxtregions` on an updated source catalog
+   - manually extract source / bkg PI spectra with the updated region files, using `xselect` tool.
+   - `fxtsensmap` when sensitivity-map assumptions need changing. It does not affect the final extracted spectra and responses, though.
+4. Use the final stacked spectra, regions, sensitivity map, and response products for downstream science analysis.
 
 Important current behavior:
 
@@ -136,37 +192,11 @@ Important current behavior:
 > [docs/fxtregions.md](docs/fxtregions.md).
 
 
-## Quick Start
+## Advanced: Run Individual Tasks
 
-### 1. `fxtcombine`
+These lower-level tasks are normally called by `fxtcombine`, but they can also be run directly to inspect or tune individual stages.
 
-Use this for the full multi-OBSID workflow.
-
-```bash
-fxtcombine /data/epfxt \
-  --obsid-lst obsids.txt \
-  --ra 9.25937 \
-  --dec 9.16681 \
-  --image-energy-ranges "0.3:10.0,10.0:12.0" \
-  --lightcurve-energy-ranges "0.1:12.0,10.0:12.0" \
-  --jobs 4 \
-  --out-dir combine_out \
-  --stack-dir combine_stack
-```
-
-Key parameters:
-
-- `--obsid-lst`: comma-separated OBSIDs or a file with one OBSID per line
-- `--image-energy-ranges`: stacked detection defaults to the first image band
-- `--lightcurve-energy-ranges`: whole-field diagnostic light curves
-- `--disable-flare-screen`: disable the default `FF`-mode FSA-based flare screening
-- `--flare-threshold-method`: FSA flare-threshold method, default `robust_iqr`
-- `--jobs`: Stage-1 OBSID parallelism
-- `--stack-dir`: where stacked science products go
-
-See: [docs/fxtcombine.md](docs/fxtcombine.md)
-
-### 2. `fxtbkgoptrate`
+### 1. `fxtbkgoptrate`
 
 Use this when you want to optimize a flare/background threshold on one FITS light curve directly.
 
@@ -191,6 +221,42 @@ Python API is available through `run_bkgoptrate`.
 
 When `fxtcombine` uses `fxtbkgoptrate` internally, it invokes the same CLI entry point shown above with `--method robust_iqr` by default, then reads the persisted summary from the diagnostic FITS rather than relying on an in-memory Python return value.
 `robust_iqr` uses the valid-bin rate distribution and sets the threshold to `Q3 + 1.5 * IQR`, with the usual retained-exposure floor still enforced by `--min-time-ratio`.
+
+### 2. `fxtpsfgen`
+
+Use this when you need observation or stacked PSF support products such as `stack_psfprod.fits`.
+
+Per-observation PSF product:
+
+```bash
+fxtpsfgen build-obs evt_image.fits \
+  --expmap evt_vexp.fits \
+  --instrument fxta \
+  --filter thin \
+  --emin 0.3 \
+  --emax 10.0 \
+  --out obs.psfprod.fits
+```
+
+Stacked PSF product:
+
+```bash
+fxtpsfgen stack \
+  --obs-psf obs_a.psfprod.fits \
+  --obs-psf obs_b.psfprod.fits \
+  --weightmap exp_a.fits \
+  --weightmap exp_b.fits \
+  --ref-image stack_cts.fits \
+  --out stack_psfprod.fits
+```
+
+Key parameters:
+
+- `build-obs`: build one per-observation PSF product from an image footprint and optional exposure map
+- `stack`: combine multiple observation PSF products onto one stacked reference image
+- `--obs-psf` and `--weightmap`: repeat once per stacked component and keep them aligned by order
+
+See: [docs/fxtpsfgen.md](docs/fxtpsfgen.md)
 
 ### 3. `fxtsrcdet`
 
@@ -275,43 +341,7 @@ Python users can call `fxtrspgen.run_fxtrspgen(...)`.
 
 See: [docs/fxtrspgen.md](docs/fxtrspgen.md)
 
-### 6. `fxtpsfgen`
-
-Use this when you need observation or stacked PSF support products such as `stack_psfprod.fits`.
-
-Per-observation PSF product:
-
-```bash
-fxtpsfgen build-obs evt_image.fits \
-  --expmap evt_vexp.fits \
-  --instrument fxta \
-  --filter thin \
-  --emin 0.3 \
-  --emax 10.0 \
-  --out obs.psfprod.fits
-```
-
-Stacked PSF product:
-
-```bash
-fxtpsfgen stack \
-  --obs-psf obs_a.psfprod.fits \
-  --obs-psf obs_b.psfprod.fits \
-  --weightmap exp_a.fits \
-  --weightmap exp_b.fits \
-  --ref-image stack_cts.fits \
-  --out stack_psfprod.fits
-```
-
-Key parameters:
-
-- `build-obs`: build one per-observation PSF product from an image footprint and optional exposure map
-- `stack`: combine multiple observation PSF products onto one stacked reference image
-- `--obs-psf` and `--weightmap`: repeat once per stacked component and keep them aligned by order
-
-See: [docs/fxtpsfgen.md](docs/fxtpsfgen.md)
-
-### 7. `fxtsensmap`
+### 6. `fxtsensmap`
 
 Use this when you need a standalone flux-limit map from an existing background map, exposure map, and PSF product.
 
@@ -336,6 +366,25 @@ Key parameters:
 
 See: [docs/fxtsensmap.md](docs/fxtsensmap.md)
 
+### 7. `fxtcombine-quickview`
+
+Use this when you want to regenerate the six-panel QA figure from an existing `fxtcombine` stack directory.
+
+```bash
+fxtcombine-quickview combine_stack \
+  --out combine_stack/quickview.png \
+  --title "Target stack"
+```
+
+Key parameters:
+
+- `stack_dir`: directory containing the stacked `fxtcombine` products
+- `--out`: output PNG path
+- `--title`: optional figure title
+- `--sensmap`: optional override for the sensitivity-map FITS path
+
+See: [docs/fxtcombine.md](docs/fxtcombine.md)
+
 ## Repo Layout
 
 The most relevant top-level directories are:
@@ -358,16 +407,21 @@ The most relevant top-level directories are:
 If a user asks for help with this repo:
 
 - start from `fxtcombine` when the request is about multi-OBSID science products
+- start from `fxtbkgoptrate` when the request is about flare/background thresholding
+- start from `fxtpsfgen` when the request is about PSF products or local PSF support
 - start from `fxtsrcdet` when the request is about source counts maps, background maps, or source catalogs
 - start from `fxtregions` when the request is about extraction-region geometry
-- start from `fxtpsfgen` when the request is about PSF products or local PSF support
+- start from `fxtrspgen` when the request is about response generation
 - start from `fxtsensmap` when the request is about flux-limit or sensitivity maps
+- start from `fxtcombine-quickview` when the request is about the six-panel QA figure
 
 Most useful diagnostics to inspect first:
 
+- `quickview.png`
 - `stack_cts.fits`
 - `stack_bkgmap.fits`
 - `stack_mask.fits`
+- `stack_psfprod.fits`
 - `stack_src.fits` / `stack_src.reg`
 - `stack_sensmap.fits`
 - `target_src.reg` / `target_bkg.reg`
@@ -376,6 +430,9 @@ Most useful diagnostics to inspect first:
 Detailed package references:
 
 - [docs/fxtcombine.md](docs/fxtcombine.md)
+- [docs/fxtbkgoptrate.md](docs/fxtbkgoptrate.md)
+- [docs/fxtpsfgen.md](docs/fxtpsfgen.md)
 - [docs/fxtsrcdet.md](docs/fxtsrcdet.md)
 - [docs/fxtregions.md](docs/fxtregions.md)
+- [docs/fxtrspgen.md](docs/fxtrspgen.md)
 - [docs/fxtsensmap.md](docs/fxtsensmap.md)
