@@ -436,3 +436,19 @@ Detailed package references:
 - [docs/fxtregions.md](docs/fxtregions.md)
 - [docs/fxtrspgen.md](docs/fxtrspgen.md)
 - [docs/fxtsensmap.md](docs/fxtsensmap.md)
+
+
+## Acknowledgements
+If you find the software useful, please consider cite our [paper](http://arxiv.org/abs/2610.32430), many thanks!
+
+```latex
+@misc{Chen2026LRDXray,
+      title={Local Analogs of Little Red Dots: Clues to the X-ray Weakness}, 
+      author={Shi-Jiang Chen and Jun-Xian Wang and Zhen-Ya Zheng and Ruqiu Lin and Luis C. Ho and Zhen-Yi Cai and Chang-Hao Chen and Zsofi Igo and Jia-Lai Kang and Ruancun Li and Teng Liu and Wenke Ren and Zhen-Bo Su},
+      year={2026},
+      eprint={2610.32430},
+      archivePrefix={arXiv},
+      primaryClass={astro-ph.GA},
+      url={https://arxiv.org/abs/2610.32430}, 
+}
+```
